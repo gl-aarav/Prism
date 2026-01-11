@@ -2320,10 +2320,12 @@ struct MarkdownView: View, Equatable {
 
     private func parseInlineMarkdown(_ text: String) -> AttributedString {
         // Handle <br> tags for line breaks
-        let textWithBreaks = text.replacingOccurrences(of: "<br>", with: "\n", options: .caseInsensitive)
-            .replacingOccurrences(of: "<br/>", with: "\n", options: .caseInsensitive)
-            .replacingOccurrences(of: "<br />", with: "\n", options: .caseInsensitive)
-        
+        let textWithBreaks = text.replacingOccurrences(
+            of: "<br>", with: "\n", options: .caseInsensitive
+        )
+        .replacingOccurrences(of: "<br/>", with: "\n", options: .caseInsensitive)
+        .replacingOccurrences(of: "<br />", with: "\n", options: .caseInsensitive)
+
         let delimiters = [
             "**", "*", "`", "\\(", "$", "\\textbf{", "\\textit{", "\\underline{", "\\emph{",
             "\\texttt{",
@@ -2940,12 +2942,14 @@ struct MarkdownView: View, Equatable {
                                             .padding(.horizontal, 16)
                                             .padding(.vertical, 12)
                                             .frame(maxWidth: .infinity, alignment: .topLeading)
-                                            .background(i % 2 == 0 ? Color.clear : Color.primary.opacity(0.04)) // Alternating row color
+                                            .background(
+                                                i % 2 == 0
+                                                    ? Color.clear : Color.primary.opacity(0.04))  // Alternating row color
                                     }
                                 }
                             }
                         }
-                        .background(Color.primary.opacity(0.02)) // Very subtle background
+                        .background(Color.primary.opacity(0.02))  // Very subtle background
                         .cornerRadius(12)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
