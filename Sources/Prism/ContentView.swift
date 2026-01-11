@@ -2319,6 +2319,11 @@ struct MarkdownView: View, Equatable {
     }
 
     private func parseInlineMarkdown(_ text: String) -> AttributedString {
+        // Handle <br> tags for line breaks
+        let textWithBreaks = text.replacingOccurrences(of: "<br>", with: "\n", options: .caseInsensitive)
+            .replacingOccurrences(of: "<br/>", with: "\n", options: .caseInsensitive)
+            .replacingOccurrences(of: "<br />", with: "\n", options: .caseInsensitive)
+        
         let delimiters = [
             "**", "*", "`", "\\(", "$", "\\textbf{", "\\textit{", "\\underline{", "\\emph{",
             "\\texttt{",
@@ -2327,7 +2332,7 @@ struct MarkdownView: View, Equatable {
         var firstMatch: (delimiter: String, range: Range<String.Index>)? = nil
 
         for delim in delimiters {
-            if let range = text.range(of: delim) {
+            if let range = textWithBreaks.range(of: delim) {
                 if let current = firstMatch {
                     if range.lowerBound < current.range.lowerBound {
                         firstMatch = (delim, range)
@@ -2362,8 +2367,8 @@ struct MarkdownView: View, Equatable {
                 closingDelimiter = "}"
             }
 
-            let prefix = text[..<range.lowerBound]
-            let remainder = text[range.upperBound...]
+            let prefix = textWithBreaks[..<range.lowerBound]
+            let remainder = textWithBreaks[range.upperBound...]
 
             if let endRange = remainder.range(of: closingDelimiter) {
                 let content = String(remainder[..<endRange.lowerBound])
@@ -2403,7 +2408,7 @@ struct MarkdownView: View, Equatable {
             }
         }
 
-        return AttributedString(text)
+        return AttributedString(textWithBreaks)
     }
 
     private func formatInlineMath(_ latex: String) -> String {
@@ -2908,16 +2913,20 @@ struct MarkdownView: View, Equatable {
                     }
                 case .table(let headers, let rows):
                     ScrollView(.horizontal, showsIndicators: true) {
-                        Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+                        Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
                             // Header
                             GridRow {
-                                ForEach(headers, id: \.self) { header in
-                                    renderRichText(header)
-                                        .font(.system(size: 14, weight: .bold))
-                                        .padding(12)
+                                ForEach(headers.indices, id: \.self) { i in
+                                    renderRichText(headers[i])
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .multilineTextAlignment(.leading)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 12)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color.black.opacity(0.2))
-                                        .border(Color.gray.opacity(0.2), width: 0.5)
+                                        .background(Color.primary.opacity(0.04))
+                                        .overlay(
+                                            Divider(), alignment: .bottom
+                                        )
                                 }
                             }
 
@@ -2925,28 +2934,24 @@ struct MarkdownView: View, Equatable {
                             ForEach(rows.indices, id: \.self) { i in
                                 GridRow {
                                     ForEach(0..<headers.count, id: \.self) { j in
-                                        if j < rows[i].count {
-                                            renderRichText(rows[i][j])
-                                                .font(.system(size: 14))
-                                                .padding(12)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .border(Color.gray.opacity(0.2), width: 0.5)
-                                        } else {
-                                            Text("")
-                                                .padding(12)
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .border(Color.gray.opacity(0.2), width: 0.5)
-                                        }
+                                        let content = j < rows[i].count ? rows[i][j] : ""
+                                        renderRichText(content)
+                                            .font(.system(size: 14))
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 12)
+                                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                                            .background(i % 2 == 0 ? Color.clear : Color.primary.opacity(0.04)) // Alternating row color
                                     }
                                 }
-                                .background(i % 2 == 0 ? Color.clear : Color.black.opacity(0.05))
                             }
                         }
-                        .cornerRadius(8)
+                        .background(Color.primary.opacity(0.02)) // Very subtle background
+                        .cornerRadius(12)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
+                            RoundedRectangle(cornerRadius: 12)
                                 .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                         )
+                        .padding(.vertical, 4)
                     }
                 }
             }

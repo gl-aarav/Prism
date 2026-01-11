@@ -385,13 +385,22 @@ struct QuickAIView: View {
         .frame(width: 700)
         .onAppear {
             isFocused = true
+            // Auto-expand if there's chat history
+            if !chatManager.getCurrentMessages().isEmpty {
+                isExpanded = true
+            }
             recalcPanelSize()
         }
         .onChange(of: isExpanded) { _, expanded in
             recalcPanelSize()
         }
-        .onChange(of: chatManager.getCurrentMessages().count) { _, _ in
-            // Keep the panel height consistent when entering/exiting expanded chat.
+        .onChange(of: chatManager.getCurrentMessages().count) { _, count in
+            // Auto-expand when messages arrive and keep the panel height consistent
+            if count > 0 && !isExpanded {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                    isExpanded = true
+                }
+            }
             recalcPanelSize()
         }
     }
