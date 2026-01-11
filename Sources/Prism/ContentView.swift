@@ -44,6 +44,7 @@ struct Message: Identifiable, Codable, Equatable {
     var thinkingContent: String?
     var thinkingDuration: TimeInterval?
     var imageData: Data?
+    var pdfData: Data?
     var isUser: Bool
     var timestamp = Date()
 
@@ -67,17 +68,18 @@ struct Message: Identifiable, Codable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, content, thinkingContent, thinkingDuration, imageData, isUser, timestamp
+        case id, content, thinkingContent, thinkingDuration, imageData, pdfData, isUser, timestamp
     }
 
     init(
         content: String, thinkingContent: String? = nil, thinkingDuration: TimeInterval? = nil,
-        image: NSImage? = nil, isUser: Bool
+        image: NSImage? = nil, pdfData: Data? = nil, isUser: Bool
     ) {
         self.content = content
         self.thinkingContent = thinkingContent
         self.thinkingDuration = thinkingDuration
         self.imageData = image?.tiffRepresentation
+        self.pdfData = pdfData
         self.isUser = isUser
         self._cachedImage = image
         self._cachedBlocks = Message.parseMarkdown(content)
@@ -91,6 +93,7 @@ struct Message: Identifiable, Codable, Equatable {
         thinkingDuration = try container.decodeIfPresent(
             TimeInterval.self, forKey: .thinkingDuration)
         imageData = try container.decodeIfPresent(Data.self, forKey: .imageData)
+        pdfData = try container.decodeIfPresent(Data.self, forKey: .pdfData)
         isUser = try container.decode(Bool.self, forKey: .isUser)
         timestamp = try container.decode(Date.self, forKey: .timestamp)
 
@@ -107,6 +110,7 @@ struct Message: Identifiable, Codable, Equatable {
         try container.encode(thinkingContent, forKey: .thinkingContent)
         try container.encode(thinkingDuration, forKey: .thinkingDuration)
         try container.encode(imageData, forKey: .imageData)
+        try container.encode(pdfData, forKey: .pdfData)
         try container.encode(isUser, forKey: .isUser)
         try container.encode(timestamp, forKey: .timestamp)
     }
@@ -367,16 +371,25 @@ struct Message: Identifiable, Codable, Equatable {
 
         // Optimization: Avoid deep data comparison for images if possible
         // If both have no image, equal.
-        if lhs.imageData == nil && rhs.imageData == nil { return true }
+        if lhs.imageData == nil && rhs.imageData == nil && lhs.pdfData == nil && rhs.pdfData == nil
+        {
+            return true
+        }
         // If one has image and other doesn't, not equal.
         if (lhs.imageData == nil) != (rhs.imageData == nil) { return false }
+        if (lhs.pdfData == nil) != (rhs.pdfData == nil) { return false }
+
         // If both have image, check size first
         if let lData = lhs.imageData, let rData = rhs.imageData {
             if lData.count != rData.count { return false }
             // If sizes match, we assume they are the same for performance in this context.
             // A true deep compare would be lData == rData, but that causes scroll hitching.
-            return true
         }
+
+        if let lPdf = lhs.pdfData, let rPdf = rhs.pdfData {
+            if lPdf.count != rPdf.count { return false }
+        }
+
         return true
     }
 }
@@ -720,6 +733,14 @@ class GeminiService {
                                 "data": base64,
                             ]
                         ])
+                    } else if let pdfData = msg.pdfData {
+                        let base64 = pdfData.base64EncodedString()
+                        parts.append([
+                            "inline_data": [
+                                "mime_type": "application/pdf",
+                                "data": base64,
+                            ]
+                        ])
                     }
 
                     // Ensure at least one part exists (Gemini requires non-empty parts)
@@ -996,6 +1017,7 @@ struct ContentView: View {
     @ObservedObject private var chatManager = ChatManager.shared
     @State private var inputText: String = ""
     @State private var selectedImage: NSImage? = nil
+    @State private var selectedPDF: Data? = nil
     @State private var isLoading: Bool = false
     @State private var thinkingLevel: String = "medium"
     @State private var showSettings: Bool = false
@@ -1108,14 +1130,14 @@ struct ContentView: View {
                                     InputView(
                                         inputText: $inputText,
                                         selectedImage: $selectedImage,
+                                        selectedPDF: $selectedPDF,
                                         thinkingLevel: $thinkingLevel,
                                         isLoading: isLoading,
                                         onSend: sendMessage,
                                         onStop: stopGeneration,
-                                        onSelectImage: selectImage,
+                                        onSelectAttachment: selectAttachment,
                                         isImageGen: selectedProvider == "Image Creation",
                                         showThinking: selectedProvider == "Ollama"
-                                            || selectedProvider == "Gemini API"
                                     )
                                 }
                                 .onChange(of: chatManager.getCurrentMessages().count) { _, count in
@@ -1213,33 +1235,43 @@ struct ContentView: View {
             lastMessageCount = currentCount
         }
     }
-
-    func selectImage() {
+    func selectAttachment() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.image]
+        panel.allowedContentTypes = [.image, .pdf]
         if panel.runModal() == .OK, let url = panel.url {
-            selectedImage = NSImage(contentsOf: url)
+            if url.pathExtension.lowercased() == "pdf" {
+                if let data = try? Data(contentsOf: url) {
+                    selectedPDF = data
+                    selectedImage = nil
+                }
+            } else {
+                selectedImage = NSImage(contentsOf: url)
+                selectedPDF = nil
+            }
         }
     }
 
     func sendMessage() {
         guard
             !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || selectedImage != nil
+                || selectedImage != nil || selectedPDF != nil
         else { return }
 
-        let userMsg = Message(content: inputText, image: selectedImage, isUser: true)
+        let userMsg = Message(
+            content: inputText, image: selectedImage, pdfData: selectedPDF, isUser: true)
         chatManager.addMessage(userMsg)
 
         let currentInput = inputText
         let currentImage = selectedImage
+        let currentPDF = selectedPDF
 
         inputText = ""
         selectedImage = nil
+        selectedPDF = nil
 
-        performSend(input: currentInput, image: currentImage)
+        performSend(input: currentInput, image: currentImage, pdfData: currentPDF)
     }
 
     func regenerateResponse(for messageId: UUID? = nil) {
@@ -1253,7 +1285,8 @@ struct ContentView: View {
 
         // Find last user message
         if let lastUserMsg = chatManager.getCurrentMessages().last(where: { $0.isUser }) {
-            performSend(input: lastUserMsg.content, image: lastUserMsg.image)
+            performSend(
+                input: lastUserMsg.content, image: lastUserMsg.image, pdfData: lastUserMsg.pdfData)
         }
     }
 
@@ -1263,7 +1296,7 @@ struct ContentView: View {
         isLoading = false
     }
 
-    func performSend(input: String, image: NSImage?) {
+    func performSend(input: String, image: NSImage?, pdfData: Data?) {
         isLoading = true
         let currentHistory = chatManager.getCurrentMessages()
 
@@ -1304,7 +1337,7 @@ struct ContentView: View {
                         for try await (contentChunk, thinkingChunk)
                             in geminiService.sendMessageStream(
                                 history: currentHistory, apiKey: geminiKey, model: geminiModel,
-                                systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
+                                systemPrompt: systemPrompt, thinkingLevel: "low")
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {
@@ -1683,6 +1716,7 @@ struct HeaderView: View {
 class PasteMonitor: ObservableObject {
     private var monitor: Any?
     var onPaste: ((NSImage) -> Void)?
+    var onPastePDF: ((Data) -> Void)?
 
     func start() {
         guard monitor == nil else { return }
@@ -1695,6 +1729,13 @@ class PasteMonitor: ObservableObject {
                 if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
                     let url = urls.first
                 {
+                    if url.pathExtension.lowercased() == "pdf" {
+                        if let data = try? Data(contentsOf: url) {
+                            self.onPastePDF?(data)
+                            return nil
+                        }
+                    }
+
                     let imageExtensions = [
                         "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
                     ]
@@ -1734,11 +1775,12 @@ class PasteMonitor: ObservableObject {
 struct InputView: View {
     @Binding var inputText: String
     @Binding var selectedImage: NSImage?
+    @Binding var selectedPDF: Data?
     @Binding var thinkingLevel: String
     var isLoading: Bool
     var onSend: () -> Void
     var onStop: () -> Void
-    var onSelectImage: () -> Void
+    var onSelectAttachment: () -> Void
     var isImageGen: Bool
     var showThinking: Bool
 
@@ -1771,6 +1813,13 @@ struct InputView: View {
         pasteMonitor.onPaste = { image in
             DispatchQueue.main.async {
                 self.selectedImage = image
+                self.selectedPDF = nil
+            }
+        }
+        pasteMonitor.onPastePDF = { data in
+            DispatchQueue.main.async {
+                self.selectedPDF = data
+                self.selectedImage = nil
             }
         }
         // If already focused on appear (rare but possible)
@@ -1800,6 +1849,28 @@ struct InputView: View {
                 .padding()
                 .background(.ultraThinMaterial)
                 .cornerRadius(12)
+            } else if let pdfData = selectedPDF {
+                HStack {
+                    Image(systemName: "doc.text.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 40, height: 40)
+                        .foregroundColor(.red)
+
+                    VStack(alignment: .leading) {
+                        Text("PDF attached").font(.caption).bold()
+                        Text("\(pdfData.count / 1024) KB").font(.caption2).foregroundColor(
+                            .secondary)
+
+                        Button("Remove") { selectedPDF = nil }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                    }
+                    Spacer()
+                }
+                .padding()
+                .background(.ultraThinMaterial)
+                .cornerRadius(12)
             }
         }
     }
@@ -1807,7 +1878,7 @@ struct InputView: View {
     private var inputBar: some View {
         HStack(spacing: 12) {
             if !isImageGen {
-                Button(action: onSelectImage) {
+                Button(action: onSelectAttachment) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
                         .foregroundColor(.secondary)
@@ -1827,35 +1898,38 @@ struct InputView: View {
                 } label: {
                     Image(systemName: "brain")
                         .font(.system(size: 16))
-                        .foregroundColor(thinkingLevel == "medium" ? .secondary : .blue)
-                        .padding(8)
-                        .background(.ultraThinMaterial)
+                        .foregroundColor(thinkingLevel == "medium" ? .secondary : .primary)
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.1))
                         .clipShape(Circle())
                 }
                 .menuStyle(.borderlessButton)
-                .help("Reasoning Effort for Supported Models")
+                .help("Reasoning Effort")
             }
 
-            if isLoading {
-                Button(action: onStop) {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.system(size: 28))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(Color.red.gradient)
+            // Send/Stop Button
+            Button(action: {
+                if isLoading {
+                    onStop()
+                } else {
+                    onSend()
                 }
-                .buttonStyle(.plain)
-            } else {
-                Button(action: onSend) {
-                    Image(systemName: isImageGen ? "paintbrush.fill" : "arrow.up.circle.fill")
-                        .font(.system(size: 28))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(
-                            inputText.isEmpty && selectedImage == nil
-                                ? Color.gray.gradient : Color.blue.gradient)
-                }
-                .buttonStyle(.plain)
-                .disabled((inputText.isEmpty && selectedImage == nil) || isLoading)
+            }) {
+                Image(systemName: isLoading ? "stop.circle.fill" : "arrow.up.circle.fill")
+                    .font(.system(size: 28))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(
+                        isLoading
+                            ? AnyShapeStyle(Color.red.gradient)
+                            : (inputText.isEmpty && selectedImage == nil && selectedPDF == nil
+                                ? AnyShapeStyle(Color.gray.gradient)
+                                : AnyShapeStyle(Color.blue.gradient)),
+                        Color.black.opacity(0.2)
+                    )
             }
+            .buttonStyle(.plain)
+            .disabled(
+                (inputText.isEmpty && selectedImage == nil && selectedPDF == nil) && !isLoading)
         }
         .padding(12)
         .background(.ultraThinMaterial)
@@ -1902,11 +1976,24 @@ struct InputView: View {
 
     private func handlePaste(_ providers: [NSItemProvider]) {
         for provider in providers {
-            if provider.canLoadObject(ofClass: NSImage.self) {
+            if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
+                provider.loadItem(forTypeIdentifier: "com.adobe.pdf", options: nil) { urlData, _ in
+                    if let urlData = urlData as? Data,
+                        let url = URL(dataRepresentation: urlData, relativeTo: nil),
+                        let data = try? Data(contentsOf: url)
+                    {
+                        DispatchQueue.main.async {
+                            self.selectedPDF = data
+                            self.selectedImage = nil
+                        }
+                    }
+                }
+            } else if provider.canLoadObject(ofClass: NSImage.self) {
                 provider.loadObject(ofClass: NSImage.self) { image, _ in
                     if let image = image as? NSImage {
                         DispatchQueue.main.async {
                             self.selectedImage = image
+                            self.selectedPDF = nil
                         }
                     }
                 }
@@ -1916,10 +2003,21 @@ struct InputView: View {
                     if let urlData = urlData as? Data,
                         let url = URL(dataRepresentation: urlData, relativeTo: nil)
                     {
+                        if url.pathExtension.lowercased() == "pdf" {
+                            if let data = try? Data(contentsOf: url) {
+                                DispatchQueue.main.async {
+                                    self.selectedPDF = data
+                                    self.selectedImage = nil
+                                }
+                                return
+                            }
+                        }
+
                         // Handle file URL - for now just try to load as image
                         if let image = NSImage(contentsOf: url) {
                             DispatchQueue.main.async {
                                 self.selectedImage = image
+                                self.selectedPDF = nil
                             }
                         }
                     }
@@ -2867,6 +2965,24 @@ struct MessageView: View, Equatable {
                                 showImagePreview = true
                             }
                     }
+                    if message.pdfData != nil {
+                        HStack(spacing: 8) {
+                            Image(systemName: "doc.text.fill")
+                                .font(.title2)
+                                .foregroundColor(.red)
+                            Text("PDF Document")
+                                .font(.callout)
+                                .foregroundColor(.primary)
+                        }
+                        .padding(10)
+                        .background(Material.ultraThin)
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        )
+                        .padding(.bottom, 4)
+                    }
                     Text(message.content)
                         .padding(12)
                         .background(Color.blue.opacity(0.2))
@@ -3549,7 +3665,8 @@ struct QuickChatView: View {
                         for try await (contentChunk, thinkingChunk)
                             in geminiService.sendMessageStream(
                                 history: chatManager.getCurrentMessages(), apiKey: geminiKey,
-                                model: geminiModel, systemPrompt: systemPrompt)
+                                model: geminiModel, systemPrompt: systemPrompt, thinkingLevel: "low"
+                            )
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {

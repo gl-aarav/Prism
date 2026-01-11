@@ -12,6 +12,7 @@ struct QuickAIView: View {
     @State private var selectedProvider: String = "Ollama"
     @State private var thinkingLevel: String = "medium"
     @State private var isExpanded: Bool = false
+    @State private var selectedPDF: Data? = nil
     @FocusState private var isFocused: Bool
     @Environment(\.colorScheme) var colorScheme
 
@@ -276,52 +277,109 @@ struct QuickAIView: View {
                 }
 
                 // Input Area
-                HStack(alignment: .center, spacing: 12) {
-                    TextField("Request...", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 16))
-                        .lineLimit(1...6)
-                        .multilineTextAlignment(.leading)
-                        .focused($isFocused)
-                        .onChange(of: inputText) { _, _ in
-                            recalcPanelSize()
+                VStack(spacing: 8) {
+                    if let pdfData = selectedPDF {
+                        HStack {
+                            Image(systemName: "doc.text.fill")
+                                .foregroundColor(.red)
+                            Text("PDF attached (\(pdfData.count / 1024) KB)")
+                                .font(.caption)
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Button(action: { selectedPDF = nil }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .onSubmit { sendMessage() }
+                        .padding(.horizontal, 16)
+                    }
 
-                    // Thinking Level Selector
-                    if selectedProvider == "Ollama" || selectedProvider == "Gemini API" {
-                        Menu {
-                            thinkingOption(title: "Low", value: "low")
-                            thinkingOption(title: "Medium", value: "medium")
-                            thinkingOption(title: "High", value: "high")
-                        } label: {
-                            Image(systemName: "brain")
-                                .font(.system(size: 16))
-                                .foregroundColor(
-                                    thinkingLevel == "medium" ? Color.teal : Color.green
+                    HStack(alignment: .center, spacing: 12) {
+                        TextField("Request...", text: $inputText, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 16))
+                            .lineLimit(1...6)
+                            .multilineTextAlignment(.leading)
+                            .focused($isFocused)
+                            .onChange(of: inputText) { _, _ in
+                                recalcPanelSize()
+                            }
+                            .onSubmit { sendMessage() }
+                            .onPasteCommand(of: [.fileURL, .pdf]) { providers in
+                                for provider in providers {
+                                    if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
+                                        provider.loadItem(
+                                            forTypeIdentifier: "com.adobe.pdf", options: nil
+                                        ) { urlData, _ in
+                                            if let urlData = urlData as? Data,
+                                                let url = URL(
+                                                    dataRepresentation: urlData, relativeTo: nil),
+                                                let data = try? Data(contentsOf: url)
+                                            {
+                                                DispatchQueue.main.async {
+                                                    self.selectedPDF = data
+                                                }
+                                            }
+                                        }
+                                    } else if provider.hasItemConformingToTypeIdentifier(
+                                        "public.file-url")
+                                    {
+                                        provider.loadItem(
+                                            forTypeIdentifier: "public.file-url", options: nil
+                                        ) { urlData, _ in
+                                            if let urlData = urlData as? Data,
+                                                let url = URL(
+                                                    dataRepresentation: urlData, relativeTo: nil)
+                                            {
+                                                if url.pathExtension.lowercased() == "pdf",
+                                                    let data = try? Data(contentsOf: url)
+                                                {
+                                                    DispatchQueue.main.async {
+                                                        self.selectedPDF = data
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                        // Thinking Level Selector
+                        if selectedProvider == "Ollama" || selectedProvider == "Gemini API" {
+                            Menu {
+                                thinkingOption(title: "Low", value: "low")
+                                thinkingOption(title: "Medium", value: "medium")
+                                thinkingOption(title: "High", value: "high")
+                            } label: {
+                                Image(systemName: "brain")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(
+                                        thinkingLevel == "medium" ? Color.teal : Color.green
+                                    )
+                                    .padding(6)
+                                    .background(Color.white.opacity(0.10))
+                                    .clipShape(Circle())
+                            }
+                            .menuStyle(.borderlessButton)
+                            .help("Reasoning Effort")
+                        }
+
+                        Button(action: sendMessage) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 28))
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(
+                                    sendButtonStyle(darkened: true),
+                                    Color.black.opacity(colorScheme == .dark ? 0.35 : 0.28)
                                 )
-                                .padding(6)
-                                .background(Color.white.opacity(0.10))
-                                .clipShape(Circle())
                         }
-                        .menuStyle(.borderlessButton)
-                        .help("Reasoning Effort")
+                        .buttonStyle(.plain)
+                        .disabled(inputText.isEmpty || isLoading)
                     }
-
-                    Button(action: sendMessage) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(
-                                sendButtonStyle(darkened: true),
-                                Color.black.opacity(colorScheme == .dark ? 0.35 : 0.28)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(inputText.isEmpty || isLoading)
+                    .padding(16)
+                    .background(CommandBarBackground(cornerRadius: 26))
                 }
-                .padding(16)
-                .background(CommandBarBackground(cornerRadius: 26))
             }
         }
         .frame(width: 700)
@@ -369,12 +427,11 @@ struct QuickAIView: View {
 
     private func recalcPanelSize() {
         let baseWidth: CGFloat = 700
-        let controlFootprint: CGFloat = 190  // approximated width taken by icons/buttons
-        let horizontalPadding: CGFloat = 32  // padding inside the input bar
-        let measureWidth = max(260, baseWidth - controlFootprint - horizontalPadding)
 
         let font = NSFont.systemFont(ofSize: 16)
         let textToMeasure = inputText.isEmpty ? "Request..." : inputText
+        let measureWidth = baseWidth - 32  // Horizontal padding
+
         let bounding = textToMeasure.boundingRect(
             with: CGSize(width: measureWidth, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
@@ -414,10 +471,12 @@ struct QuickAIView: View {
         }
 
         let content = inputText
+        let pdfData = selectedPDF
         inputText = ""
+        selectedPDF = nil
         recalcPanelSize()
 
-        let userMsg = Message(content: content, image: nil, isUser: true)
+        let userMsg = Message(content: content, image: nil, pdfData: pdfData, isUser: true)
         chatManager.addMessage(userMsg)
         isLoading = true
 
