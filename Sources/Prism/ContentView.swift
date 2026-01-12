@@ -415,18 +415,27 @@ class ChatManager: ObservableObject {
     }
 
     func createNewSession() {
-        // Check if the current session is already a "New Chat" (empty or default title with no messages)
-        if let currentId = currentSessionId,
-            let currentSession = sessions.first(where: { $0.id == currentId }),
-            currentSession.messages.isEmpty
-        {
+        // Reuse any existing empty session
+        if let index = sessions.firstIndex(where: { $0.messages.isEmpty }) {
+            let session = sessions[index]
+            // Move to top if not already
+            if index != 0 {
+                sessions.remove(at: index)
+                sessions.insert(session, at: 0)
+            }
+            currentSessionId = session.id
             return
         }
 
         let newSession = ChatSession(title: "New Chat", messages: [])
-        sessions.append(newSession)
+        sessions.insert(newSession, at: 0)
         currentSessionId = newSession.id
         saveSessions()
+    }
+
+    func deleteCurrentSession() {
+        guard let id = currentSessionId else { return }
+        deleteSession(id: id)
     }
 
     func deleteSession(id: UUID) {
@@ -449,12 +458,18 @@ class ChatManager: ObservableObject {
             createNewSession()
         }
         guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }) else { return }
-        sessions[index].messages.append(message)
+
+        var session = sessions[index]
+        session.messages.append(message)
+        session.date = Date()
 
         // Update title if it's the first user message
-        if sessions[index].messages.filter({ $0.isUser }).count == 1 && message.isUser {
-            sessions[index].title = String(message.content.prefix(30))
+        if session.messages.filter({ $0.isUser }).count == 1 && message.isUser {
+            session.title = String(message.content.prefix(30))
         }
+
+        sessions.remove(at: index)
+        sessions.insert(session, at: 0)
 
         saveSessions()
     }
@@ -510,7 +525,7 @@ class ChatManager: ObservableObject {
         if let data = try? Data(contentsOf: savePath),
             let loaded = try? JSONDecoder().decode([ChatSession].self, from: data)
         {
-            sessions = loaded
+            sessions = loaded.sorted(by: { $0.date > $1.date })
             currentSessionId = sessions.first?.id
         }
     }
@@ -1540,7 +1555,7 @@ struct SidebarView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    chatManager.deleteAllSessions()
+                    chatManager.deleteCurrentSession()
                 } label: {
                     Image(systemName: "trash")
                         .font(.system(size: 13, weight: .semibold))
@@ -1553,14 +1568,18 @@ struct SidebarView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .help("Clear all chats")
+                .help("Delete current chat")
             }
             .padding(.horizontal)
             .padding(.top, 10)
 
             ScrollView {
                 LazyVStack(spacing: 10) {
-                    ForEach(chatManager.sessions) { session in
+                    ForEach(
+                        chatManager.sessions.filter {
+                            !$0.messages.isEmpty || $0.id == chatManager.currentSessionId
+                        }
+                    ) { session in
                         sidebarRow(for: session)
                     }
                 }
