@@ -948,58 +948,84 @@ class ShortcutService {
     ) {
         let task = Process()
         let pipe = Pipe()
-        let inputPipe = Pipe()
 
         task.standardOutput = pipe
         task.standardError = pipe
         task.executableURL = URL(fileURLWithPath: "/usr/bin/shortcuts")
 
-        // Prioritize: Text as Stdin (Shortcut Input), Image on Clipboard.
-        // This allows standard "Ask ChatGPT" shortcuts (which take input text) to function,
-        // while also providing the image on the clipboard for shortcuts that are configured to check it.
-        // We use MainActor.run to ensure the clipboard write happens BEFORE the shortcut process starts.
-        if let image = image {
-            await MainActor.run {
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.writeObjects([image])
-            }
-        }
-
-        task.standardInput = inputPipe
-        task.arguments = ["run", name]
-
         do {
-            try task.run()
+            if let image = image {
+                // Image Mode: Save text and image to temporary files and pass paths as input
+                // This ensures "Ask ChatGPT" and similar shortcuts receive the image as an attachment
+                let tempDir = FileManager.default.temporaryDirectory
+                let uniqueId = UUID().uuidString
+                let txtPath = tempDir.appendingPathComponent("\(uniqueId)_prompt.txt")
+                let imgPath = tempDir.appendingPathComponent("\(uniqueId)_image.png")
 
-            if let data = input.data(using: .utf8) {
-                try inputPipe.fileHandleForWriting.write(contentsOf: data)
-                try inputPipe.fileHandleForWriting.close()
+                // Write Text
+                try input.write(to: txtPath, atomically: true, encoding: .utf8)
+
+                // Write Image
+                if let tiff = image.tiffRepresentation,
+                    let bitmap = NSBitmapImageRep(data: tiff),
+                    let png = bitmap.representation(using: .png, properties: [:])
+                {
+                    try png.write(to: imgPath)
+                }
+
+                task.arguments = ["run", name, "-i", txtPath.path, "-i", imgPath.path]
+
+                try task.run()
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                task.waitUntilExit()
+
+                // Cleanup
+                try? FileManager.default.removeItem(at: txtPath)
+                try? FileManager.default.removeItem(at: imgPath)
+
+                return processOutput(data)
+
+            } else {
+                // Text Mode: Pass text via Stdin
+                let inputPipe = Pipe()
+                task.standardInput = inputPipe
+                task.arguments = ["run", name]
+
+                try task.run()
+
+                if let data = input.data(using: .utf8) {
+                    try inputPipe.fileHandleForWriting.write(contentsOf: data)
+                    try inputPipe.fileHandleForWriting.close()
+                }
+
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                task.waitUntilExit()
+
+                return processOutput(data)
             }
-
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            task.waitUntilExit()
-
-            // Check if output is an image
-            if let image = NSImage(data: data) {
-                return ("", image)
-            }
-
-            // RTF Cleanup
-            if let attributedString = try? NSAttributedString(
-                data: data, options: [.documentType: NSAttributedString.DocumentType.rtf],
-                documentAttributes: nil)
-            {
-                let plainText = attributedString.string.trimmingCharacters(
-                    in: .whitespacesAndNewlines)
-                if !plainText.isEmpty { return (plainText, nil) }
-            }
-
-            let output = String(data: data, encoding: .utf8) ?? ""
-            return (output.trimmingCharacters(in: .whitespacesAndNewlines), nil)
         } catch {
             return ("System Error: \(error.localizedDescription)", nil)
         }
+    }
+
+    private func processOutput(_ data: Data) -> (String, NSImage?) {
+        // Check if output is an image
+        if let image = NSImage(data: data) {
+            return ("", image)
+        }
+
+        // RTF Cleanup
+        if let attributedString = try? NSAttributedString(
+            data: data, options: [.documentType: NSAttributedString.DocumentType.rtf],
+            documentAttributes: nil)
+        {
+            let plainText = attributedString.string.trimmingCharacters(
+                in: .whitespacesAndNewlines)
+            if !plainText.isEmpty { return (plainText, nil) }
+        }
+
+        let output = String(data: data, encoding: .utf8) ?? ""
+        return (output.trimmingCharacters(in: .whitespacesAndNewlines), nil)
     }
 }
 
