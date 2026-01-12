@@ -2211,11 +2211,28 @@ struct ThumbnailView: View {
 
     private func generateThumbnail() {
         Task {
-            let targetSize = NSSize(width: maxWidth * 2, height: maxHeight * 2)  // Retina
+            // Keep original aspect ratio
+            let aspectRatio = image.size.width / image.size.height
+            let newWidth: CGFloat
+            let newHeight: CGFloat
+
+            if aspectRatio > 1 {
+                // Wide image: Cap width
+                newWidth = min(image.size.width, maxWidth * 2)  // Retina
+                newHeight = newWidth / aspectRatio
+            } else {
+                // Tall image: Cap height
+                newHeight = min(image.size.height, maxHeight * 2)  // Retina
+                newWidth = newHeight * aspectRatio
+            }
+
+            let targetSize = NSSize(width: newWidth, height: newHeight)
+
             let thumb = await withCheckedContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {
                     let newImage = NSImage(size: targetSize)
                     newImage.lockFocus()
+                    // Use standard image scaling instead of force-stretching
                     image.draw(
                         in: NSRect(origin: .zero, size: targetSize),
                         from: NSRect(origin: .zero, size: image.size),
