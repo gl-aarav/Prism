@@ -9,7 +9,7 @@ struct QuickAIView: View {
     @State private var inputText: String = ""
     @State private var inputLineCount: Int = 1
     @State private var isLoading: Bool = false
-    @State private var selectedProvider: String = "Ollama"
+    @State private var selectedProvider: String = "Ollama 1"
     @State private var thinkingLevel: String = "medium"
     @State private var isExpanded: Bool = false
     @State private var selectedPDF: Data? = nil
@@ -21,10 +21,12 @@ struct QuickAIView: View {
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("OllamaModel") private var ollamaModel: String = "gpt-oss:120b-cloud"
+    @AppStorage("OllamaModel2") private var ollamaModel2: String = "gpt-oss:20b-cloud"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
+    @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
     @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     private var clampedBackgroundOpacity: Double {
@@ -53,8 +55,11 @@ struct QuickAIView: View {
                                             "Gemini API", systemImage: getProviderIcon("Gemini API")
                                         )
                                     }
-                                    Button(action: { selectedProvider = "Ollama" }) {
-                                        Label("Ollama", systemImage: getProviderIcon("Ollama"))
+                                    Button(action: { selectedProvider = "Ollama 1" }) {
+                                        Label("Ollama 1", systemImage: getProviderIcon("Ollama"))
+                                    }
+                                    Button(action: { selectedProvider = "Ollama 2" }) {
+                                        Label("Ollama 2", systemImage: getProviderIcon("Ollama"))
                                     }
                                 }
                                 Section("Shortcuts") {
@@ -69,6 +74,13 @@ struct QuickAIView: View {
                                     }
                                     Button(action: { selectedProvider = "ChatGPT" }) {
                                         Label("ChatGPT", systemImage: getProviderIcon("ChatGPT"))
+                                    }
+                                }
+                                Section("Tools") {
+                                    Button(action: { selectedProvider = "Image Creation" }) {
+                                        Label(
+                                            "Image Creation",
+                                            systemImage: getProviderIcon("Image Creation"))
                                     }
                                 }
                             } label: {
@@ -109,7 +121,7 @@ struct QuickAIView: View {
 
                             // New Chat
                             Button(action: {
-                                chatManager.deleteAllSessions()
+                                chatManager.createNewSession()
                                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                                     isExpanded = false
                                 }
@@ -346,7 +358,7 @@ struct QuickAIView: View {
                             }
 
                         // Thinking Level Selector
-                        if selectedProvider == "Ollama" || selectedProvider == "Gemini API" {
+                        if selectedProvider.contains("Ollama") || selectedProvider == "Gemini API" {
                             Menu {
                                 thinkingOption(title: "Low", value: "low")
                                 thinkingOption(title: "Medium", value: "medium")
@@ -464,7 +476,8 @@ struct QuickAIView: View {
         case "On-Device": return "iphone"
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
-        case "Ollama": return "laptopcomputer"
+        case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
+        case "Image Creation": return "paintpalette"
         case "ChatGPT": return "message"
         default: return "cpu"
         }
@@ -490,7 +503,34 @@ struct QuickAIView: View {
         isLoading = true
 
         chatManager.currentTask = Task {
-            if selectedProvider == "Gemini API" {
+            if selectedProvider == "Image Creation" {
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "Generating image...", isUser: false)
+                aiMsg.id = aiMsgId
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    let result = try await shortcutService.runShortcut(
+                        name: shortcutImageGen, input: content, image: nil)
+
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: result.0, image: result.1)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "Gemini API" {
                 if !geminiKey.isEmpty {
                     let aiMsgId = UUID()
                     var aiMsg = Message(content: "", isUser: false)
@@ -545,7 +585,7 @@ struct QuickAIView: View {
                         self.isLoading = false
                     }
                 }
-            } else if selectedProvider == "Ollama" {
+            } else if selectedProvider.contains("Ollama") {
                 let aiMsgId = UUID()
                 var aiMsg = Message(content: "", isUser: false)
                 aiMsg.id = aiMsgId
@@ -554,13 +594,15 @@ struct QuickAIView: View {
                     self.chatManager.addMessage(aiMsg)
                 }
 
+                let activeModel = (selectedProvider == "Ollama 2") ? ollamaModel2 : ollamaModel
+
                 do {
                     var fullContent = ""
                     var fullThinking = ""
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), endpoint: ollamaURL,
-                        model: ollamaModel, systemPrompt: systemPrompt, thinkingLevel: thinkingLevel
+                        model: activeModel, systemPrompt: systemPrompt, thinkingLevel: thinkingLevel
                     ) {
                         fullContent += contentChunk
                         if let thinking = thinkingChunk {
@@ -645,21 +687,40 @@ extension QuickAIView {
 
 struct QuickAIMessageView: View {
     let message: Message
+    @State private var isCopied = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if message.isUser {
                 Spacer()
-                Text(message.content)
-                    .font(.system(size: 14))
-                    .padding(12)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.blue.opacity(0.92), Color.cyan.opacity(0.7)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-                    .foregroundColor(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .trailing, spacing: 8) {
+                    if let image = message.image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 200, maxHeight: 200)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .contextMenu {
+                                Button("Copy Image") {
+                                    let pb = NSPasteboard.general
+                                    pb.clearContents()
+                                    pb.writeObjects([image])
+                                }
+                            }
+                    }
+                    if !message.content.isEmpty {
+                        Text(message.content)
+                            .font(.system(size: 14))
+                            .padding(12)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color.blue.opacity(0.92), Color.cyan.opacity(0.7)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .foregroundColor(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                }
             } else {
                 Image(systemName: "sparkles")
                     .foregroundStyle(
@@ -692,7 +753,53 @@ struct QuickAIMessageView: View {
                         .padding(.bottom, 4)
                     }
 
-                    MarkdownView(blocks: message.blocks)
+                    if let image = message.image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 300, maxHeight: 300)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .contextMenu {
+                                Button("Copy Image") {
+                                    let pb = NSPasteboard.general
+                                    pb.clearContents()
+                                    pb.writeObjects([image])
+                                }
+                            }
+                    }
+
+                    if !message.content.isEmpty {
+                        MarkdownView(blocks: message.blocks)
+                    }
+
+                    // Copy Button
+                    HStack {
+                        Button(action: {
+                            let pasteboard = NSPasteboard.general
+                            pasteboard.clearContents()
+                            if let image = message.image {
+                                pasteboard.writeObjects([image])
+                            } else {
+                                pasteboard.setString(message.content, forType: .string)
+                            }
+                            isCopied = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                isCopied = false
+                            }
+                        }) {
+                            Label(
+                                isCopied ? "Copied" : "Copy",
+                                systemImage: isCopied ? "checkmark" : "doc.on.doc"
+                            )
+                            .font(.caption2)
+                            .foregroundColor(isCopied ? .green : .secondary)
+                            .padding(4)
+                            .background(Color.black.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                    }
                 }
                 .padding(12)
                 .background(.ultraThinMaterial)

@@ -474,7 +474,9 @@ class ChatManager: ObservableObject {
         saveSessions()
     }
 
-    func updateMessage(id: UUID, content: String, thinkingContent: String? = nil) {
+    func updateMessage(
+        id: UUID, content: String, thinkingContent: String? = nil, image: NSImage? = nil
+    ) {
         guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }),
             let msgIndex = sessions[index].messages.firstIndex(where: { $0.id == id })
         else { return }
@@ -483,6 +485,13 @@ class ChatManager: ObservableObject {
         msg.content = content
         if let thinking = thinkingContent {
             msg.thinkingContent = thinking
+        }
+        if let image = image {
+            msg.imageData = image.tiffRepresentation
+            // Also need to update cache if we were using it, but Message struct handles that in init or when accessing.
+            // Actually Message struct has private _cachedImage. We should probably recreate the message or handle it.
+            // Since `Message` is a struct, modifying `msg` creates a copy.
+            // Let's just rely on `imageData` update.
         }
         sessions[index].messages[msgIndex] = msg
         // We don't save on every chunk to avoid disk thrashing, but we should save at the end
@@ -1118,6 +1127,7 @@ struct ContentView: View {
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("OllamaModel") private var ollamaModel: String = "gpt-oss:120b-cloud"
+    @AppStorage("OllamaModel2") private var ollamaModel2: String = "gpt-oss:20b-cloud"
     @AppStorage("SelectedProvider") private var selectedProvider: String = "Gemini API"
 
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
@@ -1225,7 +1235,8 @@ struct ContentView: View {
                                         onStop: stopGeneration,
                                         onSelectAttachment: selectAttachment,
                                         isImageGen: selectedProvider == "Image Creation",
-                                        showThinking: selectedProvider == "Ollama"
+                                        showThinking: selectedProvider.contains("Ollama")
+                                            || selectedProvider == "Gemini API"
                                     )
                                 }
                                 .onChange(of: chatManager.getCurrentMessages().count) { _, count in
@@ -1253,6 +1264,7 @@ struct ContentView: View {
                     geminiModel: $geminiModel,
                     ollamaURL: $ollamaURL,
                     ollamaModel: $ollamaModel,
+                    ollamaModel2: $ollamaModel2,
                     shortcutPrivateCloud: $shortcutPrivateCloud,
                     shortcutOnDevice: $shortcutOnDevice,
                     shortcutChatGPT: $shortcutChatGPT,
@@ -1425,7 +1437,7 @@ struct ContentView: View {
                         for try await (contentChunk, thinkingChunk)
                             in geminiService.sendMessageStream(
                                 history: currentHistory, apiKey: geminiKey, model: geminiModel,
-                                systemPrompt: systemPrompt, thinkingLevel: "low")
+                                systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {
@@ -1461,7 +1473,7 @@ struct ContentView: View {
                         self.isLoading = false
                     }
                 }
-            } else if selectedProvider == "Ollama" {
+            } else if selectedProvider == "Ollama 1" || selectedProvider == "Ollama 2" {
                 let aiMsgId = UUID()
                 var aiMsg = Message(content: "", isUser: false)
                 aiMsg.id = aiMsgId
@@ -1470,12 +1482,14 @@ struct ContentView: View {
                     self.chatManager.addMessage(aiMsg)
                 }
 
+                let activeModel = (selectedProvider == "Ollama 1") ? ollamaModel : ollamaModel2
+
                 do {
                     var fullContent = ""
                     var fullThinking = ""
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
-                        history: currentHistory, endpoint: ollamaURL, model: ollamaModel,
+                        history: currentHistory, endpoint: ollamaURL, model: activeModel,
                         systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
                     {
                         fullContent += contentChunk
@@ -1797,18 +1811,13 @@ struct HeaderView: View {
             Picker("Model", selection: $selectedProvider) {
                 Section("API") {
                     Text("Gemini API").tag("Gemini API")
-                    Text("Ollama").tag("Ollama")
+                    Text("Ollama 1").tag("Ollama 1")
+                    Text("Ollama 2").tag("Ollama 2")
                 }
                 Section("Shortcuts") {
                     Text("Private Cloud").tag("Private Cloud")
                     Text("On-Device").tag("On-Device")
                     Text("ChatGPT").tag("ChatGPT")
-                }
-                Section("Web View") {
-                    Text("Gemini Web").tag("Gemini Web")
-                    Text("ChatGPT Web").tag("ChatGPT Web")
-                    Text("Perplexity Web").tag("Perplexity Web")
-                    Text("Grok Web").tag("Grok Web")
                 }
                 Section("Tools") {
                     Text("Image Creation").tag("Image Creation")
@@ -1819,49 +1828,46 @@ struct HeaderView: View {
 
             Spacer()
 
-            if !["Gemini Web", "ChatGPT Web", "Perplexity Web", "Grok Web"].contains(
-                selectedProvider)
-            {
-                Button(action: onNewChat) {
-                    HStack {
-                        Image(systemName: "plus")
-                        Text("New Chat")
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.28),
-                                        Color.white.opacity(0.10),
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+            Button(action: onNewChat) {
+                HStack {
+                    Image(systemName: "plus")
+                    Text("New Chat")
                 }
-                .buttonStyle(.plain)
-
-                Button(action: { showSettings = true }) {
-                    Image(systemName: "gearshape.fill")
-                        .foregroundColor(.secondary)
-                        .padding(8)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.28),
+                                    Color.white.opacity(0.10),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
             }
+            .buttonStyle(.plain)
+
+            Button(action: { showSettings = true }) {
+                Image(systemName: "gearshape.fill")
+                    .foregroundColor(.secondary)
+                    .padding(8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+
         }
         .padding()
         // Transparent background
@@ -2257,7 +2263,7 @@ struct MathView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> MTMathUILabel {
         let view = MTMathUILabel()
-        view.textAlignment = .left
+        view.textAlignment = .center
         view.fontSize = fontSize
         view.textColor = NSColor.labelColor
         return view
@@ -2312,7 +2318,7 @@ struct KaTeXView: NSViewRepresentable {
                     <script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js\"></script>
                     <style>
                         :root { color-scheme: light dark; }
-                        body { margin:0; padding:8px; background: transparent; color: #111; font-size: \(fontSize)pt; }
+                        body { margin:0; padding:8px; background: transparent; color: #111; font-size: \(fontSize)pt; text-align: center; }
                         @media (prefers-color-scheme: dark) { body { color: #f5f5f5; } }
                         .katex, .katex * { color: inherit !important; }
                         .katex-display { margin: 0; }
@@ -2755,13 +2761,8 @@ struct MarkdownView: View, Equatable {
             content = content.replacingOccurrences(of: cmd, with: "")
         }
 
-        // Strip \boxed{...}
-        if content.contains("\\boxed{") {
-            content = content.replacingOccurrences(of: "\\boxed{", with: "")
-            if content.hasSuffix("}") {
-                content = String(content.dropLast())
-            }
-        }
+        // Fix \boxed{...} by converting to group {...} to preserve brace balance
+        content = content.replacingOccurrences(of: "\\boxed{", with: "{")
 
         return content
     }
@@ -3316,6 +3317,7 @@ struct SettingsView: View {
     @Binding var geminiModel: String
     @Binding var ollamaURL: String
     @Binding var ollamaModel: String
+    @Binding var ollamaModel2: String
     @Binding var shortcutPrivateCloud: String
     @Binding var shortcutOnDevice: String
     @Binding var shortcutChatGPT: String
@@ -3445,7 +3447,12 @@ struct SettingsView: View {
             Section(header: Text("Ollama")) {
                 TextField("Endpoint URL", text: $ollamaURL)
                     .textFieldStyle(.roundedBorder)
-                Picker("Model", selection: $ollamaModel) {
+                Picker("Model 1", selection: $ollamaModel) {
+                    ForEach(ollamaModels, id: \.self) { model in
+                        Text(model).tag(model)
+                    }
+                }
+                Picker("Model 2", selection: $ollamaModel2) {
                     ForEach(ollamaModels, id: \.self) { model in
                         Text(model).tag(model)
                     }
