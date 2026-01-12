@@ -29,10 +29,42 @@ struct PrismApp: App {
             }
         }
 
-        MenuBarExtra("", systemImage: "triangle", isInserted: $showMenuBar) {
+        MenuBarExtra(isInserted: $showMenuBar) {
             QuickChatView()
+        } label: {
+            PrismMenuBarIcon()
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+class AppState: ObservableObject {
+    static let shared = AppState()
+    var hasShownSplash: Bool = false
+
+    private init() {}
+}
+
+struct PrismMenuBarIcon: View {
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Image(systemName: "triangle")
+                .font(.system(size: 14))
+                .opacity(0.8)
+                .overlay(
+                    Image(systemName: "triangle.fill")
+                        .font(.system(size: 14))
+                        .opacity(isAnimating ? 0.6 : 0.0)
+                        .blur(radius: 2)
+                )
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
+                isAnimating = true
+            }
+        }
     }
 }
 

@@ -1138,7 +1138,7 @@ struct ContentView: View {
 
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome: Bool = false
-    @State private var showSplash: Bool = true
+    @State private var showSplash: Bool = !AppState.shared.hasShownSplash
     @State private var currentTask: Task<Void, Never>?
 
     private let geminiService = GeminiService()
@@ -1289,6 +1289,7 @@ struct ContentView: View {
             if showSplash {
                 SplashScreen {
                     showSplash = false
+                    AppState.shared.hasShownSplash = true
                 }
                 .transition(.opacity)
                 .zIndex(200)
@@ -3576,53 +3577,113 @@ struct WelcomeView: View {
 
 struct SplashScreen: View {
     var onFinish: () -> Void
+    @State private var stage: Int = 0
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
+        let mainColor = colorScheme == .dark ? Color.white : Color.black
+
         ZStack {
-            Color(nsColor: .windowBackgroundColor).ignoresSafeArea()
+            (colorScheme == .dark ? Color.black : Color.white)
+                .ignoresSafeArea()
 
-            VStack(spacing: 20) {
+            // Prism Animation Container
+            ZStack {
+                // 1. Light Beam (enters from left)
+                // We use a fixed frame container to anchor the growth to the leading edge (Source side),
+                // so it appears to travel towards the prism (Trailing side).
+                // Offset places the container: Width 150, Center -95 => Right Edge at -20 (hitting prism).
+                Color.clear
+                    .frame(width: 150, height: 2)
+                    .overlay(
+                        Rectangle()
+                            .fill(mainColor)
+                            .frame(width: stage >= 1 ? 150 : 0)  // Animates 0 -> 150
+                        , alignment: .leading  // Anchored at Source (Left)
+                    )
+                    .offset(x: -95, y: -2)
+                    .rotationEffect(.degrees(15), anchor: .trailing)  // Rotate around the Prism impact point
+                    .opacity(stage >= 1 ? 0.9 : 0)
+                    .blur(radius: 4)
+
+                // 2. The Prism (Triangle)
+                Triangle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [mainColor.opacity(0.8), mainColor.opacity(0.2)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1
+                    )
+                    .background(Triangle().fill(mainColor.opacity(0.05)))
+                    .frame(width: 80, height: 80)
+                    .shadow(color: mainColor.opacity(0.3), radius: 10)
+                    .overlay(
+                        // Shine effect on prism
+                        Triangle()
+                            .stroke(mainColor.opacity(stage >= 1 ? 0.8 : 0), lineWidth: 2)
+                            .blur(radius: 2)
+                    )
+
+                // 3. Refracted Light (Rainbow out to right)
+                // Removed the "if stage >= 2" check so the views exist in the hierarchy.
+                // This ensures the width animation (0 -> 150) plays smoothly when stage changes to 2.
                 ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [.cyan, .blue, .green], startPoint: .topLeading,
-                                endPoint: .bottomTrailing)
-                        )
-                        .frame(width: 120, height: 120)
-                        .blur(radius: 20)
-
-                    Triangle()
-                        .stroke(
-                            colorScheme == .dark ? Color.black : Color.white,
-                            style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round)
-                        )
-                        .frame(width: 80, height: 80)
-                        .offset(y: 5)
-                }
-                .scaleEffect(1.0)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                        // Pulse animation manually since symbolEffect doesn't work on custom views
+                    ForEach(0..<7) { i in
+                        Color.clear
+                            .frame(width: 150, height: 3, alignment: .leading)
+                            .overlay(
+                                Rectangle()
+                                    .fill(rainbowColor(i))
+                                    .frame(width: stage >= 2 ? 150 : 0), alignment: .leading
+                            )
+                            .offset(x: 95, y: 0)
+                            .rotationEffect(
+                                .degrees(Double(i) * 6.0 - 18.0), anchor: .leading
+                            )
+                            .opacity(0.8)
+                            .blur(radius: 6)
                     }
                 }
 
-                Text("Prism")
-                    .font(.system(size: 60, weight: .thin))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.cyan, .blue, .green], startPoint: .leading,
-                            endPoint: .trailing))
-            }
-        }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                withAnimation(.easeOut(duration: 0.5)) {
-                    onFinish()
+                if stage >= 2 {
+                    Text("Prism")
+                        .font(.system(size: 40, weight: .light, design: .serif))
+                        .foregroundStyle(mainColor.opacity(0.9))
+                        .offset(y: 100)
+                        .transition(.opacity.animation(.easeIn(duration: 1.0)))
                 }
             }
+            .scaleEffect(stage == 3 ? 1.05 : 1.0)  // Gentle scale out
+            .opacity(stage == 3 ? 0 : 1)
         }
+        .onAppear {
+            // Animate beam in
+            withAnimation(.easeOut(duration: 0.8)) {
+                stage = 1
+            }
+
+            // Animate rainbow out (starts after beam hits prism)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                withAnimation(.easeOut(duration: 1.2)) {
+                    stage = 2
+                }
+            }
+
+            // Fade out
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) {
+                withAnimation(.easeInOut(duration: 1.5)) {
+                    stage = 3
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.8) {
+                onFinish()
+            }
+        }
+    }
+
+    func rainbowColor(_ i: Int) -> Color {
+        let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .indigo, .purple]
+        return colors[i % colors.count]
     }
 }
 
