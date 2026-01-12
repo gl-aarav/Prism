@@ -1519,68 +1519,34 @@ struct ContentView: View {
 
 struct SidebarView: View {
     @ObservedObject var chatManager: ChatManager
+    @Namespace private var animation  // For sliding selection
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack {
-                Text("Chats")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.primary)
-                Spacer()
-                Button(action: chatManager.createNewSession) {
-                    Label("New", systemImage: "plus")
-                        .font(.system(size: 13, weight: .medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.35),
-                                            Color.white.opacity(0.12),
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 1
-                                )
-                        )
-                        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    chatManager.deleteCurrentSession()
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(8)
-                        .background(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .help("Delete current chat")
-            }
-            .padding(.horizontal)
-            .padding(.top, 10)
+            header
 
             ScrollView {
-                LazyVStack(spacing: 10) {
+                LazyVStack(spacing: 6) {
                     ForEach(
                         chatManager.sessions.filter {
                             !$0.messages.isEmpty || $0.id == chatManager.currentSessionId
                         }
                     ) { session in
-                        sidebarRow(for: session)
+                        SidebarRow(
+                            session: session,
+                            isSelected: chatManager.currentSessionId == session.id,
+                            animation: animation,
+                            onSelect: {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                    chatManager.currentSessionId = session.id
+                                }
+                            },
+                            onDelete: {
+                                withAnimation {
+                                    chatManager.deleteSession(id: session.id)
+                                }
+                            }
+                        )
                     }
                 }
                 .padding(10)
@@ -1595,105 +1561,202 @@ struct SidebarView: View {
         }
     }
 
-    @ViewBuilder
-    private func sidebarRow(for session: ChatSession) -> some View {
-        let isSelected = chatManager.currentSessionId == session.id
-        HStack(spacing: 10) {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color.blue.opacity(0.65), Color.green.opacity(0.55)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 8, height: 8)
-                .opacity(isSelected ? 1 : 0.35)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(session.title.isEmpty ? "Untitled" : session.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                Text(session.date, style: .date)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+    private var header: some View {
+        HStack {
+            Text("Chats")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.primary)
             Spacer()
-
-            if !session.messages.isEmpty {
-                Text("\(session.messages.count)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.secondary.opacity(0.12))
-                    .clipShape(Capsule())
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            Group {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.blue.opacity(0.24),
-                                    Color.green.opacity(0.22),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+            Button(action: chatManager.createNewSession) {
+                Label("New", systemImage: "plus")
+                    .font(.system(size: 13, weight: .medium))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.35),
+                                        Color.white.opacity(0.12),
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
                             )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.35), lineWidth: 1)
-                        )
-                        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
-                } else {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white.opacity(0.04))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                        )
-                        .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 3)
-                }
+                    )
+                    .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
             }
-        )
-        .contentShape(Rectangle())
-        .onTapGesture {
-            chatManager.currentSessionId = session.id
-        }
-        .contextMenu {
-            if !session.messages.isEmpty {
-                Button("Export Chat") {
-                    exportChat(session)
-                }
-                Divider()
-                Button("Delete") {
-                    chatManager.deleteSession(id: session.id)
-                }
+            .buttonStyle(.plain)
+
+            Button {
+                chatManager.deleteCurrentSession()
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 13, weight: .semibold))
+                    .padding(8)
+                    .background(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
+            .buttonStyle(.plain)
+            .help("Delete current chat")
         }
+        .padding(.horizontal)
+        .padding(.top, 10)
     }
+}
 
-    func exportChat(_ session: ChatSession) {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.plainText]
-        panel.nameFieldStringValue = "\(session.title).md"
-        panel.canCreateDirectories = true
+struct SidebarRow: View {
+    let session: ChatSession
+    let isSelected: Bool
+    var animation: Namespace.ID
+    var onSelect: () -> Void
+    var onDelete: () -> Void
 
-        if panel.runModal() == .OK, let url = panel.url {
-            var content = "# \(session.title)\n\n"
-            for msg in session.messages {
-                let role = msg.isUser ? "User" : "Assistant"
-                content += "### \(role)\n\(msg.content)\n\n"
+    @State private var offset: CGFloat = 0
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            // Delete Action Background
+            if offset < 0 {
+                Button(action: onDelete) {
+                    Image(systemName: "trash.fill")
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .frame(maxHeight: .infinity)
+                        .background(Color.red)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .padding(.trailing, 0)
             }
 
-            try? content.write(to: url, atomically: true, encoding: .utf8)
+            // Content
+            HStack(spacing: 12) {
+                // Indicator
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.8), Color.cyan],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 8, height: 8)
+                    .opacity(isSelected ? 1 : 0)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.title.isEmpty ? "New Chat" : session.title)
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                        .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
+                        .lineLimit(1)
+
+                    Text(session.date, style: .date)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                if !session.messages.isEmpty {
+                    Text("\(session.messages.count)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(isSelected ? .white.opacity(0.9) : .secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            isSelected
+                                ? Color.black.opacity(0.2)
+                                : Color.secondary.opacity(0.1)
+                        )
+                        .clipShape(Capsule())
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background(
+                ZStack {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.blue.opacity(0.12),
+                                        Color.cyan.opacity(0.08),
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .strokeBorder(Color.blue.opacity(0.2), lineWidth: 1)
+                            )
+                            .matchedGeometryEffect(id: "bg", in: animation)
+                            .shadow(color: Color.blue.opacity(0.05), radius: 4, x: 0, y: 2)
+                    } else {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(0.001))  // Hit testing
+                    }
+                }
+            )
+            .offset(x: offset)
+            .gesture(
+                DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                    .onChanged { gesture in
+                        if gesture.translation.width < 0 {
+                            withAnimation(.interactiveSpring()) {
+                                offset = gesture.translation.width
+                            }
+                        }
+                    }
+                    .onEnded { gesture in
+                        if gesture.translation.width < -80 {
+                            /*
+                             User requested: "slide ... to show a delete icon".
+                             Normally this means we keep it open or delete immediately.
+                             Let's snap nicely to reveal the button properly if they stop,
+                             or just snap back if they don't commit.
+                             Actually, standard behavior is snap back if released,
+                             trigger if dragged far enough, or hold open.
+                             Let's keep it simple: Snap back to 0. The button is visible *during* drag.
+                             If they want to delete they can tap the button while dragging (hard) or we can implement
+                             "Delete if dragged past threshold".
+                             Let's just implement snap back for now and rely on a tap on the revealed area?
+                             No, taps on moving targets are bad.
+                             Better: Drag past threshold -> Delete triggers automatically?
+                             Request: "sliding a chat to the left show a delete icon so you can delete it".
+                             This implies swiping reveals the icon and you tap it.
+                             So I'll snap to -60 opened state ideally.
+                            */
+                            withAnimation(.spring()) {
+                                offset = -60
+                            }
+                        } else {
+                            withAnimation(.spring()) {
+                                offset = 0
+                            }
+                        }
+                    }
+            )
+            // Tap to close if open, or select
+            .onTapGesture {
+                if offset < 0 {
+                    withAnimation(.spring()) {
+                        offset = 0
+                    }
+                } else {
+                    onSelect()
+                }
+            }
         }
     }
 }
@@ -2983,37 +3046,57 @@ struct MarkdownView: View, Equatable {
 }
 
 struct EmptyStateView: View {
+    @State private var animate = false
+
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 60, height: 60)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.blue, .teal],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+        VStack(spacing: 30) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.05)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
-                .padding()
-                .background(
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-                )
+                    .frame(width: 140, height: 140)
+                    .blur(radius: 20)
+                    .scaleEffect(animate ? 1.1 : 1.0)
 
-            Text("Start a New Conversation")
-                .font(.title2)
-                .fontWeight(.semibold)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 50))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue, .cyan],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
+            }
+            .onAppear {
+                withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
+                    animate.toggle()
+                }
+            }
 
-            Text("Type a message below to begin chatting.")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            VStack(spacing: 8) {
+                Text("Hello")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+
+                Text("How can I help you today?")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 60)
     }
 }
 
@@ -3354,27 +3437,46 @@ struct SettingsView: View {
 
 // Helper
 struct TypingIndicator: View {
-    @State private var showDot1 = false
-    @State private var showDot2 = false
-    @State private var showDot3 = false
+    @State private var animate = false
 
     var body: some View {
-        HStack(spacing: 4) {
-            Circle().opacity(showDot1 ? 1 : 0.3).scaleEffect(showDot1 ? 1 : 0.8)
-            Circle().opacity(showDot2 ? 1 : 0.3).scaleEffect(showDot2 ? 1 : 0.8)
-            Circle().opacity(showDot3 ? 1 : 0.3).scaleEffect(showDot3 ? 1 : 0.8)
-        }
-        .foregroundColor(.gray)
-        .frame(width: 40, height: 20)
-        .onAppear {
-            withAnimation(Animation.easeInOut(duration: 0.5).repeatForever()) { showDot1.toggle() }
-            withAnimation(Animation.easeInOut(duration: 0.5).repeatForever().delay(0.2)) {
-                showDot2.toggle()
+        Capsule()
+            .fill(Color.primary.opacity(0.06))
+            .frame(width: 52, height: 22)
+            .overlay(
+                GeometryReader { geo in
+                    LinearGradient(
+                        colors: [
+                            .blue.opacity(0.5), .cyan.opacity(0.5), .green.opacity(0.5),
+                            .cyan.opacity(0.5),
+                            .blue.opacity(0.5), .cyan.opacity(0.5), .green.opacity(0.5),
+                            .cyan.opacity(0.5),
+                            .blue.opacity(0.5),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * 2)
+                    .offset(x: animate ? -geo.size.width : 0)
+                }
+                .mask(Capsule())
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [.blue.opacity(0.3), .green.opacity(0.3)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .onAppear {
+                withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
+                    animate = true
+                }
             }
-            withAnimation(Animation.easeInOut(duration: 0.5).repeatForever().delay(0.4)) {
-                showDot3.toggle()
-            }
-        }
     }
 }
 
