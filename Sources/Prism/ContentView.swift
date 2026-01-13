@@ -44,6 +44,7 @@ struct Message: Identifiable, Codable, Equatable {
     }
     var thinkingContent: String?
     var thinkingDuration: TimeInterval?
+    var model: String?
     var imageData: Data?
     var pdfData: Data?
     var isUser: Bool
@@ -69,16 +70,19 @@ struct Message: Identifiable, Codable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, content, thinkingContent, thinkingDuration, imageData, pdfData, isUser, timestamp
+        case id, content, thinkingContent, thinkingDuration, model, imageData, pdfData, isUser,
+            timestamp
     }
 
     init(
         content: String, thinkingContent: String? = nil, thinkingDuration: TimeInterval? = nil,
+        model: String? = nil,
         image: NSImage? = nil, pdfData: Data? = nil, isUser: Bool
     ) {
         self.content = content
         self.thinkingContent = thinkingContent
         self.thinkingDuration = thinkingDuration
+        self.model = model
         self.imageData = image?.tiffRepresentation
         self.pdfData = pdfData
         self.isUser = isUser
@@ -93,6 +97,7 @@ struct Message: Identifiable, Codable, Equatable {
         thinkingContent = try container.decodeIfPresent(String.self, forKey: .thinkingContent)
         thinkingDuration = try container.decodeIfPresent(
             TimeInterval.self, forKey: .thinkingDuration)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
         imageData = try container.decodeIfPresent(Data.self, forKey: .imageData)
         pdfData = try container.decodeIfPresent(Data.self, forKey: .pdfData)
         isUser = try container.decode(Bool.self, forKey: .isUser)
@@ -110,6 +115,7 @@ struct Message: Identifiable, Codable, Equatable {
         try container.encode(content, forKey: .content)
         try container.encode(thinkingContent, forKey: .thinkingContent)
         try container.encode(thinkingDuration, forKey: .thinkingDuration)
+        try container.encodeIfPresent(model, forKey: .model)
         try container.encode(imageData, forKey: .imageData)
         try container.encode(pdfData, forKey: .pdfData)
         try container.encode(isUser, forKey: .isUser)
@@ -572,7 +578,14 @@ class OllamaService {
                 var finalSystemPrompt = systemPrompt
                 // Inject instructions to force thinking output if requested, mainly for models that don't do it by default
                 // or to ensure the parser can catch it.
-                if thinkingLevel == "high" || thinkingLevel == "medium" {
+                // Qwen and Gemma models: Do not inject thinking instructions.
+                // DeepSeek: Only inject if "Reasoning On" (high), otherwise rely on model default or don't force.
+                let lowerModel = model.lowercased()
+                let skipThinkingInjection =
+                    lowerModel.contains("qwen") || lowerModel.contains("gemma")
+
+                if !skipThinkingInjection && (thinkingLevel == "high" || thinkingLevel == "medium")
+                {
                     let instruction =
                         " Please think step-by-step before answering. Wrap your thought process in <think> and </think> tags."
                     if finalSystemPrompt.isEmpty {
@@ -827,7 +840,14 @@ class GeminiService {
 
                 var finalSystemPrompt = systemPrompt
                 // Inject instructions to force thinking output if requested
-                if thinkingLevel == "high" || thinkingLevel == "medium" {
+                // Qwen/Gemma check is handled by UI hiding it mostly, but if using Gemini API with those models (unlikely), same logic applies.
+                // Assuming standard Gemini models here, we keep the injection logic for now unless model name says otherwise.
+                let lowerModel = model.lowercased()
+                let skipThinkingInjection =
+                    lowerModel.contains("qwen") || lowerModel.contains("gemma")
+
+                if !skipThinkingInjection && (thinkingLevel == "high" || thinkingLevel == "medium")
+                {
                     let instruction =
                         " Please think step-by-step before answering. Wrap your thought process in <think> and </think> tags."
                     if finalSystemPrompt.isEmpty {
@@ -1110,6 +1130,12 @@ struct WebView: NSViewRepresentable {
     }
 }
 
+enum ThinkingMode {
+    case none
+    case binary  // On/Off (e.g. DeepSeek)
+    case threeState  // Low/Med/High (Standard)
+}
+
 struct ContentView: View {
     @ObservedObject private var chatManager = ChatManager.shared
     @State private var inputText: String = ""
@@ -1144,6 +1170,28 @@ struct ContentView: View {
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let shortcutService = ShortcutService()
+
+    var thinkingMode: ThinkingMode {
+        let model: String
+        if selectedProvider == "Gemini API" {
+            model = geminiModel
+        } else if selectedProvider == "Ollama 1" {
+            model = ollamaModel
+        } else if selectedProvider == "Ollama 2" {
+            model = ollamaModel2
+        } else {
+            return .none
+        }
+
+        let lower = model.lowercased()
+        if lower.contains("qwen") || lower.contains("gemma") {
+            return .none
+        } else if lower.contains("deepseek") {
+            return .binary
+        } else {
+            return .threeState
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -1235,8 +1283,7 @@ struct ContentView: View {
                                         onStop: stopGeneration,
                                         onSelectAttachment: selectAttachment,
                                         isImageGen: selectedProvider == "Image Creation",
-                                        showThinking: selectedProvider.contains("Ollama")
-                                            || selectedProvider == "Gemini API"
+                                        thinkingMode: thinkingMode
                                     )
                                 }
                                 .onChange(of: chatManager.getCurrentMessages().count) { _, count in
@@ -1355,6 +1402,7 @@ struct ContentView: View {
     }
 
     func sendMessage() {
+        guard !isLoading else { return }
         guard
             !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || selectedImage != nil || selectedPDF != nil
@@ -1424,7 +1472,8 @@ struct ContentView: View {
             } else if selectedProvider == "Gemini API" {
                 if !geminiKey.isEmpty {
                     let aiMsgId = UUID()
-                    var aiMsg = Message(content: "", isUser: false)
+                    // Store model name
+                    var aiMsg = Message(content: "", model: geminiModel, isUser: false)
                     aiMsg.id = aiMsgId
 
                     DispatchQueue.main.async {
@@ -1476,14 +1525,15 @@ struct ContentView: View {
                 }
             } else if selectedProvider == "Ollama 1" || selectedProvider == "Ollama 2" {
                 let aiMsgId = UUID()
-                var aiMsg = Message(content: "", isUser: false)
+                let activeModel = (selectedProvider == "Ollama 1") ? ollamaModel : ollamaModel2
+                var aiMsg = Message(content: "", model: activeModel, isUser: false)
                 aiMsg.id = aiMsgId
 
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
                 }
 
-                let activeModel = (selectedProvider == "Ollama 1") ? ollamaModel : ollamaModel2
+                // Removed redeclaration of activeModel
 
                 do {
                     var fullContent = ""
@@ -1944,7 +1994,7 @@ struct InputView: View {
     var onStop: () -> Void
     var onSelectAttachment: () -> Void
     var isImageGen: Bool
-    var showThinking: Bool
+    var thinkingMode: ThinkingMode
 
     @FocusState private var isFocused: Bool
     @StateObject private var pasteMonitor = PasteMonitor()
@@ -2050,17 +2100,64 @@ struct InputView: View {
 
             inputField
 
-            if showThinking {
+            if thinkingMode != .none {
                 Menu {
-                    Picker("Reasoning Effort", selection: $thinkingLevel) {
-                        Text("Low").tag("low")
-                        Text("Medium").tag("medium")
-                        Text("High").tag("high")
+                    if thinkingMode == .binary {
+                        Button {
+                            thinkingLevel = "high"
+                        } label: {
+                            if thinkingLevel == "high" {
+                                Label("Reasoning: On", systemImage: "checkmark")
+                            } else {
+                                Text("Reasoning: On")
+                            }
+                        }
+                        Button {
+                            thinkingLevel = "low"
+                        } label: {
+                            if thinkingLevel != "high" {
+                                Label("Reasoning: Off", systemImage: "checkmark")
+                            } else {
+                                Text("Reasoning: Off")
+                            }
+                        }
+                    } else {
+                        Button {
+                            thinkingLevel = "low"
+                        } label: {
+                            if thinkingLevel == "low" {
+                                Label("Low", systemImage: "checkmark")
+                            } else {
+                                Text("Low")
+                            }
+                        }
+                        Button {
+                            thinkingLevel = "medium"
+                        } label: {
+                            if thinkingLevel == "medium" {
+                                Label("Medium", systemImage: "checkmark")
+                            } else {
+                                Text("Medium")
+                            }
+                        }
+                        Button {
+                            thinkingLevel = "high"
+                        } label: {
+                            if thinkingLevel == "high" {
+                                Label("High", systemImage: "checkmark")
+                            } else {
+                                Text("High")
+                            }
+                        }
                     }
                 } label: {
                     Image(systemName: "brain")
                         .font(.system(size: 16))
-                        .foregroundColor(thinkingLevel == "medium" ? .secondary : .primary)
+                        .foregroundColor(
+                            (thinkingLevel == "medium" && thinkingMode == .threeState)
+                                || (thinkingLevel == "low" && thinkingMode == .binary)
+                                ? .secondary : .primary
+                        )
                         .padding(6)
                         .background(Color.secondary.opacity(0.1))
                         .clipShape(Circle())
@@ -3270,6 +3367,14 @@ struct MessageView: View, Equatable {
                         }
                     }
                     .padding(.top, 4)
+
+                    if let model = message.model {
+                        Text("Model used: \(model). Information could be inaccurate.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.8))
+                            .padding(.top, 2)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -3692,12 +3797,14 @@ struct QuickChatView: View {
     @State private var inputText: String = ""
     @State private var isLoading: Bool = false
     @State private var selectedProvider: String = "Gemini API"
+    @State private var thinkingLevel: String = "medium"
 
     // Settings (Read-only access to keys)
     @AppStorage("GeminiKey") private var geminiKey: String = ""
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("OllamaModel") private var ollamaModel: String = "llama3"
+    @AppStorage("OllamaModel2") private var ollamaModel2: String = "gpt-oss:20b-cloud"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
@@ -3707,6 +3814,28 @@ struct QuickChatView: View {
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let shortcutService = ShortcutService()
+
+    var thinkingMode: ThinkingMode {
+        let model: String
+        if selectedProvider == "Gemini API" {
+            model = geminiModel
+        } else if selectedProvider == "Ollama 1" {
+            model = ollamaModel
+        } else if selectedProvider == "Ollama 2" {
+            model = ollamaModel2
+        } else {
+            return .none
+        }
+
+        let lower = model.lowercased()
+        if lower.contains("qwen") || lower.contains("gemma") {
+            return .none
+        } else if lower.contains("deepseek") {
+            return .binary
+        } else {
+            return .threeState
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -3747,7 +3876,7 @@ struct QuickChatView: View {
     private var headerBar: some View {
         HStack(spacing: 10) {
             Button(action: {
-                chatManager.deleteAllSessions()  // For Quick Chat, we just clear everything
+                chatManager.createNewSession()
             }) {
                 Label("New", systemImage: "square.and.pencil")
                     .labelStyle(.iconOnly)
@@ -3767,7 +3896,8 @@ struct QuickChatView: View {
 
             Picker("", selection: $selectedProvider) {
                 Text("Gemini API").tag("Gemini API")
-                Text("Ollama").tag("Ollama")
+                Text("Ollama 1").tag("Ollama 1")
+                Text("Ollama 2").tag("Ollama 2")
                 Text("Private Cloud").tag("Private Cloud")
                 Text("On-Device").tag("On-Device")
                 Text("ChatGPT").tag("ChatGPT")
@@ -3858,16 +3988,78 @@ struct QuickChatView: View {
                 .onSubmit(sendMessage)
                 .padding(.vertical, 10)
 
+            if thinkingMode != .none {
+                Menu {
+                    if thinkingMode == .binary {
+                        Button {
+                            thinkingLevel = "high"
+                        } label: {
+                            if thinkingLevel == "high" {
+                                Label("Reasoning: On", systemImage: "checkmark")
+                            } else {
+                                Text("Reasoning: On")
+                            }
+                        }
+                        Button {
+                            thinkingLevel = "low"
+                        } label: {
+                            if thinkingLevel != "high" {
+                                Label("Reasoning: Off", systemImage: "checkmark")
+                            } else {
+                                Text("Reasoning: Off")
+                            }
+                        }
+                    } else {
+                        Button {
+                            thinkingLevel = "low"
+                        } label: {
+                            if thinkingLevel == "low" {
+                                Label("Low", systemImage: "checkmark")
+                            } else {
+                                Text("Low")
+                            }
+                        }
+                        Button {
+                            thinkingLevel = "medium"
+                        } label: {
+                            if thinkingLevel == "medium" {
+                                Label("Medium", systemImage: "checkmark")
+                            } else {
+                                Text("Medium")
+                            }
+                        }
+                        Button {
+                            thinkingLevel = "high"
+                        } label: {
+                            if thinkingLevel == "high" {
+                                Label("High", systemImage: "checkmark")
+                            } else {
+                                Text("High")
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "brain")
+                        .font(.system(size: 16))
+                        .foregroundColor(
+                            (thinkingLevel == "medium" && thinkingMode == .threeState)
+                                || (thinkingLevel == "low" && thinkingMode == .binary)
+                                ? .secondary : .primary
+                        )
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .menuStyle(.borderlessButton)
+                .help("Reasoning Effort")
+            }
+
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 26, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [primaryColor, secondaryColor.opacity(0.9)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-                    .shadow(color: primaryColor.opacity(0.25), radius: 6, x: 0, y: 3)
+                    .font(.system(size: 28, weight: .bold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(Color.primary)
+                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(.plain)
             .disabled(inputText.isEmpty || isLoading)
@@ -3931,6 +4123,7 @@ struct QuickChatView: View {
 
     func sendMessage() {
         guard !inputText.isEmpty else { return }
+        guard !isLoading else { return }
         let content = inputText
         inputText = ""
 
@@ -3942,7 +4135,7 @@ struct QuickChatView: View {
             if selectedProvider == "Gemini API" {
                 if !geminiKey.isEmpty {
                     let aiMsgId = UUID()
-                    var aiMsg = Message(content: "", isUser: false)
+                    var aiMsg = Message(content: "", model: geminiModel, isUser: false)
                     aiMsg.id = aiMsgId
 
                     DispatchQueue.main.async {
@@ -3993,9 +4186,10 @@ struct QuickChatView: View {
                         self.isLoading = false
                     }
                 }
-            } else if selectedProvider == "Ollama" {
+            } else if selectedProvider == "Ollama 1" || selectedProvider == "Ollama 2" {
                 let aiMsgId = UUID()
-                var aiMsg = Message(content: "", isUser: false)
+                let activeModel = (selectedProvider == "Ollama 1") ? ollamaModel : ollamaModel2
+                var aiMsg = Message(content: "", model: activeModel, isUser: false)
                 aiMsg.id = aiMsgId
 
                 DispatchQueue.main.async {
@@ -4008,8 +4202,8 @@ struct QuickChatView: View {
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), endpoint: ollamaURL,
-                        model: ollamaModel, systemPrompt: systemPrompt)
-                    {
+                        model: activeModel, systemPrompt: systemPrompt, thinkingLevel: thinkingLevel
+                    ) {
                         fullContent += contentChunk
                         if let thinking = thinkingChunk {
                             fullThinking += thinking
@@ -4058,14 +4252,14 @@ struct QuickChatView: View {
                     let result = try await shortcutService.runShortcut(
                         name: shortcutName, input: transcript, image: nil)
                     DispatchQueue.main.async {
-                        let aiMsg = Message(content: result.0, image: nil, isUser: false)
+                        let aiMsg = Message(content: result.0, model: shortcutName, image: nil, isUser: false)
                         self.chatManager.addMessage(aiMsg)
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         let aiMsg = Message(
-                            content: "Error: \(error.localizedDescription)", isUser: false)
+                            content: "Error: \(error.localizedDescription)", model: shortcutName, isUser: false)
                         self.chatManager.addMessage(aiMsg)
                         self.isLoading = false
                     }
