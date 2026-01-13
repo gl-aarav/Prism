@@ -49,6 +49,7 @@ struct Message: Identifiable, Codable, Equatable {
     var pdfData: Data?
     var isUser: Bool
     var timestamp = Date()
+    var isStreaming: Bool = false
 
     // Cache the decoded image to avoid expensive decoding on main thread
     private var _cachedImage: NSImage?
@@ -375,6 +376,7 @@ struct Message: Identifiable, Codable, Equatable {
         if lhs.isUser != rhs.isUser { return false }
         if lhs.timestamp != rhs.timestamp { return false }
         if lhs.content != rhs.content { return false }
+        if lhs.isStreaming != rhs.isStreaming { return false }
 
         // Optimization: Avoid deep data comparison for images if possible
         // If both have no image, equal.
@@ -481,7 +483,8 @@ class ChatManager: ObservableObject {
     }
 
     func updateMessage(
-        id: UUID, content: String, thinkingContent: String? = nil, image: NSImage? = nil
+        id: UUID, content: String, thinkingContent: String? = nil, image: NSImage? = nil,
+        isStreaming: Bool = false
     ) {
         guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }),
             let msgIndex = sessions[index].messages.firstIndex(where: { $0.id == id })
@@ -489,6 +492,7 @@ class ChatManager: ObservableObject {
 
         var msg = sessions[index].messages[msgIndex]
         msg.content = content
+        msg.isStreaming = isStreaming
         if let thinking = thinkingContent {
             msg.thinkingContent = thinking
         }
@@ -1143,10 +1147,10 @@ struct ContentView: View {
     @State private var selectedPDF: Data? = nil
     @State private var isLoading: Bool = false
     @State private var thinkingLevel: String = "medium"
-    @State private var showSettings: Bool = false
     @State private var showSidebar: Bool = false
     @State private var lastMessageCount: Int = 0
     @State private var lastSessionId: UUID?
+    @State private var columnVisibility = NavigationSplitViewVisibility.automatic
 
     // Settings
     @AppStorage("GeminiKey") private var geminiKey: String = ""
@@ -1154,7 +1158,7 @@ struct ContentView: View {
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("OllamaModel") private var ollamaModel: String = "gpt-oss:120b-cloud"
     @AppStorage("OllamaModel2") private var ollamaModel2: String = "gpt-oss:20b-cloud"
-    @AppStorage("SelectedProvider") private var selectedProvider: String = "Gemini API"
+    @AppStorage("selectedProvider") private var selectedProvider: String = "Apple Foundation Model"
 
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
@@ -1170,6 +1174,7 @@ struct ContentView: View {
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let shortcutService = ShortcutService()
+    private let appleFoundationService = AppleFoundationService()
 
     var thinkingMode: ThinkingMode {
         let model: String
@@ -1195,7 +1200,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            NavigationSplitView {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
                 SidebarView(chatManager: chatManager)
             } detail: {
                 ZStack {
@@ -1227,7 +1232,6 @@ struct ContentView: View {
                         VStack(spacing: 0) {
                             HeaderView(
                                 selectedProvider: $selectedProvider,
-                                showSettings: $showSettings,
                                 onNewChat: chatManager.createNewSession
                             )
 
@@ -1240,7 +1244,6 @@ struct ContentView: View {
                         VStack(spacing: 0) {
                             HeaderView(
                                 selectedProvider: $selectedProvider,
-                                showSettings: $showSettings,
                                 onNewChat: chatManager.createNewSession
                             )
 
@@ -1260,14 +1263,6 @@ struct ContentView: View {
                                                 )
                                                 .equatable()
                                             }
-                                        }
-                                        if isLoading {
-                                            HStack {
-                                                TypingIndicator()
-                                                Spacer()
-                                            }
-                                            .padding(.horizontal)
-                                            .id("typingIndicator")
                                         }
                                     }
                                     .padding()
@@ -1305,21 +1300,6 @@ struct ContentView: View {
                 }
             }
             .frame(minWidth: 800, minHeight: 500)
-            .popover(isPresented: $showSettings) {
-                SettingsView(
-                    geminiKey: $geminiKey,
-                    geminiModel: $geminiModel,
-                    ollamaURL: $ollamaURL,
-                    ollamaModel: $ollamaModel,
-                    ollamaModel2: $ollamaModel2,
-                    shortcutPrivateCloud: $shortcutPrivateCloud,
-                    shortcutOnDevice: $shortcutOnDevice,
-                    shortcutChatGPT: $shortcutChatGPT,
-                    shortcutImageGen: $shortcutImageGen,
-                    backgroundImagePath: $backgroundImagePath
-                )
-                .environmentObject(chatManager)
-            }
             .disabled(showSplash)  // Disable main content when splash is showing to prevent focus ring bleed-through
             .toolbar(showSplash ? .hidden : .visible, for: .windowToolbar)
 
@@ -1475,6 +1455,7 @@ struct ContentView: View {
                     // Store model name
                     var aiMsg = Message(content: "", model: geminiModel, isUser: false)
                     aiMsg.id = aiMsgId
+                    aiMsg.isStreaming = true
 
                     DispatchQueue.main.async {
                         self.chatManager.addMessage(aiMsg)
@@ -1500,17 +1481,22 @@ struct ContentView: View {
                             DispatchQueue.main.async {
                                 self.chatManager.updateMessage(
                                     id: aiMsgId, content: contentToUpdate,
-                                    thinkingContent: thinkingToUpdate)
+                                    thinkingContent: thinkingToUpdate, isStreaming: true)
                             }
                         }
                         DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: fullContent,
+                                thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
+                                isStreaming: false)
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
                         }
                     } catch {
                         DispatchQueue.main.async {
                             self.chatManager.updateMessage(
-                                id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                                id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                                isStreaming: false)
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
                         }
@@ -1520,6 +1506,43 @@ struct ContentView: View {
                         let aiMsg = Message(
                             content: "Please enter your Gemini API Key in settings.", isUser: false)
                         self.chatManager.addMessage(aiMsg)
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "Apple Foundation" {
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "", model: "Apple Foundation", isUser: false)
+                aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    var accumulatedContent = ""
+                    for try await contentSnapshot in appleFoundationService.sendMessageStream(
+                        history: chatManager.getCurrentMessages(), systemPrompt: systemPrompt
+                    ) {
+                        accumulatedContent += contentSnapshot
+                        let contentToUpdate = accumulatedContent
+                        DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                        }
+                    }
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: accumulatedContent, isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 }
@@ -1588,6 +1611,16 @@ struct ContentView: View {
                     displayModelName = "Private Cloud Compute"
                 }
 
+                // Create placeholder message with streaming state
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "", model: displayModelName, isUser: false)
+                aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
+                
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
                 // Build transcript for shortcuts
                 var transcript = "Please reply to the last message:\n\n"
                 for msg in currentHistory.suffix(10) {
@@ -1600,19 +1633,23 @@ struct ContentView: View {
                     let result = try await shortcutService.runShortcut(
                         name: shortcutName, input: transcript, image: image)
                     DispatchQueue.main.async {
-                        let aiMsg = Message(
-                            content: result.0, model: displayModelName, image: result.1,
-                            isUser: false)
-                        self.chatManager.addMessage(aiMsg)
+                        self.chatManager.updateMessage(
+                            id: aiMsgId,
+                            content: result.0,
+                            image: result.1,
+                            isStreaming: false
+                        )
+                        self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
-                        let aiMsg = Message(
+                        self.chatManager.updateMessage(
+                            id: aiMsgId,
                             content: "Error: \(error.localizedDescription)",
-                            model: displayModelName,
-                            isUser: false)
-                        self.chatManager.addMessage(aiMsg)
+                            isStreaming: false
+                        )
+                        self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 }
@@ -1867,28 +1904,77 @@ struct SidebarRow: View {
 
 struct HeaderView: View {
     @Binding var selectedProvider: String
-    @Binding var showSettings: Bool
     var onNewChat: () -> Void
 
     var body: some View {
         HStack {
-            Picker("Model", selection: $selectedProvider) {
+            Menu {
+                Section("Apple Intelligence") {
+                    Button(action: { selectedProvider = "Apple Foundation" }) {
+                        Label("Apple Foundation", systemImage: getProviderIcon("Apple Foundation"))
+                    }
+                }
                 Section("API") {
-                    Text("Gemini API").tag("Gemini API")
-                    Text("Ollama 1").tag("Ollama 1")
-                    Text("Ollama 2").tag("Ollama 2")
+                    Button(action: { selectedProvider = "Gemini API" }) {
+                        Label("Gemini API", systemImage: getProviderIcon("Gemini API"))
+                    }
+                    Button(action: { selectedProvider = "Ollama 1" }) {
+                        Label("Ollama 1", systemImage: getProviderIcon("Ollama"))
+                    }
+                    Button(action: { selectedProvider = "Ollama 2" }) {
+                        Label("Ollama 2", systemImage: getProviderIcon("Ollama"))
+                    }
                 }
                 Section("Shortcuts") {
-                    Text("Private Cloud").tag("Private Cloud")
-                    Text("On-Device").tag("On-Device")
-                    Text("ChatGPT").tag("ChatGPT")
+                    Button(action: { selectedProvider = "Private Cloud" }) {
+                        Label("Private Cloud", systemImage: getProviderIcon("Private Cloud"))
+                    }
+                    Button(action: { selectedProvider = "On-Device" }) {
+                        Label("On-Device", systemImage: getProviderIcon("On-Device"))
+                    }
+                    Button(action: { selectedProvider = "ChatGPT" }) {
+                        Label("ChatGPT", systemImage: getProviderIcon("ChatGPT"))
+                    }
                 }
                 Section("Tools") {
-                    Text("Image Creation").tag("Image Creation")
+                    Button(action: { selectedProvider = "Image Creation" }) {
+                        Label("Image Creation", systemImage: getProviderIcon("Image Creation"))
+                    }
                 }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: getProviderIcon(selectedProvider))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue, .green], startPoint: .topLeading,
+                                endPoint: .bottomTrailing))
+                    Text(selectedProvider)
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(
+                            Color.gray.opacity(0.14)
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(
+                                    Color.white.opacity(0.18),
+                                    lineWidth: 0.8
+                                )
+                        )
+                )
             }
-            .frame(width: 250)
+            .menuStyle(.borderlessButton)
+            .fixedSize()
             .focusEffectDisabled()
+            .padding(.horizontal, 4) // Padding around the menu for click area
 
             Spacer()
 
@@ -1923,18 +2009,21 @@ struct HeaderView: View {
             }
             .buttonStyle(.plain)
 
-            Button(action: { showSettings = true }) {
-                Image(systemName: "gearshape.fill")
-                    .foregroundColor(.secondary)
-                    .padding(8)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-
         }
         .padding()
         // Transparent background
+    }
+    func getProviderIcon(_ provider: String) -> String {
+        switch provider {
+        case "Apple Foundation": return "apple.logo"
+        case "On-Device": return "iphone"
+        case "Private Cloud": return "lock.icloud"
+        case "Gemini API": return "sparkles"
+        case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
+        case "Image Creation": return "paintpalette"
+        case "ChatGPT": return "message"
+        default: return "cpu"
+        }
     }
 }
 
@@ -3262,6 +3351,8 @@ struct MessageView: View, Equatable {
 
     @State private var isCopied = false
     @State private var showImagePreview = false
+    @State private var isCursorVisible = true
+    private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     static func == (lhs: MessageView, rhs: MessageView) -> Bool {
         return lhs.message == rhs.message
@@ -3341,9 +3432,16 @@ struct MessageView: View, Equatable {
                                 showImagePreview = true
                             }
                     }
-                    if !message.content.isEmpty {
-                        MarkdownView(blocks: message.blocks)
-                            .equatable()
+                    if !message.content.isEmpty || message.isStreaming {
+                        if message.isStreaming {
+                            MarkdownView(
+                                blocks: Message.parseMarkdown(
+                                    message.content + (isCursorVisible ? " ▋" : "")))
+                                .equatable()
+                        } else {
+                            MarkdownView(blocks: message.blocks)
+                                .equatable()
+                        }
                     }
 
                     // Action Buttons
@@ -3398,6 +3496,11 @@ struct MessageView: View, Equatable {
                 ImagePreviewView(image: image)
             }
         }
+        .onReceive(cursorTimer) { _ in
+            if message.isStreaming {
+                isCursorVisible.toggle()
+            }
+        }
     }
 }
 
@@ -3432,16 +3535,16 @@ struct ImagePreviewView: View {
 }
 
 struct SettingsView: View {
-    @Binding var geminiKey: String
-    @Binding var geminiModel: String
-    @Binding var ollamaURL: String
-    @Binding var ollamaModel: String
-    @Binding var ollamaModel2: String
-    @Binding var shortcutPrivateCloud: String
-    @Binding var shortcutOnDevice: String
-    @Binding var shortcutChatGPT: String
-    @Binding var shortcutImageGen: String
-    @Binding var backgroundImagePath: String
+    @AppStorage("GeminiKey") private var geminiKey: String = ""
+    @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
+    @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
+    @AppStorage("OllamaModel") private var ollamaModel: String = "llama3"
+    @AppStorage("OllamaModel2") private var ollamaModel2: String = "gpt-oss:20b-cloud"
+    @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
+    @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
+    @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
+    @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
+    @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShowMenuBar") private var showMenuBar = true
     @AppStorage("EnableQuickAI") private var enableQuickAI = true
@@ -3479,6 +3582,13 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(height: 50)
+            }
+            .listRowBackground(Color.clear)
+
             Section(header: Text("General")) {
                 Toggle("Show Menu Bar Icon", isOn: $showMenuBar)
                     .toggleStyle(.switch)
@@ -3597,9 +3707,16 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
+            
+            Section {
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(height: 50)
+            }
+            .listRowBackground(Color.clear)
         }
         .formStyle(.grouped)
-        .frame(width: 500, height: 650)
+        .frame(minWidth: 500, minHeight: 600)
         .padding()
     }
 }
@@ -3809,7 +3926,7 @@ struct QuickChatView: View {
     @ObservedObject var chatManager = ChatManager.shared
     @State private var inputText: String = ""
     @State private var isLoading: Bool = false
-    @State private var selectedProvider: String = "Gemini API"
+    @AppStorage("selectedProvider") private var selectedProvider: String = "Apple Foundation Model"
     @State private var thinkingLevel: String = "medium"
 
     // Settings (Read-only access to keys)
@@ -3822,11 +3939,15 @@ struct QuickChatView: View {
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
+    @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
+
+    @State private var columnVisibility = NavigationSplitViewVisibility.automatic
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let shortcutService = ShortcutService()
+    private let appleFoundationService = AppleFoundationService()
 
     var thinkingMode: ThinkingMode {
         let model: String
@@ -3888,6 +4009,63 @@ struct QuickChatView: View {
 
     private var headerBar: some View {
         HStack(spacing: 10) {
+            Menu {
+                Section("Apple Intelligence") {
+                    Button(action: { selectedProvider = "Apple Foundation" }) {
+                        Label("Apple Foundation", systemImage: "apple.logo")
+                    }
+                }
+                Section("API") {
+                    Button(action: { selectedProvider = "Gemini API" }) {
+                        Label("Gemini API", systemImage: "sparkles")
+                    }
+                    Button(action: { selectedProvider = "Ollama 1" }) {
+                        Label("Ollama 1", systemImage: "laptopcomputer")
+                    }
+                    Button(action: { selectedProvider = "Ollama 2" }) {
+                        Label("Ollama 2", systemImage: "laptopcomputer")
+                    }
+                }
+                Section("Shortcuts") {
+                    Button(action: { selectedProvider = "Private Cloud" }) {
+                        Label("Private Cloud", systemImage: "lock.icloud")
+                    }
+                    Button(action: { selectedProvider = "On-Device" }) {
+                        Label("On-Device", systemImage: "iphone")
+                    }
+                    Button(action: { selectedProvider = "ChatGPT" }) {
+                        Label("ChatGPT", systemImage: "message")
+                    }
+                }
+            } label: {
+                HStack {
+                    Image(systemName: getProviderIcon(selectedProvider))
+                    Text(selectedProvider)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                .background(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.28), .white.opacity(0.1)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 160)
+            .focusEffectDisabled()
+            .focusable(false)
+
+            Spacer(minLength: 0)
+
             Button(action: {
                 chatManager.createNewSession()
             }) {
@@ -3906,32 +4084,6 @@ struct QuickChatView: View {
             .focusable(false)
             .buttonStyle(.plain)
             .help("New Chat")
-
-            Picker("", selection: $selectedProvider) {
-                Text("Gemini API").tag("Gemini API")
-                Text("Ollama 1").tag("Ollama 1")
-                Text("Ollama 2").tag("Ollama 2")
-                Text("Private Cloud").tag("Private Cloud")
-                Text("On-Device").tag("On-Device")
-                Text("ChatGPT").tag("ChatGPT")
-            }
-            .labelsHidden()
-            .frame(width: 140)
-            .focusEffectDisabled()
-            .focusable(false)
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
-            .background(.ultraThinMaterial)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        LinearGradient(
-                            colors: [.white.opacity(0.28), .white.opacity(0.1)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            Spacer(minLength: 0)
         }
         .padding(10)
         .background(
@@ -3955,16 +4107,6 @@ struct QuickChatView: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(chatManager.getCurrentMessages()) { message in
                         MessageView(message: message, maxBubbleWidth: 300)
-                    }
-                    if isLoading {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                                .scaleEffect(0.6)
-                            Spacer()
-                        }
-                        .id("loading")
-                        .padding(.vertical, 8)
                     }
                 }
                 .padding()
@@ -4134,6 +4276,19 @@ struct QuickChatView: View {
         )
     }
 
+    private func getProviderIcon(_ provider: String) -> String {
+        switch provider {
+        case "Apple Foundation": return "apple.logo"
+        case "On-Device": return "iphone"
+        case "Private Cloud": return "lock.icloud"
+        case "Gemini API": return "sparkles"
+        case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
+        case "Image Creation": return "paintpalette"
+        case "ChatGPT": return "message"
+        default: return "cpu"
+        }
+    }
+
     func sendMessage() {
         guard !inputText.isEmpty else { return }
         guard !isLoading else { return }
@@ -4145,11 +4300,50 @@ struct QuickChatView: View {
         isLoading = true
 
         chatManager.currentTask = Task {
-            if selectedProvider == "Gemini API" {
+            if selectedProvider == "Apple Foundation" {
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "", model: "Apple Foundation", isUser: false)
+                aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    var fullContent = ""
+                    for try await chunk in appleFoundationService.sendMessageStream(
+                        history: chatManager.getCurrentMessages(),
+                        systemPrompt: systemPrompt
+                    ) {
+                        fullContent += chunk
+                        let contentToUpdate = fullContent
+                        DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                        }
+                    }
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: fullContent, isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "Gemini API" {
                 if !geminiKey.isEmpty {
                     let aiMsgId = UUID()
                     var aiMsg = Message(content: "", model: geminiModel, isUser: false)
                     aiMsg.id = aiMsgId
+                    aiMsg.isStreaming = true
 
                     DispatchQueue.main.async {
                         self.chatManager.addMessage(aiMsg)
@@ -4176,17 +4370,22 @@ struct QuickChatView: View {
                             DispatchQueue.main.async {
                                 self.chatManager.updateMessage(
                                     id: aiMsgId, content: contentToUpdate,
-                                    thinkingContent: thinkingToUpdate)
+                                    thinkingContent: thinkingToUpdate, isStreaming: true)
                             }
                         }
                         DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: fullContent,
+                                thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
+                                isStreaming: false)
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
                         }
                     } catch {
                         DispatchQueue.main.async {
                             self.chatManager.updateMessage(
-                                id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                                id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                                isStreaming: false)
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
                         }
@@ -4204,6 +4403,7 @@ struct QuickChatView: View {
                 let activeModel = (selectedProvider == "Ollama 1") ? ollamaModel : ollamaModel2
                 var aiMsg = Message(content: "", model: activeModel, isUser: false)
                 aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
 
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
@@ -4228,17 +4428,22 @@ struct QuickChatView: View {
                         DispatchQueue.main.async {
                             self.chatManager.updateMessage(
                                 id: aiMsgId, content: contentToUpdate,
-                                thinkingContent: thinkingToUpdate)
+                                thinkingContent: thinkingToUpdate, isStreaming: true)
                         }
                     }
                     DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: fullContent,
+                            thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
+                            isStreaming: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }

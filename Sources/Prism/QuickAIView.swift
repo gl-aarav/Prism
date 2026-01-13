@@ -9,7 +9,7 @@ struct QuickAIView: View {
     @State private var inputText: String = ""
     @State private var inputLineCount: Int = 1
     @State private var isLoading: Bool = false
-    @State private var selectedProvider: String = "Ollama 1"
+    @AppStorage("selectedProvider") private var selectedProvider: String = "Apple Foundation Model"
     @State private var thinkingLevel: String = "medium"
     @State private var isExpanded: Bool = false
     @State private var selectedPDF: Data? = nil
@@ -39,6 +39,7 @@ struct QuickAIView: View {
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let shortcutService = ShortcutService()
+    private let appleFoundationService = AppleFoundationService()
     @State private var showOpacityPopover: Bool = false
 
     var body: some View {
@@ -49,6 +50,13 @@ struct QuickAIView: View {
                         // Header
                         HStack {
                             Menu {
+                                Section("Apple Intelligence") {
+                                    Button(action: { selectedProvider = "Apple Foundation" }) {
+                                        Label(
+                                            "Apple Foundation",
+                                            systemImage: getProviderIcon("Apple Foundation"))
+                                    }
+                                }
                                 Section("API") {
                                     Button(action: { selectedProvider = "Gemini API" }) {
                                         Label(
@@ -148,81 +156,6 @@ struct QuickAIView: View {
                             }
                             .buttonStyle(.plain)
                             .help("New Chat")
-
-                            // Opacity control
-                            Button(action: { showOpacityPopover.toggle() }) {
-                                Image(systemName: "paintbrush.pointed")
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Capsule(style: .continuous)
-                                            .fill(
-                                                Color.gray.opacity(
-                                                    colorScheme == .dark ? 0.18 : 0.14)
-                                            )
-                                            .overlay(
-                                                Capsule(style: .continuous)
-                                                    .stroke(
-                                                        Color.white.opacity(
-                                                            colorScheme == .dark ? 0.22 : 0.18),
-                                                        lineWidth: 0.8
-                                                    )
-                                            )
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .popover(isPresented: $showOpacityPopover, arrowEdge: .top) {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Text("Background Opacity")
-                                        .font(.headline)
-                                    Slider(
-                                        value: Binding(
-                                            get: { backgroundOpacity },
-                                            set: { backgroundOpacity = min(max($0, 0.05), 0.55) }
-                                        ),
-                                        in: 0.05...0.55
-                                    )
-                                    HStack {
-                                        Text("Clear")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Spacer()
-                                        Text("Opaque")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Text("Current: \(Int((backgroundOpacity) * 100))%")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-
-                                    Divider().padding(.vertical, 4)
-
-                                    Text("Chat Bar Vibrancy")
-                                        .font(.headline)
-                                    Slider(
-                                        value: Binding(
-                                            get: { commandBarVibrancy },
-                                            set: { commandBarVibrancy = min(max($0, 0.05), 0.9) }
-                                        ),
-                                        in: 0.05...0.9
-                                    )
-                                    HStack {
-                                        Text("Subtle")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        Spacer()
-                                        Text("Punchy")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Text("Current: \(Int((commandBarVibrancy) * 100))%")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(16)
-                                .frame(width: 240)
-                            }
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
@@ -235,12 +168,7 @@ struct QuickAIView: View {
                                         QuickAIMessageView(message: message)
                                     }
                                     if isLoading {
-                                        HStack {
-                                            TypingIndicator()
-                                            Spacer()
-                                        }
-                                        .padding(.horizontal)
-                                        .id("loading")
+                                        // Loading indicator removed in favor of streaming cursor
                                     }
                                 }
                                 .padding(20)
@@ -473,6 +401,7 @@ struct QuickAIView: View {
 
     func getProviderIcon(_ provider: String) -> String {
         switch provider {
+        case "Apple Foundation": return "apple.logo"
         case "On-Device": return "iphone"
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
@@ -533,8 +462,9 @@ struct QuickAIView: View {
             } else if selectedProvider == "Gemini API" {
                 if !geminiKey.isEmpty {
                     let aiMsgId = UUID()
-                    var aiMsg = Message(content: "", isUser: false)
+                    var aiMsg = Message(content: "", model: geminiModel, isUser: false)
                     aiMsg.id = aiMsgId
+                    aiMsg.isStreaming = true
 
                     DispatchQueue.main.async {
                         self.chatManager.addMessage(aiMsg)
@@ -561,17 +491,22 @@ struct QuickAIView: View {
                             DispatchQueue.main.async {
                                 self.chatManager.updateMessage(
                                     id: aiMsgId, content: contentToUpdate,
-                                    thinkingContent: thinkingToUpdate)
+                                    thinkingContent: thinkingToUpdate, isStreaming: true)
                             }
                         }
                         DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: fullContent,
+                                thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
+                                isStreaming: false)
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
                         }
                     } catch {
                         DispatchQueue.main.async {
                             self.chatManager.updateMessage(
-                                id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                                id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                                isStreaming: false)
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
                         }
@@ -582,6 +517,43 @@ struct QuickAIView: View {
                             content: "Please set your API Key in the main app settings.",
                             isUser: false)
                         self.chatManager.addMessage(aiMsg)
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "Apple Foundation" {
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "", model: "Apple Foundation", isUser: false)
+                aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    var accumulatedContent = ""
+                    for try await contentSnapshot in appleFoundationService.sendMessageStream(
+                        history: chatManager.getCurrentMessages(), systemPrompt: systemPrompt
+                    ) {
+                        accumulatedContent += contentSnapshot
+                        let contentToUpdate = accumulatedContent
+                        DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                        }
+                    }
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: accumulatedContent, isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 }
@@ -688,6 +660,8 @@ extension QuickAIView {
 struct QuickAIMessageView: View {
     let message: Message
     @State private var isCopied = false
+    @State private var isCursorVisible = true
+    private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -768,8 +742,14 @@ struct QuickAIMessageView: View {
                             }
                     }
 
-                    if !message.content.isEmpty {
-                        MarkdownView(blocks: message.blocks)
+                    if !message.content.isEmpty || message.isStreaming {
+                        if message.isStreaming {
+                            MarkdownView(
+                                blocks: Message.parseMarkdown(
+                                    message.content + (isCursorVisible ? " ▋" : "")))
+                        } else {
+                            MarkdownView(blocks: message.blocks)
+                        }
                     }
 
                     // Copy Button
@@ -806,6 +786,11 @@ struct QuickAIMessageView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 Spacer()
+            }
+        }
+        .onReceive(cursorTimer) { _ in
+            if message.isStreaming {
+                isCursorVisible.toggle()
             }
         }
     }

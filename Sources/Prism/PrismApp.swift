@@ -8,6 +8,7 @@ struct PrismApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(AppState.shared) // If needed or just environmentObject(ChatManager.shared)
                 .navigationTitle("Prism")
         }
         .windowStyle(.hiddenTitleBar)
@@ -27,6 +28,12 @@ struct PrismApp: App {
                     )
                 }
             }
+        }
+
+        Settings {
+            SettingsView()
+                .environmentObject(ChatManager.shared)
+                .frame(minWidth: 500, minHeight: 400)
         }
 
         MenuBarExtra(isInserted: $showMenuBar) {
