@@ -1572,11 +1572,20 @@ struct ContentView: View {
             } else {
                 // Shortcuts
                 let shortcutName: String
+                let displayModelName: String
                 switch selectedProvider {
-                case "Private Cloud": shortcutName = shortcutPrivateCloud
-                case "On-Device": shortcutName = shortcutOnDevice
-                case "ChatGPT": shortcutName = shortcutChatGPT
-                default: shortcutName = shortcutPrivateCloud
+                case "Private Cloud":
+                    shortcutName = shortcutPrivateCloud
+                    displayModelName = "Private Cloud Compute"
+                case "On-Device":
+                    shortcutName = shortcutOnDevice
+                    displayModelName = "On-Device"
+                case "ChatGPT":
+                    shortcutName = shortcutChatGPT
+                    displayModelName = "ChatGPT"
+                default:
+                    shortcutName = shortcutPrivateCloud
+                    displayModelName = "Private Cloud Compute"
                 }
 
                 // Build transcript for shortcuts
@@ -1591,14 +1600,18 @@ struct ContentView: View {
                     let result = try await shortcutService.runShortcut(
                         name: shortcutName, input: transcript, image: image)
                     DispatchQueue.main.async {
-                        let aiMsg = Message(content: result.0, image: result.1, isUser: false)
+                        let aiMsg = Message(
+                            content: result.0, model: displayModelName, image: result.1,
+                            isUser: false)
                         self.chatManager.addMessage(aiMsg)
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         let aiMsg = Message(
-                            content: "Error: \(error.localizedDescription)", isUser: false)
+                            content: "Error: \(error.localizedDescription)",
+                            model: displayModelName,
+                            isUser: false)
                         self.chatManager.addMessage(aiMsg)
                         self.isLoading = false
                     }
@@ -4233,11 +4246,20 @@ struct QuickChatView: View {
             } else {
                 // Shortcuts
                 let shortcutName: String
+                let displayModelName: String
                 switch selectedProvider {
-                case "Private Cloud": shortcutName = shortcutPrivateCloud
-                case "On-Device": shortcutName = shortcutOnDevice
-                case "ChatGPT": shortcutName = shortcutChatGPT
-                default: shortcutName = shortcutPrivateCloud
+                case "Private Cloud":
+                    shortcutName = shortcutPrivateCloud
+                    displayModelName = "Private Cloud Compute"
+                case "On-Device":
+                    shortcutName = shortcutOnDevice
+                    displayModelName = "On-Device"
+                case "ChatGPT":
+                    shortcutName = shortcutChatGPT
+                    displayModelName = "ChatGPT"
+                default:
+                    shortcutName = shortcutPrivateCloud
+                    displayModelName = "Private Cloud Compute"
                 }
 
                 // Build transcript
@@ -4252,14 +4274,17 @@ struct QuickChatView: View {
                     let result = try await shortcutService.runShortcut(
                         name: shortcutName, input: transcript, image: nil)
                     DispatchQueue.main.async {
-                        let aiMsg = Message(content: result.0, model: shortcutName, image: nil, isUser: false)
+                        let aiMsg = Message(
+                            content: result.0, model: displayModelName, image: nil, isUser: false)
                         self.chatManager.addMessage(aiMsg)
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         let aiMsg = Message(
-                            content: "Error: \(error.localizedDescription)", model: shortcutName, isUser: false)
+                            content: "Error: \(error.localizedDescription)",
+                            model: displayModelName,
+                            isUser: false)
                         self.chatManager.addMessage(aiMsg)
                         self.isLoading = false
                     }
