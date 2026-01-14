@@ -984,66 +984,105 @@ class GeminiService {
 }
 
 class ShortcutService {
-    func runShortcut(name: String, input: String, image: NSImage?) async throws -> (
+    func runShortcut(name: String, input: String, style: String? = nil, image: NSImage?) async throws -> (
         String, NSImage?
     ) {
         let task = Process()
         let pipe = Pipe()
+        let inputPipe = Pipe()
 
         task.standardOutput = pipe
         task.standardError = pipe
+        task.standardInput = inputPipe
         task.executableURL = URL(fileURLWithPath: "/usr/bin/shortcuts")
 
         do {
-            if let image = image {
-                // Image Mode: Save text and image to temporary files and pass paths as input
-                // This ensures "Ask ChatGPT" and similar shortcuts receive the image as an attachment
-                let tempDir = FileManager.default.temporaryDirectory
-                let uniqueId = UUID().uuidString
-                let txtPath = tempDir.appendingPathComponent("\(uniqueId)_prompt.txt")
-                let imgPath = tempDir.appendingPathComponent("\(uniqueId)_image.png")
-
-                // Write Text
-                try input.write(to: txtPath, atomically: true, encoding: .utf8)
-
-                // Write Image
-                if let tiff = image.tiffRepresentation,
-                    let bitmap = NSBitmapImageRep(data: tiff),
-                    let png = bitmap.representation(using: .png, properties: [:])
-                {
-                    try png.write(to: imgPath)
+            let tempDir = FileManager.default.temporaryDirectory
+            let uniqueId = UUID().uuidString
+            var filesToDelete: [URL] = []
+            var isLegacyMode = (style == nil) // Use legacy mode if style is NOT provided
+            
+            if !isLegacyMode {
+                // MARK: - JSON Strategy (Image Creation)
+                // Passes simple JSON text via Stdin: { "prompt": "...", "style": "...", "image_path": "..." }
+                
+                var inputDict: [String: String] = [:]
+                
+                let hasText = !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                if hasText {
+                    inputDict["prompt"] = input
                 }
-
-                task.arguments = ["run", name, "-i", txtPath.path, "-i", imgPath.path]
-
-                try task.run()
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                task.waitUntilExit()
-
-                // Cleanup
-                try? FileManager.default.removeItem(at: txtPath)
-                try? FileManager.default.removeItem(at: imgPath)
-
-                return processOutput(data)
-
-            } else {
-                // Text Mode: Pass text via Stdin
-                let inputPipe = Pipe()
-                task.standardInput = inputPipe
+                
+                if let style = style, !style.isEmpty {
+                    inputDict["style"] = style
+                }
+                
+                // Image handling removed as requested to avoid bugs for now.
+                // Can be re-enabled here later.
+                
+                // Serialize to JSON
+                let jsonData = try JSONSerialization.data(withJSONObject: inputDict, options: [.prettyPrinted, .sortedKeys]) // sortedKeys for deterministic output
+                
+                // Run with NO arguments (uses Stdin)
                 task.arguments = ["run", name]
-
+                
                 try task.run()
-
-                if let data = input.data(using: .utf8) {
-                    try inputPipe.fileHandleForWriting.write(contentsOf: data)
+                
+                // Write JSON to Stdin
+                try inputPipe.fileHandleForWriting.write(contentsOf: jsonData)
+                try inputPipe.fileHandleForWriting.close()
+                
+            } else {
+                // MARK: - Legacy Strategy (Standard Chat)
+                // Preserves original behavior for "Ask ChatGPT" etc.
+                
+                if let image = image {
+                    // Image Mode: Save text and image to temporary files
+                    let txtPath = tempDir.appendingPathComponent("\(uniqueId)_prompt.txt")
+                    let imgPath = tempDir.appendingPathComponent("\(uniqueId)_image.png")
+                    
+                    try input.write(to: txtPath, atomically: true, encoding: .utf8)
+                    
+                    if let tiff = image.tiffRepresentation,
+                        let bitmap = NSBitmapImageRep(data: tiff),
+                        let png = bitmap.representation(using: .png, properties: [:])
+                    {
+                        try png.write(to: imgPath)
+                    }
+                    
+                    task.arguments = ["run", name, "-i", txtPath.path, "-i", imgPath.path]
+                    
+                    // Close Stdin as we are using file inputs
                     try inputPipe.fileHandleForWriting.close()
+                    
+                    filesToDelete.append(txtPath)
+                    filesToDelete.append(imgPath)
+                    
+                    try task.run()
+                    
+                } else {
+                    // Text Mode: Pass raw text via Stdin
+                    task.arguments = ["run", name]
+                    
+                    try task.run()
+                    
+                    if let data = input.data(using: .utf8) {
+                        try inputPipe.fileHandleForWriting.write(contentsOf: data)
+                        try inputPipe.fileHandleForWriting.close()
+                    }
                 }
-
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                task.waitUntilExit()
-
-                return processOutput(data)
             }
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
+
+            // Cleanup
+            for file in filesToDelete {
+                try? FileManager.default.removeItem(at: file)
+            }
+
+            return processOutput(data)
+
         } catch {
             return ("System Error: \(error.localizedDescription)", nil)
         }
@@ -1153,6 +1192,7 @@ struct ContentView: View {
     @State private var inputText: String = ""
     @State private var selectedImage: NSImage? = nil
     @State private var selectedPDF: Data? = nil
+    @State private var imageCreationStyle: String = "Animation"
     @State private var isLoading: Bool = false
     @State private var thinkingLevel: String = "medium"
     @State private var showSidebar: Bool = false
@@ -1289,7 +1329,8 @@ struct ContentView: View {
                                         onStop: stopGeneration,
                                         onSelectAttachment: selectAttachment,
                                         isImageGen: selectedProvider == "Image Creation",
-                                        thinkingMode: thinkingMode
+                                        thinkingMode: thinkingMode,
+                                        imageStyle: $imageCreationStyle
                                     )
                                 }
                                 .onChange(of: chatManager.getCurrentMessages().count) { _, count in
@@ -1439,6 +1480,7 @@ struct ContentView: View {
     func performSend(input: String, image: NSImage?, pdfData: Data?) {
         isLoading = true
         let currentHistory = chatManager.getCurrentMessages()
+        let style = imageCreationStyle
 
         currentTask?.cancel()
 
@@ -1454,7 +1496,7 @@ struct ContentView: View {
 
                 do {
                     let result = try await shortcutService.runShortcut(
-                        name: shortcutImageGen, input: input, image: nil)
+                        name: shortcutImageGen, input: input, style: style, image: image)
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: result.0, image: result.1)
@@ -2212,6 +2254,7 @@ struct InputView: View {
     var onSelectAttachment: () -> Void
     var isImageGen: Bool
     var thinkingMode: ThinkingMode
+    @Binding var imageStyle: String
 
     @FocusState private var isFocused: Bool
     @StateObject private var pasteMonitor = PasteMonitor()
@@ -2306,7 +2349,42 @@ struct InputView: View {
 
     private var inputBar: some View {
         HStack(spacing: 12) {
-            if !isImageGen {
+            if isImageGen {
+                // Style Picker
+                Menu {
+                    Button(action: { imageStyle = "" }) {
+                         if imageStyle.isEmpty {
+                             Label("None", systemImage: "checkmark")
+                         } else {
+                             Text("None")
+                         }
+                     }
+                    Divider()
+                    Section("Apple Intelligence") {
+                        styleButton("Animation", value: "Animation")
+                        styleButton("Illustration", value: "Illustration")
+                        styleButton("Sketch", value: "Sketch")
+                    }
+                    Divider()
+                    Section("ChatGPT") {
+                        styleButton("ChatGPT (Default)", value: "ChatGPT")
+                        styleButton("Oil Painting", value: "Oil Painting (ChatGPT)")
+                        styleButton("Watercolor", value: "Watercolor (ChatGPT)")
+                        styleButton("Vector", value: "Vector (ChatGPT)")
+                        styleButton("Anime", value: "Anime (ChatGPT)")
+                        styleButton("Print", value: "Print (ChatGPT)")
+                    }
+                } label: {
+                    Image(systemName: "paintpalette")
+                        .font(.system(size: 16))
+                        .foregroundColor(imageStyle.isEmpty ? .secondary : .orange)
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .menuStyle(.borderlessButton)
+                .help("Image Style")
+            } else {
                 Button(action: onSelectAttachment) {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
@@ -2498,6 +2576,17 @@ struct InputView: View {
                         }
                     }
                 }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func styleButton(_ title: String, value: String) -> some View {
+        Button(action: { imageStyle = value }) {
+            if imageStyle == value {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
             }
         }
     }
@@ -4224,19 +4313,7 @@ struct QuickChatView: View {
                 .padding()
                 .padding(.bottom, 14)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white.opacity(0.03))
-                    .background(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.22), .white.opacity(0.1)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing),
-                                lineWidth: 1)
-                    )
-            )
+            .padding(.bottom, 14)
             .onChange(of: chatManager.getCurrentMessages().count) { _, _ in
                 if let lastId = chatManager.getCurrentMessages().last?.id {
                     withAnimation {

@@ -13,6 +13,7 @@ struct QuickAIView: View {
     @State private var thinkingLevel: String = "medium"
     @State private var isExpanded: Bool = false
     @State private var selectedPDF: Data? = nil
+    @State private var selectedStyle: String = "Animation"
     @FocusState private var isFocused: Bool
     @Environment(\.colorScheme) var colorScheme
 
@@ -288,6 +289,44 @@ struct QuickAIView: View {
                                 }
                             }
 
+                        // Image Creation Tools
+                        if selectedProvider == "Image Creation" {
+                             // Style Picker
+                             Menu {
+                                 Button(action: { selectedStyle = "" }) {
+                                     if selectedStyle.isEmpty {
+                                         Label("None", systemImage: "checkmark")
+                                     } else {
+                                         Text("None")
+                                     }
+                                 }
+                                 Divider()
+                                 Section("Apple Intelligence") {
+                                    styleButton("Animation", value: "Animation")
+                                    styleButton("Illustration", value: "Illustration")
+                                    styleButton("Sketch", value: "Sketch")
+                                 }
+                                 Divider()
+                                 Section("ChatGPT") {
+                                    styleButton("ChatGPT (Default)", value: "ChatGPT")
+                                    styleButton("Oil Painting", value: "Oil Painting (ChatGPT)")
+                                    styleButton("Watercolor", value: "Watercolor (ChatGPT)")
+                                    styleButton("Vector", value: "Vector (ChatGPT)")
+                                    styleButton("Anime", value: "Anime (ChatGPT)")
+                                    styleButton("Print", value: "Print (ChatGPT)")
+                                 }
+                             } label: {
+                                 Image(systemName: "paintpalette")
+                                     .font(.system(size: 16))
+                                     .foregroundColor(selectedStyle.isEmpty ? .secondary : .orange)
+                                     .padding(6)
+                                     .background(Color.white.opacity(0.10))
+                                     .clipShape(Circle())
+                             }
+                             .menuStyle(.borderlessButton)
+                             .help("Image Style")
+                        }
+
                         // Thinking Level Selector
                         if selectedProvider.contains("Ollama") || selectedProvider == "Gemini API" {
                             Menu {
@@ -426,6 +465,7 @@ struct QuickAIView: View {
 
         let content = inputText
         let pdfData = selectedPDF
+        let style = selectedStyle
         inputText = ""
         selectedPDF = nil
         recalcPanelSize()
@@ -446,7 +486,7 @@ struct QuickAIView: View {
 
                 do {
                     let result = try await shortcutService.runShortcut(
-                        name: shortcutImageGen, input: content, image: nil)
+                        name: shortcutImageGen, input: content, style: style, image: nil)
 
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
@@ -645,6 +685,17 @@ struct QuickAIView: View {
 }
 
 extension QuickAIView {
+    @ViewBuilder
+    private func styleButton(_ title: String, value: String) -> some View {
+        Button(action: { selectedStyle = value }) {
+            if selectedStyle == value {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+
     @ViewBuilder
     private func thinkingOption(title: String, value: String) -> some View {
         Button(action: { thinkingLevel = value }) {
