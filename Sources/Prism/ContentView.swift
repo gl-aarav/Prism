@@ -2020,7 +2020,7 @@ struct HeaderView: View {
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
         case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
-        case "Image Creation": return "paintpalette"
+        case "Image Creation": return "paintbrush"
         case "ChatGPT": return "message"
         default: return "cpu"
         }
@@ -4037,6 +4037,11 @@ struct QuickChatView: View {
                         Label("ChatGPT", systemImage: "message")
                     }
                 }
+                Section("Tools") {
+                    Button(action: { selectedProvider = "Image Creation" }) {
+                        Label("Image Creation", systemImage: "paintbrush")
+                    }
+                }
             } label: {
                 HStack {
                     Image(systemName: getProviderIcon(selectedProvider))
@@ -4283,7 +4288,7 @@ struct QuickChatView: View {
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
         case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
-        case "Image Creation": return "paintpalette"
+        case "Image Creation": return "paintbrush" // Fixed icon name
         case "ChatGPT": return "message"
         default: return "cpu"
         }
@@ -4444,6 +4449,33 @@ struct QuickChatView: View {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: "Error: \(error.localizedDescription)",
                             isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "Image Creation" {
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "Generating image...", isUser: false)
+                aiMsg.id = aiMsgId
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    let result = try await shortcutService.runShortcut(
+                        name: shortcutImageGen, input: content, image: nil)
+
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: result.0, image: result.1)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)")
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }

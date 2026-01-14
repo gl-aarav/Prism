@@ -406,7 +406,7 @@ struct QuickAIView: View {
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
         case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
-        case "Image Creation": return "paintpalette"
+        case "Image Creation": return "paintbrush"
         case "ChatGPT": return "message"
         default: return "cpu"
         }
