@@ -4,6 +4,7 @@ import PDFKit
 import SwiftMath
 import SwiftUI
 import WebKit
+import UniformTypeIdentifiers
 
 // MARK: - Models
 
@@ -1817,6 +1818,9 @@ struct SidebarView: View {
                             },
                             onSummarize: {
                                 summarize(session: session)
+                            },
+                            onExport: {
+                                exportChat(session: session)
                             }
                         )
                     }
@@ -1851,6 +1855,31 @@ struct SidebarView: View {
                 }
             } catch {
                 print("Summarization failed: \(error)")
+            }
+        }
+    }
+
+    private func exportChat(session: ChatSession) {
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+        savePanel.nameFieldStringValue = "\(session.title).md"
+        savePanel.canCreateDirectories = true
+        
+        savePanel.begin { response in
+            if response == .OK, let url = savePanel.url {
+                var markdown = "# \(session.title)\n\n"
+                markdown += "Date: \(session.date.formatted())\n\n"
+                
+                for message in session.messages {
+                    let role = message.isUser ? "**User**" : "**AI (\(message.model ?? "Unknown"))**"
+                    markdown += "\(role):\n\(message.content)\n\n"
+                }
+                
+                do {
+                    try markdown.write(to: url, atomically: true, encoding: .utf8)
+                } catch {
+                    print("Failed to save file: \(error)")
+                }
             }
         }
     }
@@ -1896,6 +1925,7 @@ struct SidebarRow: View {
     var onRename: () -> Void
     var onCommitRename: () -> Void
     var onSummarize: () -> Void
+    var onExport: () -> Void
 
     @State private var offset: CGFloat = 0
     @FocusState private var isFocused: Bool
@@ -2006,6 +2036,9 @@ struct SidebarRow: View {
                 }
                 Button("Rename with Apple Intelligence") {
                     onSummarize()
+                }
+                Button("Export as Markdown") {
+                    onExport()
                 }
                 Divider()
                 Button("Delete", role: .destructive) {
@@ -4302,12 +4335,13 @@ struct QuickChatView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color.white.opacity(0.04))
                 .background(.ultraThinMaterial)
         )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(
                     LinearGradient(
                         colors: [.white.opacity(0.28), .white.opacity(0.12)],

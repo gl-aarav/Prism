@@ -109,6 +109,18 @@ class QuickAIManager: ObservableObject {
     }
 
     private func scheduleResize(to size: CGSize, panel: QuickAIPanel) {
+        let currentHeight = panel.frame.height
+        let targetHeight = max(72, size.height)
+        let diff = abs(currentHeight - targetHeight)
+        
+        // If the change is significant (expansion/collapse), run immediately without debounce
+        // to match the SwiftUI animation.
+        if diff > 50 {
+            resizeWorkItem?.cancel()
+            self.applyResize(size: size, panel: panel)
+            return
+        }
+
         pendingResize = size
         resizeWorkItem?.cancel()
 
@@ -133,14 +145,17 @@ class QuickAIManager: ObservableObject {
 
         let currentFrame = panel.frame
         let targetHeight = max(72, size.height)
+        let diff = abs(currentFrame.height - targetHeight)
 
-        guard abs(currentFrame.height - targetHeight) > 0.5 else { return }
+        guard diff > 0.5 else { return }
 
-        // Avoid fighting SwiftUI/Auto Layout update cycles. If constraints are currently
-        // being resolved, defer the resize slightly to the next runloop tick.
+        // Avoid fighting SwiftUI/Auto Layout update cycles.
         if panel.contentView?.needsUpdateConstraints == true || panel.inLiveResize {
-            scheduleResize(to: size, panel: panel)
-            return
+            // If it's a large jump, force it through anyway to avoid getting stuck
+            if diff <= 50 {
+               scheduleResize(to: size, panel: panel)
+               return
+            }
         }
 
         // Perform the actual frame change on the next runloop turn to stay out of the
@@ -160,10 +175,15 @@ class QuickAIManager: ObservableObject {
                 height: targetSize)
 
             NSAnimationContext.runAnimationGroup { context in
-                // "Smooth like butter": Use a duration and an ease-out curve to animate the frame change.
-                context.duration = 0.35
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                // "Slow and smooth" to match SwiftUI .spring(response: 0.55, damping: 0.8)
+                // A response of 0.55s means the spring settles over a longer period. 
+                // We'll set the window duration to approx 0.6s with a smooth eased curve.
+                context.duration = 0.6
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut) // Standard ease-out is smoother/slower feeling than quint
                 panel.animator().setFrame(newFrame, display: true)
+            } completionHandler: {
+                 // Ensure final frame is set correctly
+                 panel.setFrame(newFrame, display: true)
             }
 
             self.isApplyingResize = false
