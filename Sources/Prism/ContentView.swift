@@ -456,6 +456,13 @@ class ChatManager: ObservableObject {
         saveSessions()
     }
 
+    func renameSession(id: UUID, newTitle: String) {
+        if let index = sessions.firstIndex(where: { $0.id == id }) {
+            sessions[index].title = newTitle
+            saveSessions()
+        }
+    }
+
     func deleteAllSessions() {
         sessions.removeAll()
         createNewSession()
@@ -1170,6 +1177,7 @@ struct ContentView: View {
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome: Bool = false
     @State private var showSplash: Bool = !AppState.shared.hasShownSplash
     @State private var currentTask: Task<Void, Never>?
+    @State private var showImageGallery: Bool = false
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
@@ -1201,7 +1209,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             NavigationSplitView(columnVisibility: $columnVisibility) {
-                SidebarView(chatManager: chatManager)
+                SidebarView(chatManager: chatManager, showImageGallery: $showImageGallery)
             } detail: {
                 ZStack {
                     // Background Layer
@@ -1228,7 +1236,9 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                     // Content Layer
-                    if isWebViewProvider(selectedProvider) {
+                    if showImageGallery {
+                        ImageGalleryView(chatManager: chatManager, showImageGallery: $showImageGallery)
+                    } else if isWebViewProvider(selectedProvider) {
                         VStack(spacing: 0) {
                             HeaderView(
                                 selectedProvider: $selectedProvider,
@@ -1433,19 +1443,28 @@ struct ContentView: View {
 
         currentTask = Task {
             if selectedProvider == "Image Creation" {
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "Generating image...", isUser: false)
+                aiMsg.id = aiMsgId
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
                 do {
                     let result = try await shortcutService.runShortcut(
                         name: shortcutImageGen, input: input, image: nil)
                     DispatchQueue.main.async {
-                        let aiMsg = Message(content: result.0, image: result.1, isUser: false)
-                        self.chatManager.addMessage(aiMsg)
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: result.0, image: result.1)
+                        self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
-                        let aiMsg = Message(
-                            content: "Error: \(error.localizedDescription)", isUser: false)
-                        self.chatManager.addMessage(aiMsg)
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                        self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 }
@@ -1660,24 +1679,125 @@ struct ContentView: View {
 
 struct SidebarView: View {
     @ObservedObject var chatManager: ChatManager
-    @Namespace private var animation  // For sliding selection
+    @Binding var showImageGallery: Bool
+    @Namespace private var animation
+    
+    @State private var searchText: String = ""
+    @State private var isSearchVisible: Bool = false
+    @State private var renamingSessionId: UUID?
+    @State private var renameText: String = ""
+    
+    // Service for summarization
+    private let summarizer = AppleFoundationService()
+
+    var filteredSessions: [ChatSession] {
+        if searchText.isEmpty {
+            return chatManager.sessions
+        } else {
+            return chatManager.sessions.filter { session in
+                if session.title.localizedCaseInsensitiveContains(searchText) { return true }
+                return session.messages.contains { msg in
+                    msg.content.localizedCaseInsensitiveContains(searchText)
+                }
+            }
+        }
+    }
 
     var body: some View {
-        VStack(spacing: 12) {
-            header
+        VStack(alignment: .leading, spacing: 0) {
+            // Top Section
+            VStack(alignment: .leading, spacing: 4) {
+                // New Chat
+                SidebarItem(icon: "square.and.pencil", title: "New chat") {
+                    showImageGallery = false
+                    chatManager.createNewSession()
+                }
 
-            ScrollView {
-                LazyVStack(spacing: 6) {
-                    ForEach(
-                        chatManager.sessions.filter {
-                            !$0.messages.isEmpty || $0.id == chatManager.currentSessionId
+                // Search
+                SidebarItem(icon: "magnifyingglass", title: "Search chats") {
+                    isSearchVisible.toggle()
+                }
+                .popover(isPresented: $isSearchVisible, arrowEdge: .leading) {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.secondary)
+                            TextField("Search chats...", text: $searchText)
+                                .textFieldStyle(.plain)
                         }
-                    ) { session in
+                        .padding(8)
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(8)
+                        
+                        if filteredSessions.isEmpty {
+                            Text("No chats found")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding()
+                        } else {
+                            ScrollView {
+                                LazyVStack(spacing: 4) {
+                                    ForEach(filteredSessions) { session in
+                                        Button(action: {
+                                            showImageGallery = false
+                                            chatManager.currentSessionId = session.id
+                                            isSearchVisible = false
+                                        }) {
+                                            HStack {
+                                                Text(session.title)
+                                                    .lineLimit(1)
+                                                    .font(.system(size: 13))
+                                                Spacer()
+                                                Text(session.date, style: .date)
+                                                    .font(.caption2)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            .padding(8)
+                                            .background(Color.primary.opacity(0.05))
+                                            .cornerRadius(6)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 300)
+                        }
+                    }
+                    .padding()
+                    .frame(width: 300)
+                }
+
+                // Images
+                SidebarItem(icon: "photo", title: "Images", isSelected: showImageGallery) {
+                     withAnimation {
+                        showImageGallery = true
+                        chatManager.currentSessionId = nil
+                     }
+                }
+            }
+            .padding(10)
+
+            // Section Header
+            Text("Your chats")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+            // Chat List
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(chatManager.sessions.filter { !$0.messages.isEmpty || $0.id == chatManager.currentSessionId }) { session in
                         SidebarRow(
                             session: session,
-                            isSelected: chatManager.currentSessionId == session.id,
+                            isSelected: !showImageGallery && chatManager.currentSessionId == session.id,
+                            isRenaming: renamingSessionId == session.id,
+                            renameText: $renameText,
                             animation: animation,
                             onSelect: {
+                                showImageGallery = false
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                     chatManager.currentSessionId = session.id
                                 }
@@ -1686,84 +1806,99 @@ struct SidebarView: View {
                                 withAnimation {
                                     chatManager.deleteSession(id: session.id)
                                 }
+                            },
+                            onRename: {
+                                renameText = session.title
+                                renamingSessionId = session.id
+                            },
+                            onCommitRename: {
+                                chatManager.renameSession(id: session.id, newTitle: renameText)
+                                renamingSessionId = nil
+                            },
+                            onSummarize: {
+                                summarize(session: session)
                             }
                         )
                     }
                 }
-                .padding(10)
+                .padding(.horizontal, 10)
             }
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 6)
-            )
-            .padding(.horizontal)
-            .padding(.bottom, 8)
         }
     }
-
-    private var header: some View {
-        HStack {
-            Text("Chats")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.primary)
-            Spacer()
-            Button(action: chatManager.createNewSession) {
-                Label("New", systemImage: "plus")
-                    .font(.system(size: 13, weight: .medium))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.35),
-                                        Color.white.opacity(0.12),
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
+    
+    private func summarize(session: ChatSession) {
+        guard !session.messages.isEmpty else { return }
+        
+        let prompt = """
+        Analyze the following conversation and provide a short, concise title (3-5 words max).
+        Return ONLY the title, no quotes or explanation.
+        """
+        
+        Task {
+            do {
+                var newTitle = ""
+                for try await chunk in summarizer.sendMessageStream(history: session.messages, systemPrompt: prompt) {
+                    newTitle += chunk
+                }
+                
+                let cleaned = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\"", with: "")
+                
+                DispatchQueue.main.async {
+                    if !cleaned.isEmpty {
+                        chatManager.renameSession(id: session.id, newTitle: cleaned)
+                    }
+                }
+            } catch {
+                print("Summarization failed: \(error)")
             }
-            .buttonStyle(.plain)
-
-            Button {
-                chatManager.deleteCurrentSession()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 13, weight: .semibold))
-                    .padding(8)
-                    .background(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .help("Delete current chat")
         }
-        .padding(.horizontal)
-        .padding(.top, 10)
+    }
+}
+
+struct SidebarItem: View {
+    let icon: String
+    let title: String
+    var isSelected: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 16))
+                    .frame(width: 20) // Fixed width for alignment
+                Text(title)
+                    .font(.system(size: 14))
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                isSelected ? Color.primary.opacity(0.1) : Color.clear
+            )
+            .cornerRadius(8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(isSelected ? .primary : .primary.opacity(0.8))
     }
 }
 
 struct SidebarRow: View {
     let session: ChatSession
     let isSelected: Bool
+    var isRenaming: Bool = false
+    @Binding var renameText: String
     var animation: Namespace.ID
     var onSelect: () -> Void
     var onDelete: () -> Void
+    var onRename: () -> Void
+    var onCommitRename: () -> Void
+    var onSummarize: () -> Void
 
     @State private var offset: CGFloat = 0
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -1795,10 +1930,19 @@ struct SidebarRow: View {
                     .opacity(isSelected ? 1 : 0)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(session.title.isEmpty ? "New Chat" : session.title)
-                        .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                        .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
-                        .lineLimit(1)
+                    if isRenaming {
+                        TextField("Title", text: $renameText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13, weight: .medium))
+                            .focused($isFocused)
+                            .onSubmit(onCommitRename)
+                            .onAppear { isFocused = true }
+                    } else {
+                        Text(session.title.isEmpty ? "New Chat" : session.title)
+                            .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                            .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
+                            .lineLimit(1)
+                    }
 
                     Text(session.date, style: .date)
                         .font(.system(size: 11))
@@ -1809,46 +1953,22 @@ struct SidebarRow: View {
 
                 if !session.messages.isEmpty {
                     Text("\(session.messages.count)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(isSelected ? .white.opacity(0.9) : .secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            isSelected
-                                ? Color.black.opacity(0.2)
-                                : Color.secondary.opacity(0.1)
-                        )
-                        .clipShape(Capsule())
+                        .font(.caption2)
+                        .foregroundColor(.secondary.opacity(0.5))
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .background(
                 ZStack {
                     if isSelected {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color.blue.opacity(0.12),
-                                        Color.cyan.opacity(0.08),
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(Color.blue.opacity(0.2), lineWidth: 1)
-                            )
-                            .matchedGeometryEffect(id: "bg", in: animation)
-                            .shadow(color: Color.blue.opacity(0.05), radius: 4, x: 0, y: 2)
-                    } else {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.white.opacity(0.001))  // Hit testing
+                            .fill(Color.primary.opacity(0.1))
+                            .matchedGeometryEffect(id: "selection", in: animation)
                     }
                 }
             )
+            .contentShape(Rectangle())
             .offset(x: offset)
             .gesture(
                 DragGesture(minimumDistance: 20, coordinateSpace: .local)
@@ -1860,24 +1980,7 @@ struct SidebarRow: View {
                         }
                     }
                     .onEnded { gesture in
-                        if gesture.translation.width < -80 {
-                            /*
-                             User requested: "slide ... to show a delete icon".
-                             Normally this means we keep it open or delete immediately.
-                             Let's snap nicely to reveal the button properly if they stop,
-                             or just snap back if they don't commit.
-                             Actually, standard behavior is snap back if released,
-                             trigger if dragged far enough, or hold open.
-                             Let's keep it simple: Snap back to 0. The button is visible *during* drag.
-                             If they want to delete they can tap the button while dragging (hard) or we can implement
-                             "Delete if dragged past threshold".
-                             Let's just implement snap back for now and rely on a tap on the revealed area?
-                             No, taps on moving targets are bad.
-                             Better: Drag past threshold -> Delete triggers automatically?
-                             Request: "sliding a chat to the left show a delete icon so you can delete it".
-                             This implies swiping reveals the icon and you tap it.
-                             So I'll snap to -60 opened state ideally.
-                            */
+                        if gesture.translation.width < -60 {
                             withAnimation(.spring()) {
                                 offset = -60
                             }
@@ -1888,14 +1991,25 @@ struct SidebarRow: View {
                         }
                     }
             )
-            // Tap to close if open, or select
             .onTapGesture {
                 if offset < 0 {
                     withAnimation(.spring()) {
                         offset = 0
                     }
-                } else {
+                } else if !isRenaming {
                     onSelect()
+                }
+            }
+            .contextMenu {
+                Button("Rename") {
+                    onRename()
+                }
+                Button("Rename with Apple Intelligence") {
+                    onSummarize()
+                }
+                Divider()
+                Button("Delete", role: .destructive) {
+                    onDelete()
                 }
             }
         }
@@ -1977,38 +2091,6 @@ struct HeaderView: View {
             .padding(.horizontal, 4) // Padding around the menu for click area
 
             Spacer()
-
-            Button(action: onNewChat) {
-                HStack {
-                    Image(systemName: "plus")
-                    Text("New Chat")
-                }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.28),
-                                    Color.white.opacity(0.10),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                )
-                .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
-            }
-            .buttonStyle(.plain)
-
         }
         .padding()
         // Transparent background
@@ -3395,14 +3477,6 @@ struct MessageView: View, Equatable {
                 }
                 .frame(maxWidth: maxBubbleWidth, alignment: .trailing)
             } else {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue, .green], startPoint: .top, endPoint: .bottom)
-                    )
-                    .font(.title2)
-                    .frame(width: 30)
-
                 VStack(alignment: .leading, spacing: 8) {
                     if let thinking = message.thinkingContent {
                         DisclosureGroup {
@@ -4541,3 +4615,70 @@ struct Triangle: Shape {
         return path
     }
 }
+
+struct ImageGalleryView: View {
+    @ObservedObject var chatManager: ChatManager
+    @Binding var showImageGallery: Bool
+    
+    var images: [(UUID, UUID, NSImage, String)] {
+        var result: [(UUID, UUID, NSImage, String)] = []
+        for session in chatManager.sessions {
+            for message in session.messages {
+                if let image = message.image {
+                    result.append((session.id, message.id, image, message.content))
+                }
+            }
+        }
+        return result
+    }
+
+    let columns = [
+        GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 16)
+    ]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(images, id: \.1) { item in
+                    ZStack {
+                        Image(nsImage: item.2)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .cornerRadius(8)
+                            .shadow(radius: 2)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .aspectRatio(1, contentMode: .fit)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(16)
+                    .onTapGesture {
+                        showImageGallery = false
+                        chatManager.currentSessionId = item.0
+                    }
+                    .contextMenu {
+                        Button("Copy") {
+                            let pasteboard = NSPasteboard.general
+                            pasteboard.clearContents()
+                            pasteboard.writeObjects([item.2])
+                        }
+                        if #available(macOS 13.0, *) {
+                            ShareLink(item: Image(nsImage: item.2), preview: SharePreview(item.3, image: Image(nsImage: item.2)))
+                        } else {
+                            Button("Share") {
+                                let picker = NSSharingServicePicker(items: [item.2])
+                                if let view = NSApp.keyWindow?.contentView {
+                                    picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+        }
+        .navigationTitle("Images")
+    }
+}
+

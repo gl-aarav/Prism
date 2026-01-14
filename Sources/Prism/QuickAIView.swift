@@ -696,15 +696,6 @@ struct QuickAIMessageView: View {
                     }
                 }
             } else {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.blue, .green], startPoint: .topLeading,
-                            endPoint: .bottomTrailing)
-                    )
-                    .frame(width: 24, height: 24)
-                    .background(Circle().fill(.ultraThinMaterial))
-
                 VStack(alignment: .leading, spacing: 8) {
                     if let thinking = message.thinkingContent {
                         DisclosureGroup {
