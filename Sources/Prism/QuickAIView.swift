@@ -191,6 +191,24 @@ struct QuickAIView: View {
                         }
                     }
                     .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                            .fill(
+                                (colorScheme == .dark ? Color.black : Color.white).opacity(
+                                    colorScheme == .dark
+                                        ? clampedBackgroundOpacity + 0.08
+                                        : clampedBackgroundOpacity
+                                )
+                            )
+                            .background(
+                                .ultraThinMaterial.opacity(
+                                    colorScheme == .dark
+                                        ? clampedBackgroundOpacity + 0.16
+                                        : clampedBackgroundOpacity + 0.12
+                                )
+                            )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                     .compositingGroup()
                     .padding(.bottom, 10)
                     .transition(
@@ -676,8 +694,8 @@ struct QuickAIMessageView: View {
                                     colors: [Color.blue.opacity(0.92), Color.cyan.opacity(0.7)],
                                     startPoint: .topLeading, endPoint: .bottomTrailing)
                             )
-                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                             .foregroundColor(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                 }
             } else {
@@ -758,12 +776,8 @@ struct QuickAIMessageView: View {
                     }
                 }
                 .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color.white.opacity(0.01))
-                        .background(.ultraThinMaterial)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 Spacer()
             }
