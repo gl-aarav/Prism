@@ -28,6 +28,7 @@ struct QuickAIView: View {
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
+    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String = "Generate Image ChatGPT"
     @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     private var clampedBackgroundOpacity: Double {
@@ -485,8 +486,11 @@ struct QuickAIView: View {
                 }
 
                 do {
+                    // Switch shortcut based on style/mode
+                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+                    
                     let result = try await shortcutService.runShortcut(
-                        name: shortcutImageGen, input: content, style: style, image: nil)
+                        name: targetShortcut, input: content, style: style, image: nil)
 
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
@@ -728,11 +732,15 @@ struct QuickAIMessageView: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: 200, maxHeight: 200)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .onTapGesture {
+                                previewImage(image)
+                            }
                             .contextMenu {
                                 Button("Copy Image") {
-                                    let pb = NSPasteboard.general
-                                    pb.clearContents()
-                                    pb.writeObjects([image])
+                                    copyImage(image)
+                                }
+                                Button("Take me to chat") {
+                                    openInMainWindow()
                                 }
                             }
                     }
@@ -778,11 +786,15 @@ struct QuickAIMessageView: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(maxWidth: 300, maxHeight: 300)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .onTapGesture {
+                                previewImage(image)
+                            }
                             .contextMenu {
                                 Button("Copy Image") {
-                                    let pb = NSPasteboard.general
-                                    pb.clearContents()
-                                    pb.writeObjects([image])
+                                    copyImage(image)
+                                }
+                                Button("Take me to chat") {
+                                    openInMainWindow()
                                 }
                             }
                     }
@@ -836,6 +848,43 @@ struct QuickAIMessageView: View {
         .onReceive(cursorTimer) { _ in
             if message.isStreaming {
                 isCursorVisible.toggle()
+            }
+        }
+    }
+
+    private func copyImage(_ image: NSImage) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.writeObjects([image])
+    }
+
+    private func previewImage(_ image: NSImage) {
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileURL = tempDir.appendingPathComponent("Prism_Preview_\(UUID().uuidString).png")
+        if let tiff = image.tiffRepresentation,
+           let bitmap = NSBitmapImageRep(data: tiff),
+           let png = bitmap.representation(using: .png, properties: [:]) {
+            try? png.write(to: fileURL)
+            NSWorkspace.shared.open(fileURL)
+        }
+    }
+
+    private func openInMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        // Find main window (approximate by filtering out panels) and order front
+        // In a typical app, the main window is the one that's not the QuickAI panel
+        // and usually isn't an NSPanel unless it's a utility style
+        // We'll trust NSApp.activate to do most of the work, but we should unhide the app
+        NSApp.unhide(nil)
+        
+        for window in NSApp.windows {
+            // Filter out QuickAI Panel by its known frame size or controller type if possible,
+            // or just order forward normal windows.
+            // Since we can't easily check 'is QuickAIPanel' due to type scope, checking title or style helps.
+            // But relying on unhide + activate is usually sufficient for single-window apps.
+            // If the main window was closed, we might need new implementation, but let's assume it's just hidden/backgrounded.
+            if window.isVisible && !(window.styleMask.contains(.nonactivatingPanel)) {
+                 window.makeKeyAndOrderFront(nil)
             }
         }
     }

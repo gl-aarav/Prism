@@ -1000,7 +1000,7 @@ class ShortcutService {
             let tempDir = FileManager.default.temporaryDirectory
             let uniqueId = UUID().uuidString
             var filesToDelete: [URL] = []
-            var isLegacyMode = (style == nil) // Use legacy mode if style is NOT provided
+            let isLegacyMode = (style == nil) // Use legacy mode if style is NOT provided
             
             if !isLegacyMode {
                 // MARK: - JSON Strategy (Image Creation)
@@ -1212,6 +1212,7 @@ struct ContentView: View {
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
+    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String = "Generate Image ChatGPT"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
 
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
@@ -1495,8 +1496,11 @@ struct ContentView: View {
                 }
 
                 do {
+                    // Switch shortcut based on style/mode
+                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+                    
                     let result = try await shortcutService.runShortcut(
-                        name: shortcutImageGen, input: input, style: style, image: image)
+                        name: targetShortcut, input: input, style: style, image: image)
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: result.0, image: result.1)
@@ -3740,6 +3744,7 @@ struct SettingsView: View {
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
+    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String = "Generate Image ChatGPT"
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShowMenuBar") private var showMenuBar = true
@@ -3892,6 +3897,8 @@ struct SettingsView: View {
                 TextField("ChatGPT", text: $shortcutChatGPT)
                     .textFieldStyle(.roundedBorder)
                 TextField("Image Gen", text: $shortcutImageGen)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Image Gen (ChatGPT)", text: $shortcutImageGenChatGPT)
                     .textFieldStyle(.roundedBorder)
             }
 
@@ -4730,6 +4737,7 @@ struct Triangle: Shape {
 struct ImageGalleryView: View {
     @ObservedObject var chatManager: ChatManager
     @Binding var showImageGallery: Bool
+    @State private var selectedImageForPreview: NSImage? = nil
     
     var images: [(UUID, UUID, NSImage, String)] {
         var result: [(UUID, UUID, NSImage, String)] = []
@@ -4748,48 +4756,82 @@ struct ImageGalleryView: View {
     ]
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(images, id: \.1) { item in
-                    ZStack {
-                        Image(nsImage: item.2)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .cornerRadius(8)
-                            .shadow(radius: 2)
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .aspectRatio(1, contentMode: .fit)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(16)
-                    .onTapGesture {
-                        showImageGallery = false
-                        chatManager.currentSessionId = item.0
-                    }
-                    .contextMenu {
-                        Button("Copy") {
-                            let pasteboard = NSPasteboard.general
-                            pasteboard.clearContents()
-                            pasteboard.writeObjects([item.2])
+        ZStack {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 16) {
+                    ForEach(images, id: \.1) { item in
+                        ZStack {
+                            Image(nsImage: item.2)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .cornerRadius(8)
+                                .shadow(radius: 2)
                         }
-                        if #available(macOS 13.0, *) {
-                            ShareLink(item: Image(nsImage: item.2), preview: SharePreview(item.3, image: Image(nsImage: item.2)))
-                        } else {
-                            Button("Share") {
-                                let picker = NSSharingServicePicker(items: [item.2])
-                                if let view = NSApp.keyWindow?.contentView {
-                                    picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .aspectRatio(1, contentMode: .fit)
+                        .background(Color.white.opacity(0.05))
+                        .cornerRadius(16)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedImageForPreview = item.2
+                            }
+                        }
+                        .contextMenu {
+                            Button("Go to chat") {
+                                showImageGallery = false
+                                chatManager.currentSessionId = item.0
+                            }
+                            Button("Copy") {
+                                let pasteboard = NSPasteboard.general
+                                pasteboard.clearContents()
+                                pasteboard.writeObjects([item.2])
+                            }
+                            if #available(macOS 13.0, *) {
+                                ShareLink(item: Image(nsImage: item.2), preview: SharePreview(item.3, image: Image(nsImage: item.2)))
+                            } else {
+                                Button("Share") {
+                                    let picker = NSSharingServicePicker(items: [item.2])
+                                    if let view = NSApp.keyWindow?.contentView {
+                                        picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                .padding()
+                .frame(maxWidth: .infinity)
             }
-            .padding()
-            .frame(maxWidth: .infinity)
+            .navigationTitle("Images")
+            .blur(radius: selectedImageForPreview != nil ? 15 : 0)
+
+            if let image = selectedImageForPreview {
+                ZStack {
+                    Color.black.opacity(0.6)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedImageForPreview = nil
+                            }
+                        }
+                    
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(40)
+                        .shadow(radius: 20)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedImageForPreview = nil
+                            }
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
+                .zIndex(100)
+            }
         }
-        .navigationTitle("Images")
     }
 }
 
