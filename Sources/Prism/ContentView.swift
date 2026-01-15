@@ -51,6 +51,7 @@ struct Message: Identifiable, Codable, Equatable {
     var isUser: Bool
     var timestamp = Date()
     var isStreaming: Bool = false
+    var isGeneratingImage: Bool? = false
 
     // Cache the decoded image to avoid expensive decoding on main thread
     private var _cachedImage: NSImage?
@@ -492,7 +493,7 @@ class ChatManager: ObservableObject {
 
     func updateMessage(
         id: UUID, content: String, thinkingContent: String? = nil, image: NSImage? = nil,
-        isStreaming: Bool = false
+        isStreaming: Bool = false, isGeneratingImage: Bool? = nil
     ) {
         guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }),
             let msgIndex = sessions[index].messages.firstIndex(where: { $0.id == id })
@@ -503,6 +504,9 @@ class ChatManager: ObservableObject {
         msg.isStreaming = isStreaming
         if let thinking = thinkingContent {
             msg.thinkingContent = thinking
+        }
+        if let genImage = isGeneratingImage {
+            msg.isGeneratingImage = genImage
         }
         if let image = image {
             msg.imageData = image.tiffRepresentation
@@ -1488,7 +1492,8 @@ struct ContentView: View {
         currentTask = Task {
             if selectedProvider == "Image Creation" {
                 let aiMsgId = UUID()
-                var aiMsg = Message(content: "Generating image...", isUser: false)
+                var aiMsg = Message(content: "", isUser: false)
+                aiMsg.isGeneratingImage = true
                 aiMsg.id = aiMsgId
 
                 DispatchQueue.main.async {
@@ -1497,20 +1502,20 @@ struct ContentView: View {
 
                 do {
                     // Switch shortcut based on style/mode
-                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+                    let targetShortcut = style.contains("ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
                     
                     let result = try await shortcutService.runShortcut(
                         name: targetShortcut, input: input, style: style, image: image)
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: result.0, image: result.1)
+                            id: aiMsgId, content: result.0, image: result.1, isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)", isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -2356,14 +2361,6 @@ struct InputView: View {
             if isImageGen {
                 // Style Picker
                 Menu {
-                    Button(action: { imageStyle = "" }) {
-                         if imageStyle.isEmpty {
-                             Label("None", systemImage: "checkmark")
-                         } else {
-                             Text("None")
-                         }
-                     }
-                    Divider()
                     Section("Apple Intelligence") {
                         styleButton("Animation", value: "Animation")
                         styleButton("Illustration", value: "Illustration")
@@ -3604,45 +3601,50 @@ struct MessageView: View, Equatable {
                 .frame(maxWidth: maxBubbleWidth, alignment: .trailing)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    if let thinking = message.thinkingContent {
-                        DisclosureGroup {
-                            Text(thinking)
-                                .font(.system(size: 12, design: .monospaced))
+                    if message.isGeneratingImage == true {
+                        GeneratingImagePlaceholder()
+                    } else {
+                        if let thinking = message.thinkingContent {
+                            DisclosureGroup {
+                                Text(thinking)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.1))
+                                    .cornerRadius(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "brain")
+                                        .font(.caption)
+                                    Text("Reasoning Process")
+                                        .font(.caption)
+                                }
                                 .foregroundColor(.secondary)
-                                .padding(8)
-                                .background(Color.gray.opacity(0.1))
-                                .cornerRadius(8)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "brain")
-                                    .font(.caption)
-                                Text("Reasoning Process")
-                                    .font(.caption)
                             }
-                            .foregroundColor(.secondary)
+                            .padding(.bottom, 4)
                         }
-                        .padding(.bottom, 4)
+
+                        if let image = message.image {
+                            ThumbnailView(image: image, maxWidth: 300, maxHeight: 300)
+                                .padding(.bottom, 4)
+                                .onTapGesture {
+                                    showImagePreview = true
+                                }
+                        }
+                        if !message.content.isEmpty || message.isStreaming {
+                            if message.isStreaming {
+                                MarkdownView(
+                                    blocks: Message.parseMarkdown(
+                                        message.content + (isCursorVisible ? " ▋" : "")))
+                                    .equatable()
+                            } else {
+                                MarkdownView(blocks: message.blocks)
+                                    .equatable()
+                            }
+                        }
                     }
 
-                    if let image = message.image {
-                        ThumbnailView(image: image, maxWidth: 300, maxHeight: 300)
-                            .padding(.bottom, 4)
-                            .onTapGesture {
-                                showImagePreview = true
-                            }
-                    }
-                    if !message.content.isEmpty || message.isStreaming {
-                        if message.isStreaming {
-                            MarkdownView(
-                                blocks: Message.parseMarkdown(
-                                    message.content + (isCursorVisible ? " ▋" : "")))
-                                .equatable()
-                        } else {
-                            MarkdownView(blocks: message.blocks)
-                                .equatable()
-                        }
-                    }
 
                     // Action Buttons
                     HStack(spacing: 12) {
@@ -4129,6 +4131,7 @@ struct QuickChatView: View {
     @ObservedObject var chatManager = ChatManager.shared
     @State private var inputText: String = ""
     @State private var isLoading: Bool = false
+    @State private var imageCreationStyle: String = "Animation"
     @AppStorage("selectedProvider") private var selectedProvider: String = "Apple Foundation Model"
     @State private var thinkingLevel: String = "medium"
 
@@ -4143,6 +4146,7 @@ struct QuickChatView: View {
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
+    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String = "Generate Image ChatGPT"
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
 
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
@@ -4333,11 +4337,58 @@ struct QuickChatView: View {
 
     private var inputBar: some View {
         HStack(alignment: .center, spacing: 12) {
-            TextField("Ask anything...", text: $inputText, axis: .vertical)
+            TextField(selectedProvider == "Image Creation" ? "Describe an image..." : "Ask anything...", text: $inputText, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...6)
                 .onSubmit(sendMessage)
                 .padding(.vertical, 10)
+
+            if selectedProvider == "Image Creation" {
+                 // Style Picker
+                 Menu {
+                     Section("Apple Intelligence") {
+                         Button(action: { imageCreationStyle = "Animation" }) {
+                             if imageCreationStyle == "Animation" { Label("Animation", systemImage: "checkmark") } else { Text("Animation") }
+                         }
+                         Button(action: { imageCreationStyle = "Illustration" }) {
+                             if imageCreationStyle == "Illustration" { Label("Illustration", systemImage: "checkmark") } else { Text("Illustration") }
+                         }
+                         Button(action: { imageCreationStyle = "Sketch" }) {
+                             if imageCreationStyle == "Sketch" { Label("Sketch", systemImage: "checkmark") } else { Text("Sketch") }
+                         }
+                     }
+                     Divider()
+                     Section("ChatGPT") {
+                         Button(action: { imageCreationStyle = "ChatGPT" }) {
+                             if imageCreationStyle == "ChatGPT" { Label("ChatGPT (Default)", systemImage: "checkmark") } else { Text("ChatGPT (Default)") }
+                         }
+                         Button(action: { imageCreationStyle = "Oil Painting (ChatGPT)" }) {
+                             if imageCreationStyle == "Oil Painting (ChatGPT)" { Label("Oil Painting", systemImage: "checkmark") } else { Text("Oil Painting") }
+                         }
+                         Button(action: { imageCreationStyle = "Watercolor (ChatGPT)" }) {
+                             if imageCreationStyle == "Watercolor (ChatGPT)" { Label("Watercolor", systemImage: "checkmark") } else { Text("Watercolor") }
+                         }
+                         Button(action: { imageCreationStyle = "Vector (ChatGPT)" }) {
+                             if imageCreationStyle == "Vector (ChatGPT)" { Label("Vector", systemImage: "checkmark") } else { Text("Vector") }
+                         }
+                         Button(action: { imageCreationStyle = "Anime (ChatGPT)" }) {
+                             if imageCreationStyle == "Anime (ChatGPT)" { Label("Anime", systemImage: "checkmark") } else { Text("Anime") }
+                         }
+                         Button(action: { imageCreationStyle = "Print (ChatGPT)" }) {
+                             if imageCreationStyle == "Print (ChatGPT)" { Label("Print", systemImage: "checkmark") } else { Text("Print") }
+                         }
+                     }
+                 } label: {
+                     Image(systemName: "paintpalette")
+                         .font(.system(size: 16))
+                         .foregroundColor(imageCreationStyle.isEmpty ? .secondary : .orange)
+                         .padding(6)
+                         .background(Color.secondary.opacity(0.1))
+                         .clipShape(Circle())
+                 }
+                 .menuStyle(.borderlessButton)
+                 .help("Image Style")
+            }
 
             if thinkingMode != .none {
                 Menu {
@@ -4647,27 +4698,34 @@ struct QuickChatView: View {
                 }
             } else if selectedProvider == "Image Creation" {
                 let aiMsgId = UUID()
-                var aiMsg = Message(content: "Generating image...", isUser: false)
+                var aiMsg = Message(content: "", isUser: false)
+                aiMsg.isGeneratingImage = true
                 aiMsg.id = aiMsgId
+
+                // Capture current style
+                let style = imageCreationStyle
 
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
                 }
 
                 do {
+                    // Switch shortcut based on style/mode (Check if style contains ChatGPT)
+                    let targetShortcut = style.contains("ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+
                     let result = try await shortcutService.runShortcut(
-                        name: shortcutImageGen, input: content, image: nil)
+                        name: targetShortcut, input: content, style: style, image: nil)
 
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: result.0, image: result.1)
+                            id: aiMsgId, content: result.0, image: result.1, isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)", isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }

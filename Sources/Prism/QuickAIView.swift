@@ -294,27 +294,37 @@ struct QuickAIView: View {
                         if selectedProvider == "Image Creation" {
                              // Style Picker
                              Menu {
-                                 Button(action: { selectedStyle = "" }) {
-                                     if selectedStyle.isEmpty {
-                                         Label("None", systemImage: "checkmark")
-                                     } else {
-                                         Text("None")
+                                 Section("Apple Intelligence") {
+                                     Button(action: { selectedStyle = "Animation" }) {
+                                         if selectedStyle == "Animation" { Label("Animation", systemImage: "checkmark") } else { Text("Animation") }
+                                     }
+                                     Button(action: { selectedStyle = "Illustration" }) {
+                                         if selectedStyle == "Illustration" { Label("Illustration", systemImage: "checkmark") } else { Text("Illustration") }
+                                     }
+                                     Button(action: { selectedStyle = "Sketch" }) {
+                                         if selectedStyle == "Sketch" { Label("Sketch", systemImage: "checkmark") } else { Text("Sketch") }
                                      }
                                  }
                                  Divider()
-                                 Section("Apple Intelligence") {
-                                    styleButton("Animation", value: "Animation")
-                                    styleButton("Illustration", value: "Illustration")
-                                    styleButton("Sketch", value: "Sketch")
-                                 }
-                                 Divider()
                                  Section("ChatGPT") {
-                                    styleButton("ChatGPT (Default)", value: "ChatGPT")
-                                    styleButton("Oil Painting", value: "Oil Painting (ChatGPT)")
-                                    styleButton("Watercolor", value: "Watercolor (ChatGPT)")
-                                    styleButton("Vector", value: "Vector (ChatGPT)")
-                                    styleButton("Anime", value: "Anime (ChatGPT)")
-                                    styleButton("Print", value: "Print (ChatGPT)")
+                                     Button(action: { selectedStyle = "ChatGPT" }) {
+                                         if selectedStyle == "ChatGPT" { Label("ChatGPT (Default)", systemImage: "checkmark") } else { Text("ChatGPT (Default)") }
+                                     }
+                                     Button(action: { selectedStyle = "Oil Painting (ChatGPT)" }) {
+                                         if selectedStyle == "Oil Painting (ChatGPT)" { Label("Oil Painting", systemImage: "checkmark") } else { Text("Oil Painting") }
+                                     }
+                                     Button(action: { selectedStyle = "Watercolor (ChatGPT)" }) {
+                                         if selectedStyle == "Watercolor (ChatGPT)" { Label("Watercolor", systemImage: "checkmark") } else { Text("Watercolor") }
+                                     }
+                                     Button(action: { selectedStyle = "Vector (ChatGPT)" }) {
+                                         if selectedStyle == "Vector (ChatGPT)" { Label("Vector", systemImage: "checkmark") } else { Text("Vector") }
+                                     }
+                                     Button(action: { selectedStyle = "Anime (ChatGPT)" }) {
+                                         if selectedStyle == "Anime (ChatGPT)" { Label("Anime", systemImage: "checkmark") } else { Text("Anime") }
+                                     }
+                                     Button(action: { selectedStyle = "Print (ChatGPT)" }) {
+                                         if selectedStyle == "Print (ChatGPT)" { Label("Print", systemImage: "checkmark") } else { Text("Print") }
+                                     }
                                  }
                              } label: {
                                  Image(systemName: "paintpalette")
@@ -478,7 +488,8 @@ struct QuickAIView: View {
         chatManager.currentTask = Task {
             if selectedProvider == "Image Creation" {
                 let aiMsgId = UUID()
-                var aiMsg = Message(content: "Generating image...", isUser: false)
+                var aiMsg = Message(content: "", isUser: false)
+                aiMsg.isGeneratingImage = true
                 aiMsg.id = aiMsgId
 
                 DispatchQueue.main.async {
@@ -487,21 +498,21 @@ struct QuickAIView: View {
 
                 do {
                     // Switch shortcut based on style/mode
-                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+                    let targetShortcut = style.contains("ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
                     
                     let result = try await shortcutService.runShortcut(
                         name: targetShortcut, input: content, style: style, image: nil)
 
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: result.0, image: result.1)
+                            id: aiMsgId, content: result.0, image: result.1, isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)", isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -759,83 +770,84 @@ struct QuickAIMessageView: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    if let thinking = message.thinkingContent {
-                        DisclosureGroup {
-                            Text(thinking)
-                                .font(.system(size: 12, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .padding(8)
-                                .background(Color.gray.opacity(0.1))
+                    if message.isGeneratingImage == true {
+                        GeneratingImagePlaceholder()
+                    } else {
+                        if let thinking = message.thinkingContent {
+                            DisclosureGroup {
+                                Text(thinking)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.1))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "brain")
+                                        .font(.caption)
+                                    Text("Reasoning Process")
+                                        .font(.caption)
+                                }
+                                .foregroundColor(.secondary)
+                            }
+                            .padding(.bottom, 4)
+                        }
+
+                        if let image = message.image {
+                            Image(nsImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: 300, maxHeight: 300)
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "brain")
-                                    .font(.caption)
-                                Text("Reasoning Process")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(.secondary)
-                        }
-                        .padding(.bottom, 4)
-                    }
-
-                    if let image = message.image {
-                        Image(nsImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(maxWidth: 300, maxHeight: 300)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .onTapGesture {
-                                previewImage(image)
-                            }
-                            .contextMenu {
-                                Button("Copy Image") {
-                                    copyImage(image)
+                                .contextMenu {
+                                    Button("Copy Image") {
+                                        copyImage(image)
+                                    }
+                                    Button("Go to chat") {
+                                        openInMainWindow()
+                                    }
                                 }
-                                Button("Take me to chat") {
-                                    openInMainWindow()
-                                }
-                            }
-                    }
-
-                    if !message.content.isEmpty || message.isStreaming {
-                        if message.isStreaming {
-                            MarkdownView(
-                                blocks: Message.parseMarkdown(
-                                    message.content + (isCursorVisible ? " ▋" : "")))
-                        } else {
-                            MarkdownView(blocks: message.blocks)
                         }
-                    }
 
-                    // Copy Button
-                    HStack {
-                        Button(action: {
-                            let pasteboard = NSPasteboard.general
-                            pasteboard.clearContents()
-                            if let image = message.image {
-                                pasteboard.writeObjects([image])
+                        if !message.content.isEmpty || message.isStreaming {
+                            if message.isStreaming {
+                                MarkdownView(
+                                    blocks: Message.parseMarkdown(
+                                        message.content + (isCursorVisible ? " ▋" : "")))
                             } else {
-                                pasteboard.setString(message.content, forType: .string)
+                                MarkdownView(blocks: message.blocks)
                             }
-                            isCopied = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                isCopied = false
-                            }
-                        }) {
-                            Label(
-                                isCopied ? "Copied" : "Copy",
-                                systemImage: isCopied ? "checkmark" : "doc.on.doc"
-                            )
-                            .font(.caption2)
-                            .foregroundColor(isCopied ? .green : .secondary)
-                            .padding(4)
-                            .background(Color.black.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
-                        .buttonStyle(.plain)
-                        Spacer()
+                    
+                        // Copy Button
+                        HStack {
+                            Button(action: {
+                                let pasteboard = NSPasteboard.general
+                                pasteboard.clearContents()
+                                if let image = message.image {
+                                    pasteboard.writeObjects([image])
+                                } else {
+                                    pasteboard.setString(message.content, forType: .string)
+                                }
+                                isCopied = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    isCopied = false
+                                }
+                            }) {
+                                Label(
+                                    isCopied ? "Copied" : "Copy",
+                                    systemImage: isCopied ? "checkmark" : "doc.on.doc"
+                                )
+                                .font(.caption2)
+                                .foregroundColor(isCopied ? .green : .secondary)
+                                .padding(4)
+                                .background(Color.black.opacity(0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                            }
+                            .buttonStyle(.plain)
+                            Spacer()
+                        }
                     }
                 }
                 .padding(12)
@@ -926,5 +938,46 @@ struct CommandBarBackground: View {
         .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 4)
         // Mask shadow and contents to a fixed-radius rect so added height doesn't overly round corners
         .mask(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
+struct GeneratingImagePlaceholder: View {
+    @State private var phase: CGFloat = 0
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(colorScheme == .dark ? Color.black : Color.white)
+            
+            // Shimmering Effect
+            GeometryReader { geo in
+                LinearGradient(
+                    colors: [
+                        .clear,
+                        (colorScheme == .dark ? Color.white : Color.black).opacity(0.1),
+                        .clear
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .rotationEffect(.degrees(45))
+                .offset(x: -geo.size.width + (geo.size.width * 2 * phase))
+            }
+            .mask(RoundedRectangle(cornerRadius: 16))
+            
+            // Border
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    colorScheme == .dark ? Color.white.opacity(0.5) : Color.black.opacity(0.5),
+                    lineWidth: 2
+                )
+        }
+        .frame(width: 200, height: 200)
+        .onAppear {
+            withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
+                phase = 1
+            }
+        }
     }
 }
