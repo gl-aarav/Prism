@@ -168,6 +168,7 @@ struct QuickAIView: View {
                                 LazyVStack(alignment: .leading, spacing: 16) {
                                     ForEach(chatManager.getCurrentMessages()) { message in
                                         QuickAIMessageView(message: message)
+                                            .equatable()
                                     }
                                     if isLoading {
                                         // Loading indicator removed in favor of streaming cursor
@@ -390,8 +391,12 @@ struct QuickAIView: View {
         .onChange(of: chatManager.getCurrentMessages().count) { _, count in
             // Auto-expand when messages arrive and keep the panel height consistent
             if count > 0 && !isExpanded {
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
                     isExpanded = true
+                }
+            } else if count == 0 && isExpanded {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
+                    isExpanded = false
                 }
             }
             recalcPanelSize()
@@ -726,11 +731,15 @@ extension QuickAIView {
     }
 }
 
-struct QuickAIMessageView: View {
+struct QuickAIMessageView: View, Equatable {
     let message: Message
     @State private var isCopied = false
     @State private var isCursorVisible = true
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+
+    static func == (lhs: QuickAIMessageView, rhs: QuickAIMessageView) -> Bool {
+        return lhs.message == rhs.message
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
