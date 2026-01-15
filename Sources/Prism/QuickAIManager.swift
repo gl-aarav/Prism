@@ -162,6 +162,9 @@ class QuickAIManager: ObservableObject {
         // active display/layout cycle.
         isApplyingResize = true
         let targetSize = targetHeight
+        
+        // Determine if this is a major transition (expand/collapse)
+        let isMajorTransition = diff > 100
 
         DispatchQueue.main.async { [weak self, weak panel] in
             guard let self = self, let panel = panel else { return }
@@ -175,11 +178,19 @@ class QuickAIManager: ObservableObject {
                 height: targetSize)
 
             NSAnimationContext.runAnimationGroup { context in
-                // "Slow and smooth" to match SwiftUI .spring(response: 0.55, damping: 0.8)
-                // A response of 0.55s means the spring settles over a longer period. 
-                // We'll set the window duration to approx 0.6s with a smooth eased curve.
-                context.duration = 0.6
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut) // Standard ease-out is smoother/slower feeling than quint
+                // Use different durations for major vs minor transitions
+                // Major transitions (expand/collapse) use a longer, smoother animation
+                // Minor transitions (text input changes) use a quicker response
+                if isMajorTransition {
+                    // Match the SwiftUI spring animation (response: 0.5, damping: 0.82)
+                    // Spring response of 0.5s with high damping = smooth, controlled expansion
+                    context.duration = 0.55
+                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0) // Custom ease-out curve
+                } else {
+                    context.duration = 0.35
+                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1.0) // Smooth ease
+                }
+                context.allowsImplicitAnimation = true
                 panel.animator().setFrame(newFrame, display: true)
             } completionHandler: {
                  // Ensure final frame is set correctly

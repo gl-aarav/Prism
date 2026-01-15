@@ -12,6 +12,11 @@ struct QuickAIView: View {
     @AppStorage("selectedProvider") private var selectedProvider: String = "Apple Foundation Model"
     @State private var thinkingLevel: String = "medium"
     @State private var isExpanded: Bool = false
+    @State private var expandedContentOpacity: Double = 0
+    @State private var headerOffset: CGFloat = 20
+    @State private var messagesOffset: CGFloat = 30
+    @State private var backgroundScale: CGFloat = 0.92
+    @State private var backgroundBlur: CGFloat = 0
     @State private var selectedPDF: Data? = nil
     @State private var selectedStyle: String = "Animation"
     @FocusState private var isFocused: Bool
@@ -44,6 +49,19 @@ struct QuickAIView: View {
     private let appleFoundationService = AppleFoundationService()
     @State private var showOpacityPopover: Bool = false
 
+    // Custom spring animation for ultra-smooth transitions
+    private var expandAnimation: Animation {
+        .spring(response: 0.5, dampingFraction: 0.82, blendDuration: 0.1)
+    }
+    
+    private var staggeredExpandAnimation: Animation {
+        .spring(response: 0.55, dampingFraction: 0.78, blendDuration: 0.08)
+    }
+    
+    private var collapseAnimation: Animation {
+        .spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.05)
+    }
+    
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -59,6 +77,8 @@ struct QuickAIView: View {
                                             systemImage: getProviderIcon("Apple Foundation"))
                                     }
                                 }
+                                .opacity(expandedContentOpacity)
+                                .offset(y: headerOffset)
                                 Section("API") {
                                     Button(action: { selectedProvider = "Gemini API" }) {
                                         Label(
@@ -132,7 +152,7 @@ struct QuickAIView: View {
                             // New Chat
                             Button(action: {
                                 chatManager.createNewSession()
-                                withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
+                                withAnimation(collapseAnimation) {
                                     isExpanded = false
                                 }
                             }) {
@@ -161,6 +181,8 @@ struct QuickAIView: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
+                        .opacity(expandedContentOpacity)
+                        .offset(y: headerOffset)
 
                         // Messages
                         ScrollViewReader { proxy in
@@ -192,6 +214,8 @@ struct QuickAIView: View {
                                 }
                             }
                         }
+                        .opacity(expandedContentOpacity)
+                        .offset(y: messagesOffset)
                     }
                     .padding(10)
                     .background(
@@ -213,11 +237,19 @@ struct QuickAIView: View {
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                     .compositingGroup()
+                    .scaleEffect(backgroundScale, anchor: .bottom)
+                    .blur(radius: backgroundBlur)
                     .padding(.bottom, 10)
                     .transition(
                         .asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .bottom).combined(with: .scale(scale: 0.95, anchor: .bottom))),
-                            removal: .opacity.combined(with: .scale(scale: 0.95, anchor: .bottom))
+                            insertion: .modifier(
+                                active: ExpandedPanelModifier(opacity: 0, offsetY: 40, scale: 0.88, blur: 8),
+                                identity: ExpandedPanelModifier(opacity: 1, offsetY: 0, scale: 1, blur: 0)
+                            ),
+                            removal: .modifier(
+                                active: ExpandedPanelModifier(opacity: 0, offsetY: 25, scale: 0.92, blur: 6),
+                                identity: ExpandedPanelModifier(opacity: 1, offsetY: 0, scale: 1, blur: 0)
+                            )
                         )
                     )
                 }
@@ -386,16 +418,41 @@ struct QuickAIView: View {
             recalcPanelSize()
         }
         .onChange(of: isExpanded) { _, expanded in
+            if expanded {
+                // Staggered entrance animations
+                withAnimation(staggeredExpandAnimation.delay(0.02)) {
+                    backgroundScale = 1.0
+                    backgroundBlur = 0
+                }
+                withAnimation(staggeredExpandAnimation.delay(0.06)) {
+                    expandedContentOpacity = 1.0
+                    headerOffset = 0
+                }
+                withAnimation(staggeredExpandAnimation.delay(0.1)) {
+                    messagesOffset = 0
+                }
+            } else {
+                // Smooth collapse animations
+                withAnimation(collapseAnimation) {
+                    messagesOffset = 15
+                    expandedContentOpacity = 0
+                    headerOffset = 10
+                }
+                withAnimation(collapseAnimation.delay(0.04)) {
+                    backgroundScale = 0.94
+                    backgroundBlur = 4
+                }
+            }
             recalcPanelSize()
         }
         .onChange(of: chatManager.getCurrentMessages().count) { _, count in
             // Auto-expand when messages arrive and keep the panel height consistent
             if count > 0 && !isExpanded {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
+                withAnimation(expandAnimation) {
                     isExpanded = true
                 }
             } else if count == 0 && isExpanded {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.8)) {
+                withAnimation(collapseAnimation) {
                     isExpanded = false
                 }
             }
@@ -474,7 +531,7 @@ struct QuickAIView: View {
         guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         if !isExpanded {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            withAnimation(expandAnimation) {
                 isExpanded = true
             }
         }
@@ -987,6 +1044,37 @@ struct GeneratingImagePlaceholder: View {
             withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
                 phase = 1
             }
+        }
+    }
+}
+
+// MARK: - Custom Transition Modifier for Smooth Expand/Collapse
+
+struct ExpandedPanelModifier: ViewModifier {
+    var opacity: Double
+    var offsetY: CGFloat
+    var scale: CGFloat
+    var blur: CGFloat
+    
+    func body(content: Content) -> some View {
+        content
+            .opacity(opacity)
+            .offset(y: offsetY)
+            .scaleEffect(scale, anchor: .bottom)
+            .blur(radius: blur)
+    }
+}
+
+extension ExpandedPanelModifier: Animatable {
+    var animatableData: AnimatablePair<AnimatablePair<Double, CGFloat>, AnimatablePair<CGFloat, CGFloat>> {
+        get {
+            AnimatablePair(AnimatablePair(opacity, offsetY), AnimatablePair(scale, blur))
+        }
+        set {
+            opacity = newValue.first.first
+            offsetY = newValue.first.second
+            scale = newValue.second.first
+            blur = newValue.second.second
         }
     }
 }
