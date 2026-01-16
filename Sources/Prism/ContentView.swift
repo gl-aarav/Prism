@@ -1501,8 +1501,8 @@ struct ContentView: View {
                 }
 
                 do {
-                    // Switch shortcut based on style/mode
-                    let targetShortcut = style.contains("ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+                    // Only plain "ChatGPT" (no styles) uses the specialized ChatGPT shortcut
+                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
                     
                     let result = try await shortcutService.runShortcut(
                         name: targetShortcut, input: input, style: style, image: image)
@@ -4710,8 +4710,8 @@ struct QuickChatView: View {
                 }
 
                 do {
-                    // Switch shortcut based on style/mode (Check if style contains ChatGPT)
-                    let targetShortcut = style.contains("ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+                    // Only plain "ChatGPT" (no styles) uses the specialized ChatGPT shortcut
+                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
 
                     let result = try await shortcutService.runShortcut(
                         name: targetShortcut, input: content, style: style, image: nil)

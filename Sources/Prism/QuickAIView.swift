@@ -559,8 +559,8 @@ struct QuickAIView: View {
                 }
 
                 do {
-                    // Switch shortcut based on style/mode
-                    let targetShortcut = style.contains("ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+                    // Only plain "ChatGPT" (no styles) uses the specialized ChatGPT shortcut
+                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
                     
                     let result = try await shortcutService.runShortcut(
                         name: targetShortcut, input: content, style: style, image: nil)
