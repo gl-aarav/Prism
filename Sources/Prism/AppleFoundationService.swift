@@ -110,41 +110,66 @@ class AppleFoundationService {
                         
                         var lastLength = 0
                         for try await partialResponse in stream {
-                            // Convert partialResponse to String.
-                            // 'String(describing:)' produced 'Snapshot(...)', so we need a cleaner way.
-                            // Since ChatDetailView uses it as a String (via coalescing), we treat it as such.
-                            // We attempt to utilize string interpolation simply, but if that fails (Snapshot...),
-                            // we must find the content.
-                            // Given 'Snapshot(content: "...")', we parse it as a fallback.
+                            // The partialResponse is a Snapshot<String> that contains the accumulated content
+                            // We need to extract the content properly
                             
                             let rawDescription = String(describing: partialResponse)
                             let currentText: String
                             
-                            if rawDescription.hasPrefix("Snapshot(content: \"") {
-                                // Extract content from: Snapshot(content: "TEXT", rawContent: ...)
-                                // Simplistic parsing:
-                                if let rangeStart = rawDescription.range(of: "content: \""),
-                                   let rangeEnd = rawDescription.range(of: "\", rawContent:", range: rangeStart.upperBound..<rawDescription.endIndex) {
-                                    let content = rawDescription[rangeStart.upperBound..<rangeEnd.lowerBound]
-                                    currentText = String(content)
-                                        .replacingOccurrences(of: "\\\"", with: "\"")
-                                        .replacingOccurrences(of: "\\'", with: "'") 
-                                        .replacingOccurrences(of: "\\\\", with: "\\")
+                            // Try to access content property directly using Mirror reflection
+                            let mirror = Mirror(reflecting: partialResponse)
+                            if let contentChild = mirror.children.first(where: { $0.label == "content" }),
+                               let contentValue = contentChild.value as? String {
+                                currentText = contentValue
+                            } else if rawDescription.hasPrefix("Snapshot(content: \"") {
+                                // Fallback: Extract content from: Snapshot(content: "TEXT", rawContent: ...)
+                                // Use a more robust parsing approach
+                                if let rangeStart = rawDescription.range(of: "content: \"") {
+                                    // Find the matching closing quote, handling escaped quotes
+                                    var searchIdx = rangeStart.upperBound
+                                    var result = ""
+                                    var escaped = false
+                                    
+                                    while searchIdx < rawDescription.endIndex {
+                                        let char = rawDescription[searchIdx]
+                                        if escaped {
+                                            result.append(char)
+                                            escaped = false
+                                        } else if char == "\\" {
+                                            escaped = true
+                                        } else if char == "\"" {
+                                            // Found the closing quote
+                                            break
+                                        } else {
+                                            result.append(char)
+                                        }
+                                        searchIdx = rawDescription.index(after: searchIdx)
+                                    }
+                                    
+                                    // Unescape the content
+                                    currentText = result
                                         .replacingOccurrences(of: "\\n", with: "\n")
                                         .replacingOccurrences(of: "\\t", with: "\t")
+                                        .replacingOccurrences(of: "\\r", with: "\r")
                                 } else {
                                     currentText = rawDescription
                                 }
                             } else {
+                                // The response might be the string directly
                                 currentText = rawDescription
                             }
                             
                             let currentLength = currentText.count
-                            
+
                             if currentLength > lastLength {
-                                let deltaIndex = currentText.index(currentText.startIndex, offsetBy: lastLength)
+                                let deltaIndex = currentText.index(
+                                    currentText.startIndex, offsetBy: lastLength)
                                 let delta = String(currentText[deltaIndex...])
                                 continuation.yield(delta)
+                                lastLength = currentLength
+                            } else if currentLength < lastLength {
+                                // Snapshot length shrank (new segment or restart); emit current text to avoid losing tail
+                                continuation.yield(currentText)
                                 lastLength = currentLength
                             }
                         }

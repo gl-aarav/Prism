@@ -717,9 +717,21 @@ class OllamaService {
                     for try await line in result.lines {
                         guard let data = line.data(using: .utf8),
                             let json = try? JSONSerialization.jsonObject(with: data)
-                                as? [String: Any],
-                            let message = json["message"] as? [String: Any],
-                            let content = message["content"] as? String
+                                as? [String: Any]
+                        else { continue }
+
+                        // Check done FIRST to avoid skipping if message/content is missing in final chunk
+                        if let done = json["done"] as? Bool, done {
+                            // If there is content in the done message, append it
+                            if let message = json["message"] as? [String: Any],
+                               let content = message["content"] as? String {
+                                buffer += content
+                            }
+                            break
+                        }
+
+                        guard let message = json["message"] as? [String: Any],
+                              let content = message["content"] as? String
                         else { continue }
 
                         buffer += content
@@ -740,37 +752,17 @@ class OllamaService {
                                 buffer.removeSubrange(..<range.upperBound)
                                 isThinking.toggle()
                             } else {
-                                // Smart buffering: only hold back if the end acts as a prefix for the tag
-                                var keepCount = 0
-                                let limit = min(buffer.count, targetTag.count - 1)
-                                
-                                if limit > 0 {
-                                    for i in (1...limit).reversed() {
-                                        let suffix = buffer.suffix(i)
-                                        if targetTag.prefix(i).caseInsensitiveCompare(String(suffix)) == .orderedSame {
-                                            keepCount = i
-                                            break
-                                        }
-                                    }
-                                }
-                                
-                                if buffer.count > keepCount {
-                                    let emitIndex = buffer.index(buffer.endIndex, offsetBy: -keepCount)
-                                    let emitStr = String(buffer[..<emitIndex])
-                                    
+                                // Smart buffering disabled to prevent truncation
+                                if !buffer.isEmpty {
                                     if isThinking {
-                                        continuation.yield(("", emitStr))
+                                        continuation.yield(("", buffer))
                                     } else {
-                                        continuation.yield((emitStr, nil))
+                                        continuation.yield((buffer, nil))
                                     }
-                                    buffer.removeSubrange(..<emitIndex)
+                                    buffer = ""
                                 }
                                 break
                             }
-                        }
-
-                        if let done = json["done"] as? Bool, done {
-                            break
                         }
                     }
 
@@ -1543,6 +1535,7 @@ struct ContentView: View {
                     do {
                         var fullContent = ""
                         var fullThinking = ""
+                        var lastUpdateTime = Date()
 
                         for try await (contentChunk, thinkingChunk)
                             in geminiService.sendMessageStream(
@@ -1554,13 +1547,16 @@ struct ContentView: View {
                                 fullThinking += thinking
                             }
 
-                            let contentToUpdate = fullContent
-                            let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                let contentToUpdate = fullContent
+                                let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
 
-                            DispatchQueue.main.async {
-                                self.chatManager.updateMessage(
-                                    id: aiMsgId, content: contentToUpdate,
-                                    thinkingContent: thinkingToUpdate, isStreaming: true)
+                                DispatchQueue.main.async {
+                                    self.chatManager.updateMessage(
+                                        id: aiMsgId, content: contentToUpdate,
+                                        thinkingContent: thinkingToUpdate, isStreaming: true)
+                                }
+                                lastUpdateTime = Date()
                             }
                         }
                         DispatchQueue.main.async {
@@ -1600,16 +1596,23 @@ struct ContentView: View {
 
                 do {
                     var accumulatedContent = ""
+                    var lastUpdateTime = Date()
+                    
                     for try await contentSnapshot in appleFoundationService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), systemPrompt: systemPrompt
                     ) {
                         accumulatedContent += contentSnapshot
-                        let contentToUpdate = accumulatedContent
-                        DispatchQueue.main.async {
-                            self.chatManager.updateMessage(
-                                id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                        
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentToUpdate = accumulatedContent
+                            DispatchQueue.main.async {
+                                self.chatManager.updateMessage(
+                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                            }
+                            lastUpdateTime = Date()
                         }
                     }
+                    
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: accumulatedContent, isStreaming: false)
@@ -1640,6 +1643,7 @@ struct ContentView: View {
                 do {
                     var fullContent = ""
                     var fullThinking = ""
+                    var lastUpdateTime = Date()
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: currentHistory, endpoint: ollamaURL, model: activeModel,
@@ -1650,16 +1654,24 @@ struct ContentView: View {
                             fullThinking += thinking
                         }
 
-                        let contentToUpdate = fullContent
-                        let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentToUpdate = fullContent
+                            let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
 
-                        DispatchQueue.main.async {
-                            self.chatManager.updateMessage(
-                                id: aiMsgId, content: contentToUpdate,
-                                thinkingContent: thinkingToUpdate)
+                            DispatchQueue.main.async {
+                                self.chatManager.updateMessage(
+                                    id: aiMsgId, content: contentToUpdate,
+                                    thinkingContent: thinkingToUpdate)
+                            }
+                            lastUpdateTime = Date()
                         }
                     }
                     DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId,
+                            content: fullContent,
+                            thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
+                            isStreaming: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -4659,17 +4671,24 @@ struct QuickChatView: View {
 
                 do {
                     var fullContent = ""
+                    var lastUpdateTime = Date()
+                    
                     for try await chunk in appleFoundationService.sendMessageStream(
                         history: chatManager.getCurrentMessages(),
                         systemPrompt: systemPrompt
                     ) {
                         fullContent += chunk
-                        let contentToUpdate = fullContent
-                        DispatchQueue.main.async {
-                            self.chatManager.updateMessage(
-                                id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                        
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentToUpdate = fullContent
+                            DispatchQueue.main.async {
+                                self.chatManager.updateMessage(
+                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                            }
+                            lastUpdateTime = Date()
                         }
                     }
+                    
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: fullContent, isStreaming: false)
@@ -4699,6 +4718,7 @@ struct QuickChatView: View {
                     do {
                         var fullContent = ""
                         var fullThinking = ""
+                        var lastUpdateTime = Date()
 
                         for try await (contentChunk, thinkingChunk)
                             in geminiService.sendMessageStream(
@@ -4711,13 +4731,16 @@ struct QuickChatView: View {
                                 fullThinking += thinking
                             }
 
-                            let contentToUpdate = fullContent
-                            let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                let contentToUpdate = fullContent
+                                let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
 
-                            DispatchQueue.main.async {
-                                self.chatManager.updateMessage(
-                                    id: aiMsgId, content: contentToUpdate,
-                                    thinkingContent: thinkingToUpdate, isStreaming: true)
+                                DispatchQueue.main.async {
+                                    self.chatManager.updateMessage(
+                                        id: aiMsgId, content: contentToUpdate,
+                                        thinkingContent: thinkingToUpdate, isStreaming: true)
+                                }
+                                lastUpdateTime = Date()
                             }
                         }
                         DispatchQueue.main.async {
@@ -4761,6 +4784,7 @@ struct QuickChatView: View {
                 do {
                     var fullContent = ""
                     var fullThinking = ""
+                    var lastUpdateTime = Date()
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), endpoint: ollamaURL,
@@ -4771,15 +4795,18 @@ struct QuickChatView: View {
                             fullThinking += thinking
                         }
 
-                        let contentSnapshot = fullContent
-                        let thinkingSnapshot = fullThinking
-                        DispatchQueue.main.async {
-                            self.streamBuffer[aiMsgId] = contentSnapshot
-                            if thinkingSnapshot.isEmpty {
-                                self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
-                            } else {
-                                self.streamThinkingBuffer[aiMsgId] = thinkingSnapshot
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentSnapshot = fullContent
+                            let thinkingSnapshot = fullThinking
+                            DispatchQueue.main.async {
+                                self.streamBuffer[aiMsgId] = contentSnapshot
+                                if thinkingSnapshot.isEmpty {
+                                    self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                                } else {
+                                    self.streamThinkingBuffer[aiMsgId] = thinkingSnapshot
+                                }
                             }
+                            lastUpdateTime = Date()
                         }
                     }
                     DispatchQueue.main.async {

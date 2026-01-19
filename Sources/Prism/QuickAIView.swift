@@ -297,6 +297,7 @@ struct QuickAIView: View {
                     do {
                         var fullContent = ""
                         var fullThinking = ""
+                        var lastUpdateTime = Date()
 
                         for try await (contentChunk, thinkingChunk)
                             in geminiService.sendMessageStream(
@@ -309,13 +310,16 @@ struct QuickAIView: View {
                                 fullThinking += thinking
                             }
 
-                            let contentToUpdate = fullContent
-                            let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                let contentToUpdate = fullContent
+                                let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
 
-                            DispatchQueue.main.async {
-                                self.chatManager.updateMessage(
-                                    id: aiMsgId, content: contentToUpdate,
-                                    thinkingContent: thinkingToUpdate, isStreaming: true)
+                                DispatchQueue.main.async {
+                                    self.chatManager.updateMessage(
+                                        id: aiMsgId, content: contentToUpdate,
+                                        thinkingContent: thinkingToUpdate, isStreaming: true)
+                                }
+                                lastUpdateTime = Date()
                             }
                         }
                         DispatchQueue.main.async {
@@ -356,16 +360,23 @@ struct QuickAIView: View {
 
                 do {
                     var accumulatedContent = ""
+                    var lastUpdateTime = Date()
+                    
                     for try await contentSnapshot in appleFoundationService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), systemPrompt: systemPrompt
                     ) {
                         accumulatedContent += contentSnapshot
-                        let contentToUpdate = accumulatedContent
-                        DispatchQueue.main.async {
-                            self.chatManager.updateMessage(
-                                id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                        
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentToUpdate = accumulatedContent
+                            DispatchQueue.main.async {
+                                self.chatManager.updateMessage(
+                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                            }
+                            lastUpdateTime = Date()
                         }
                     }
+                    
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: accumulatedContent, isStreaming: false)
@@ -397,6 +408,7 @@ struct QuickAIView: View {
                 do {
                     var fullContent = ""
                     var fullThinking = ""
+                    var lastUpdateTime = Date()
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), endpoint: ollamaURL,
@@ -407,16 +419,19 @@ struct QuickAIView: View {
                             fullThinking += thinking
                         }
 
-                        // Update live buffers only (avoid heavy state writes)
-                        let contentSnapshot = fullContent
-                        let thinkingSnapshot = fullThinking
-                        DispatchQueue.main.async {
-                            self.streamBuffer[aiMsgId] = contentSnapshot
-                            if thinkingSnapshot.isEmpty {
-                                self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
-                            } else {
-                                self.streamThinkingBuffer[aiMsgId] = thinkingSnapshot
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            // Update live buffers only (avoid heavy state writes)
+                            let contentSnapshot = fullContent
+                            let thinkingSnapshot = fullThinking
+                            DispatchQueue.main.async {
+                                self.streamBuffer[aiMsgId] = contentSnapshot
+                                if thinkingSnapshot.isEmpty {
+                                    self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                                } else {
+                                    self.streamThinkingBuffer[aiMsgId] = thinkingSnapshot
+                                }
                             }
+                            lastUpdateTime = Date()
                         }
                     }
 
@@ -514,7 +529,7 @@ struct QuickAIMessageView: View, Equatable {
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     static func == (lhs: QuickAIMessageView, rhs: QuickAIMessageView) -> Bool {
-        return lhs.message == rhs.message
+        return lhs.message == rhs.message && lhs.liveContent == rhs.liveContent && lhs.liveThinking == rhs.liveThinking
     }
 
     var body: some View {
@@ -603,6 +618,7 @@ struct QuickAIMessageView: View, Equatable {
                                     .foregroundStyle(.primary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .textSelection(.enabled)
+                                    .id("streamingText") 
                             } else {
                                 MarkdownView(blocks: message.blocks)
                             }
@@ -942,6 +958,18 @@ extension QuickAIView {
                     withAnimation {
                         proxy.scrollTo(lastId, anchor: .bottom)
                     }
+                }
+            }
+            // Auto-scroll during generation
+            .onChange(of: chatManager.getCurrentMessages().last?.content.count) { _, _ in
+                if let lastId = chatManager.getCurrentMessages().last?.id,
+                   chatManager.getCurrentMessages().last?.isStreaming == true {
+                    proxy.scrollTo(lastId, anchor: .bottom)
+                }
+            }
+            .onChange(of: streamBuffer) { _, _ in
+                if let lastId = chatManager.getCurrentMessages().last?.id, isLoading {
+                    proxy.scrollTo(lastId, anchor: .bottom)
                 }
             }
             .onChange(of: isLoading) { _, loading in
