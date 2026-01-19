@@ -752,15 +752,24 @@ class OllamaService {
                                 buffer.removeSubrange(..<range.upperBound)
                                 isThinking.toggle()
                             } else {
-                                // Smart buffering disabled to prevent truncation
-                                if !buffer.isEmpty {
-                                    if isThinking {
-                                        continuation.yield(("", buffer))
-                                    } else {
-                                        continuation.yield((buffer, nil))
+                                // Handle partial tags to prevent splitting <think> or </think> across chunks
+                                // </think> is 8 chars, <think> is 7. We keep 10 chars to be safe.
+                                let keepLength = 10
+                                
+                                if buffer.count > keepLength {
+                                    let splitIndex = buffer.index(buffer.endIndex, offsetBy: -keepLength)
+                                    let emitStr = String(buffer[..<splitIndex])
+                                    
+                                    if !emitStr.isEmpty {
+                                        if isThinking {
+                                            continuation.yield(("", emitStr))
+                                        } else {
+                                            continuation.yield((emitStr, nil))
+                                        }
+                                        buffer.removeSubrange(..<splitIndex)
                                     }
-                                    buffer = ""
                                 }
+                                // If buffer is small, keep it for next chunk to ensure we don't split a tag
                                 break
                             }
                         }
