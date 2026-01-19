@@ -27,6 +27,8 @@ struct QuickAIView: View {
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
+    @State private var streamBuffer: [UUID: String] = [:]  // live text per message
+    @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
@@ -386,6 +388,8 @@ struct QuickAIView: View {
 
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
+                    self.streamBuffer[aiMsgId] = ""
+                    self.streamThinkingBuffer[aiMsgId] = ""
                 }
 
                 let activeModel = selectedOllamaModel
@@ -403,17 +407,28 @@ struct QuickAIView: View {
                             fullThinking += thinking
                         }
 
-                        let contentToUpdate = fullContent
-                        let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
-
+                        // Update live buffers only (avoid heavy state writes)
+                        let contentSnapshot = fullContent
+                        let thinkingSnapshot = fullThinking
                         DispatchQueue.main.async {
-                            self.chatManager.updateMessage(
-                                id: aiMsgId, content: contentToUpdate,
-                                thinkingContent: thinkingToUpdate)
+                            self.streamBuffer[aiMsgId] = contentSnapshot
+                            if thinkingSnapshot.isEmpty {
+                                self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            } else {
+                                self.streamThinkingBuffer[aiMsgId] = thinkingSnapshot
+                            }
                         }
                     }
+
                     DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId,
+                            content: fullContent,
+                            thinkingContent: fullThinking.isEmpty ? nil : fullThinking
+                        )
                         self.chatManager.finalizeMessageUpdate()
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
                         self.isLoading = false
                     }
                 } catch {
@@ -492,6 +507,8 @@ extension QuickAIView {
 
 struct QuickAIMessageView: View, Equatable {
     let message: Message
+    var liveContent: String? = nil
+    var liveThinking: String? = nil
     @State private var isCopied = false
     @State private var isCursorVisible = true
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
@@ -541,7 +558,7 @@ struct QuickAIMessageView: View, Equatable {
                     if message.isGeneratingImage == true {
                         GeneratingImagePlaceholder()
                     } else {
-                        if let thinking = message.thinkingContent {
+                        if let thinking = (liveThinking ?? message.thinkingContent) {
                             DisclosureGroup {
                                 Text(thinking)
                                     .font(.system(size: 12, design: .monospaced))
@@ -578,11 +595,14 @@ struct QuickAIMessageView: View, Equatable {
                                 }
                         }
 
-                        if !message.content.isEmpty || message.isStreaming {
+                        let activeContent = liveContent ?? message.content
+                        if !activeContent.isEmpty || message.isStreaming {
                             if message.isStreaming {
-                                MarkdownView(
-                                    blocks: Message.parseMarkdown(
-                                        message.content + (isCursorVisible ? " ▋" : "")))
+                                Text(activeContent + (isCursorVisible ? " ▋" : ""))
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .textSelection(.enabled)
                             } else {
                                 MarkdownView(blocks: message.blocks)
                             }
@@ -903,7 +923,11 @@ extension QuickAIView {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(chatManager.getCurrentMessages()) { message in
-                        QuickAIMessageView(message: message)
+                        QuickAIMessageView(
+                            message: message,
+                            liveContent: streamBuffer[message.id],
+                            liveThinking: streamThinkingBuffer[message.id]
+                        )
                             .equatable()
                     }
                     if isLoading {

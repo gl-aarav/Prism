@@ -1232,6 +1232,8 @@ struct ContentView: View {
     @State private var showSplash: Bool = !AppState.shared.hasShownSplash
     @State private var currentTask: Task<Void, Never>?
     @State private var showImageGallery: Bool = false
+    @State private var streamBuffer: [UUID: String] = [:]  // live text per message
+    @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
@@ -1317,6 +1319,8 @@ struct ContentView: View {
                                                 let isLast = message.id == messages.last?.id
                                                 MessageView(
                                                     message: message,
+                                                    liveContent: streamBuffer[message.id] ?? nil,
+                                                    liveThinking: streamThinkingBuffer[message.id] ?? nil,
                                                     onRegenerate: (!message.isUser && !isLoading && isLast)
                                                         ? { regenerateResponse(for: message.id) }
                                                         : nil
@@ -3613,6 +3617,8 @@ struct EmptyStateView: View {
 
 struct MessageView: View, Equatable {
     let message: Message
+    var liveContent: String? = nil
+    var liveThinking: String? = nil
     var onRegenerate: (() -> Void)?
     var maxBubbleWidth: CGFloat = 500
 
@@ -3666,7 +3672,7 @@ struct MessageView: View, Equatable {
                     if message.isGeneratingImage == true {
                         GeneratingImagePlaceholder()
                     } else {
-                        if let thinking = message.thinkingContent {
+                        if let thinking = (liveThinking ?? message.thinkingContent) {
                             DisclosureGroup {
                                 Text(thinking)
                                     .font(.system(size: 12, design: .monospaced))
@@ -3694,12 +3700,13 @@ struct MessageView: View, Equatable {
                                     showImagePreview = true
                                 }
                         }
-                        if !message.content.isEmpty || message.isStreaming {
+                        let activeContent = liveContent ?? message.content
+                        if !activeContent.isEmpty || message.isStreaming {
                             if message.isStreaming {
-                                MarkdownView(
-                                    blocks: Message.parseMarkdown(
-                                        message.content + (isCursorVisible ? " ▋" : "")))
-                                    .equatable()
+                                Text(activeContent + (isCursorVisible ? " ▋" : ""))
+                                    .font(.body)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .textSelection(.enabled)
                             } else {
                                 MarkdownView(blocks: message.blocks)
                                     .equatable()
@@ -4184,6 +4191,8 @@ struct QuickChatView: View {
     @State private var imageCreationStyle: String = "Animation"
     @AppStorage("selectedProvider") private var selectedProvider: String = "Apple Foundation Model"
     @State private var thinkingLevel: String = "medium"
+    @State private var streamBuffer: [UUID: String] = [:]  // live text per message
+    @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
 
     // Settings (Read-only access to keys)
     @AppStorage("GeminiKey") private var geminiKey: String = ""
@@ -4352,7 +4361,12 @@ struct QuickChatView: View {
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(chatManager.getCurrentMessages()) { message in
-                        MessageView(message: message, maxBubbleWidth: 300)
+                        MessageView(
+                            message: message,
+                            liveContent: streamBuffer[message.id],
+                            liveThinking: streamThinkingBuffer[message.id],
+                            maxBubbleWidth: 300
+                        )
                     }
                 }
                 .padding()
@@ -4740,6 +4754,8 @@ struct QuickChatView: View {
 
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
+                    self.streamBuffer[aiMsgId] = ""
+                    self.streamThinkingBuffer[aiMsgId] = ""
                 }
 
                 do {
@@ -4755,13 +4771,15 @@ struct QuickChatView: View {
                             fullThinking += thinking
                         }
 
-                        let contentToUpdate = fullContent
-                        let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
-
+                        let contentSnapshot = fullContent
+                        let thinkingSnapshot = fullThinking
                         DispatchQueue.main.async {
-                            self.chatManager.updateMessage(
-                                id: aiMsgId, content: contentToUpdate,
-                                thinkingContent: thinkingToUpdate, isStreaming: true)
+                            self.streamBuffer[aiMsgId] = contentSnapshot
+                            if thinkingSnapshot.isEmpty {
+                                self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            } else {
+                                self.streamThinkingBuffer[aiMsgId] = thinkingSnapshot
+                            }
                         }
                     }
                     DispatchQueue.main.async {
@@ -4770,6 +4788,8 @@ struct QuickChatView: View {
                             thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
                             isStreaming: false)
                         self.chatManager.finalizeMessageUpdate()
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
                         self.isLoading = false
                     }
                 } catch {
