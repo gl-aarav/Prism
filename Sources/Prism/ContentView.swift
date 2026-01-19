@@ -495,11 +495,14 @@ class ChatManager: ObservableObject {
         id: UUID, content: String, thinkingContent: String? = nil, image: NSImage? = nil,
         isStreaming: Bool = false, isGeneratingImage: Bool? = nil
     ) {
-        guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }),
-            let msgIndex = sessions[index].messages.firstIndex(where: { $0.id == id })
+        // Find session containing the message (search all sessions to support background generation)
+        guard let sessionIndex = sessions.firstIndex(where: { session in
+            session.messages.contains(where: { $0.id == id })
+        }),
+        let msgIndex = sessions[sessionIndex].messages.firstIndex(where: { $0.id == id })
         else { return }
 
-        var msg = sessions[index].messages[msgIndex]
+        var msg = sessions[sessionIndex].messages[msgIndex]
         msg.content = content
         msg.isStreaming = isStreaming
         if let thinking = thinkingContent {
@@ -512,10 +515,10 @@ class ChatManager: ObservableObject {
             msg.imageData = image.tiffRepresentation
             // Also need to update cache if we were using it, but Message struct handles that in init or when accessing.
             // Actually Message struct has private _cachedImage. We should probably recreate the message or handle it.
-            // Since `Message` is a struct, modifying `msg` creates a copy.
+            // SisessionIce `Message` is a struct, modifying `msg` creates a copy.
             // Let's just rely on `imageData` update.
         }
-        sessions[index].messages[msgIndex] = msg
+        sessions[sessionIndex].messages[msgIndex] = msg
         // We don't save on every chunk to avoid disk thrashing, but we should save at the end
     }
 
@@ -597,8 +600,15 @@ class OllamaService {
                 // Qwen and Gemma models: Do not inject thinking instructions.
                 // DeepSeek: Only inject if "Reasoning On" (high), otherwise rely on model default or don't force.
                 let lowerModel = model.lowercased()
-                let skipThinkingInjection =
-                    lowerModel.contains("qwen") || lowerModel.contains("gemma")
+                var skipThinkingInjection = true
+                
+                // Logic:
+                // GPT-OSS -> Allow thinking (uses Low/Med/High)
+                // DeepSeek -> Allow thinking (uses On/Off if "high" passed effectively)
+                // All others -> Skip thinking
+                if lowerModel.contains("gpt-oss") || lowerModel.contains("deepseek") {
+                    skipThinkingInjection = false
+                }
 
                 if !skipThinkingInjection && (thinkingLevel == "high" || thinkingLevel == "medium")
                 {
@@ -715,48 +725,47 @@ class OllamaService {
                         buffer += content
 
                         while true {
-                            if !isThinking {
-                                // Search for start tag (case insensitive)
-                                if let range = buffer.range(
-                                    of: "<think>", options: .caseInsensitive)
-                                {
-                                    let preTag = buffer[..<range.lowerBound]
-                                    if !preTag.isEmpty {
-                                        continuation.yield((String(preTag), nil))
+                            let targetTag = isThinking ? "</think>" : "<think>"
+                            
+                            if let range = buffer.range(of: targetTag, options: .caseInsensitive) {
+                                let preTag = buffer[..<range.lowerBound]
+                                if !preTag.isEmpty {
+                                    let text = String(preTag)
+                                    if isThinking {
+                                        continuation.yield(("", text))
+                                    } else {
+                                        continuation.yield((text, nil))
                                     }
-                                    buffer.removeSubrange(..<range.upperBound)
-                                    isThinking = true
-                                } else {
-                                    // Handle partial tag at end
-                                    if buffer.count > 7 {
-                                        let keepIndex = buffer.index(buffer.endIndex, offsetBy: -7)
-                                        let emitStr = buffer[..<keepIndex]
-                                        continuation.yield((String(emitStr), nil))
-                                        buffer.removeSubrange(..<keepIndex)
-                                    }
-                                    break
                                 }
+                                buffer.removeSubrange(..<range.upperBound)
+                                isThinking.toggle()
                             } else {
-                                // Search for end tag (case insensitive)
-                                if let range = buffer.range(
-                                    of: "</think>", options: .caseInsensitive)
-                                {
-                                    let preTag = buffer[..<range.lowerBound]
-                                    if !preTag.isEmpty {
-                                        continuation.yield(("", String(preTag)))
+                                // Smart buffering: only hold back if the end acts as a prefix for the tag
+                                var keepCount = 0
+                                let limit = min(buffer.count, targetTag.count - 1)
+                                
+                                if limit > 0 {
+                                    for i in (1...limit).reversed() {
+                                        let suffix = buffer.suffix(i)
+                                        if targetTag.prefix(i).caseInsensitiveCompare(String(suffix)) == .orderedSame {
+                                            keepCount = i
+                                            break
+                                        }
                                     }
-                                    buffer.removeSubrange(..<range.upperBound)
-                                    isThinking = false
-                                } else {
-                                    // Handle partial tag </think>
-                                    if buffer.count > 8 {
-                                        let keepIndex = buffer.index(buffer.endIndex, offsetBy: -8)
-                                        let emitStr = buffer[..<keepIndex]
-                                        continuation.yield(("", String(emitStr)))
-                                        buffer.removeSubrange(..<keepIndex)
-                                    }
-                                    break
                                 }
+                                
+                                if buffer.count > keepCount {
+                                    let emitIndex = buffer.index(buffer.endIndex, offsetBy: -keepCount)
+                                    let emitStr = String(buffer[..<emitIndex])
+                                    
+                                    if isThinking {
+                                        continuation.yield(("", emitStr))
+                                    } else {
+                                        continuation.yield((emitStr, nil))
+                                    }
+                                    buffer.removeSubrange(..<emitIndex)
+                                }
+                                break
                             }
                         }
 
@@ -1208,8 +1217,7 @@ struct ContentView: View {
     @AppStorage("GeminiKey") private var geminiKey: String = ""
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
-    @AppStorage("OllamaModel") private var ollamaModel: String = "gpt-oss:120b-cloud"
-    @AppStorage("OllamaModel2") private var ollamaModel2: String = "gpt-oss:20b-cloud"
+    @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("selectedProvider") private var selectedProvider: String = "Apple Foundation Model"
 
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
@@ -1231,25 +1239,20 @@ struct ContentView: View {
     private let appleFoundationService = AppleFoundationService()
 
     var thinkingMode: ThinkingMode {
-        let model: String
         if selectedProvider == "Gemini API" {
-            model = geminiModel
-        } else if selectedProvider == "Ollama 1" {
-            model = ollamaModel
-        } else if selectedProvider == "Ollama 2" {
-            model = ollamaModel2
-        } else {
+            // Remove thinking for Gemini
+            return .none
+        } else if selectedProvider.contains("Ollama") {
+            let lower = selectedOllamaModel.lowercased()
+            if lower.contains("gpt-oss") {
+                return .threeState // Low, Med, High
+            } else if lower.contains("deepseek") {
+                return .binary // On/Off
+            }
+            // All others (llama3, etc) -> None
             return .none
         }
-
-        let lower = model.lowercased()
-        if lower.contains("qwen") || lower.contains("gemma") {
-            return .none
-        } else if lower.contains("deepseek") {
-            return .binary
-        } else {
-            return .threeState
-        }
+        return .none
     }
 
     var body: some View {
@@ -1311,13 +1314,13 @@ struct ContentView: View {
                                             EmptyStateView()
                                         } else {
                                             ForEach(messages) { message in
+                                                let isLast = message.id == messages.last?.id
                                                 MessageView(
                                                     message: message,
-                                                    onRegenerate: (!message.isUser && !isLoading)
+                                                    onRegenerate: (!message.isUser && !isLoading && isLast)
                                                         ? { regenerateResponse(for: message.id) }
                                                         : nil
                                                 )
-                                                .equatable()
                                             }
                                         }
                                     }
@@ -1335,7 +1338,8 @@ struct ContentView: View {
                                         onSelectAttachment: selectAttachment,
                                         isImageGen: selectedProvider == "Image Creation",
                                         thinkingMode: thinkingMode,
-                                        imageStyle: $imageCreationStyle
+                                        imageStyle: $imageCreationStyle,
+                                        isOllama: selectedProvider.contains("Ollama")
                                     )
                                 }
                                 .onChange(of: chatManager.getCurrentMessages().count) { _, count in
@@ -1617,9 +1621,9 @@ struct ContentView: View {
                         self.isLoading = false
                     }
                 }
-            } else if selectedProvider == "Ollama 1" || selectedProvider == "Ollama 2" {
+            } else if selectedProvider == "Ollama" {
                 let aiMsgId = UUID()
-                let activeModel = (selectedProvider == "Ollama 1") ? ollamaModel : ollamaModel2
+                let activeModel = selectedOllamaModel
                 var aiMsg = Message(content: "", model: activeModel, isUser: false)
                 aiMsg.id = aiMsgId
 
@@ -2116,11 +2120,8 @@ struct HeaderView: View {
                     Button(action: { selectedProvider = "Gemini API" }) {
                         Label("Gemini API", systemImage: getProviderIcon("Gemini API"))
                     }
-                    Button(action: { selectedProvider = "Ollama 1" }) {
-                        Label("Ollama 1", systemImage: getProviderIcon("Ollama"))
-                    }
-                    Button(action: { selectedProvider = "Ollama 2" }) {
-                        Label("Ollama 2", systemImage: getProviderIcon("Ollama"))
+                    Button(action: { selectedProvider = "Ollama" }) {
+                        Label("Ollama", systemImage: getProviderIcon("Ollama"))
                     }
                 }
                 Section("Shortcuts") {
@@ -2264,6 +2265,9 @@ struct InputView: View {
     var isImageGen: Bool
     var thinkingMode: ThinkingMode
     @Binding var imageStyle: String
+    var isOllama: Bool = false
+    @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
+    @ObservedObject var ollamaManager = OllamaModelManager.shared
 
     @FocusState private var isFocused: Bool
     @StateObject private var pasteMonitor = PasteMonitor()
@@ -2395,6 +2399,64 @@ struct InputView: View {
             }
 
             inputField
+
+            if isOllama {
+                Menu {
+                    Section("Favorites") {
+                        ForEach(ollamaManager.favoriteModels, id: \.self) { model in
+                            Button(action: { selectedOllamaModel = model }) {
+                                if selectedOllamaModel == model {
+                                    Label(model, systemImage: "checkmark")
+                                } else {
+                                    Text(model)
+                                }
+                            }
+                        }
+                    }
+                    ForEach(ollamaManager.sortedManufacturers, id: \.self) { manufacturer in
+                        let models = ollamaManager.availableModels
+                            .filter { !ollamaManager.isFavorite($0) }
+                            .filter { ollamaManager.getManufacturer(for: $0) == manufacturer }
+                        
+                        if !models.isEmpty {
+                            Section(manufacturer) {
+                                ForEach(models, id: \.self) { model in
+                                    Button(action: { selectedOllamaModel = model }) {
+                                        if selectedOllamaModel == model {
+                                            Label(model, systemImage: "checkmark")
+                                        } else {
+                                            Text(model)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    Menu("Manage Favorites") {
+                        ForEach(ollamaManager.availableModels, id: \.self) { model in
+                            Button(action: { ollamaManager.toggleFavorite(model) }) {
+                                if ollamaManager.isFavorite(model) {
+                                    Label(model, systemImage: "star.fill")
+                                } else {
+                                    Label(model, systemImage: "star")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "server.rack")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .menuStyle(.borderlessButton)
+                .help("Select Ollama Model")
+            }
 
             if thinkingMode != .none {
                 Menu {
@@ -2723,7 +2785,7 @@ struct KaTeXView: NSViewRepresentable {
                     <script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js\"></script>
                     <style>
                         :root { color-scheme: light dark; }
-                        body { margin:0; padding:8px; background: transparent; color: #111; font-size: \(fontSize)pt; text-align: center; }
+                        body { margin:0; padding:8px; background: transparent; color: #111; font-size: \(fontSize)pt; text-align: center; overflow: hidden; }
                         @media (prefers-color-scheme: dark) { body { color: #f5f5f5; } }
                         .katex, .katex * { color: inherit !important; }
                         .katex-display { margin: 0; }
@@ -3740,8 +3802,6 @@ struct SettingsView: View {
     @AppStorage("GeminiKey") private var geminiKey: String = ""
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
-    @AppStorage("OllamaModel") private var ollamaModel: String = "llama3"
-    @AppStorage("OllamaModel2") private var ollamaModel2: String = "gpt-oss:20b-cloud"
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
@@ -3879,16 +3939,6 @@ struct SettingsView: View {
             Section(header: Text("Ollama")) {
                 TextField("Endpoint URL", text: $ollamaURL)
                     .textFieldStyle(.roundedBorder)
-                Picker("Model 1", selection: $ollamaModel) {
-                    ForEach(ollamaModels, id: \.self) { model in
-                        Text(model).tag(model)
-                    }
-                }
-                Picker("Model 2", selection: $ollamaModel2) {
-                    ForEach(ollamaModels, id: \.self) { model in
-                        Text(model).tag(model)
-                    }
-                }
             }
 
             Section(header: Text("Shortcuts")) {
@@ -4141,6 +4191,8 @@ struct QuickChatView: View {
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("OllamaModel") private var ollamaModel: String = "llama3"
     @AppStorage("OllamaModel2") private var ollamaModel2: String = "gpt-oss:20b-cloud"
+    @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
+    @ObservedObject var ollamaManager = OllamaModelManager.shared
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
@@ -4157,25 +4209,15 @@ struct QuickChatView: View {
     private let appleFoundationService = AppleFoundationService()
 
     var thinkingMode: ThinkingMode {
-        let model: String
-        if selectedProvider == "Gemini API" {
-            model = geminiModel
-        } else if selectedProvider == "Ollama 1" {
-            model = ollamaModel
-        } else if selectedProvider == "Ollama 2" {
-            model = ollamaModel2
-        } else {
-            return .none
+        if selectedProvider.contains("Ollama") {
+            let lower = selectedOllamaModel.lowercased()
+            if lower.contains("gpt-oss") {
+                return .threeState // Low, Med, High
+            } else if lower.contains("deepseek") {
+                return .binary // On/Off
+            }
         }
-
-        let lower = model.lowercased()
-        if lower.contains("qwen") || lower.contains("gemma") {
-            return .none
-        } else if lower.contains("deepseek") {
-            return .binary
-        } else {
-            return .threeState
-        }
+        return .none
     }
 
     var body: some View {
@@ -4226,16 +4268,8 @@ struct QuickChatView: View {
                     Button(action: { selectedProvider = "Gemini API" }) {
                         Label("Gemini API", systemImage: "sparkles")
                     }
-                    Button(action: { selectedProvider = "Ollama 1" }) {
-                        Label("Ollama 1", systemImage: "laptopcomputer")
-                    }
-                    Button(action: { selectedProvider = "Ollama 2" }) {
-                        Label("Ollama 2", systemImage: "laptopcomputer")
-                    }
-                }
-                Section("Shortcuts") {
-                    Button(action: { selectedProvider = "Private Cloud" }) {
-                        Label("Private Cloud", systemImage: "lock.icloud")
+                    Button(action: { selectedProvider = "Ollama" }) {
+                        Label("Ollama", systemImage: "laptopcomputer")
                     }
                     Button(action: { selectedProvider = "On-Device" }) {
                         Label("On-Device", systemImage: "iphone")
@@ -4388,6 +4422,57 @@ struct QuickChatView: View {
                  }
                  .menuStyle(.borderlessButton)
                  .help("Image Style")
+            }
+
+            if selectedProvider.contains("Ollama") {
+                Menu {
+                    Section("Favorites") {
+                        ForEach(ollamaManager.favoriteModels, id: \.self) { model in
+                            Button(action: { selectedOllamaModel = model }) {
+                                if selectedOllamaModel == model {
+                                    Label(model, systemImage: "checkmark")
+                                } else {
+                                    Text(model)
+                                }
+                            }
+                        }
+                    }
+                    
+                    Section("All Models") {
+                        ForEach(ollamaManager.availableModels.filter { !ollamaManager.isFavorite($0) }, id: \.self) { model in
+                            Button(action: { selectedOllamaModel = model }) {
+                                if selectedOllamaModel == model {
+                                    Label(model, systemImage: "checkmark")
+                                } else {
+                                    Text(model)
+                                }
+                            }
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    Menu("Manage Favorites") {
+                        ForEach(ollamaManager.availableModels, id: \.self) { model in
+                            Button(action: { ollamaManager.toggleFavorite(model) }) {
+                                if ollamaManager.isFavorite(model) {
+                                    Label(model, systemImage: "star.fill")
+                                } else {
+                                    Label(model, systemImage: "star")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "server.rack")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .menuStyle(.borderlessButton)
+                .help("Select Ollama Model")
             }
 
             if thinkingMode != .none {
@@ -4646,9 +4731,9 @@ struct QuickChatView: View {
                         self.isLoading = false
                     }
                 }
-            } else if selectedProvider == "Ollama 1" || selectedProvider == "Ollama 2" {
+            } else if selectedProvider == "Ollama" {
                 let aiMsgId = UUID()
-                let activeModel = (selectedProvider == "Ollama 1") ? ollamaModel : ollamaModel2
+                let activeModel = selectedOllamaModel
                 var aiMsg = Message(content: "", model: activeModel, isUser: false)
                 aiMsg.id = aiMsgId
                 aiMsg.isStreaming = true

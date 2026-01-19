@@ -26,8 +26,6 @@ struct QuickAIView: View {
     @AppStorage("GeminiKey") private var geminiKey: String = ""
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
-    @AppStorage("OllamaModel") private var ollamaModel: String = "gpt-oss:120b-cloud"
-    @AppStorage("OllamaModel2") private var ollamaModel2: String = "gpt-oss:20b-cloud"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
@@ -36,6 +34,8 @@ struct QuickAIView: View {
     @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String = "Generate Image ChatGPT"
     @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
+    @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
+    @ObservedObject var ollamaManager = OllamaModelManager.shared
     private var clampedBackgroundOpacity: Double {
         min(max(backgroundOpacity, 0.05), 0.55)
     }
@@ -67,155 +67,8 @@ struct QuickAIView: View {
             VStack(spacing: 0) {
                 if isExpanded {
                     VStack(spacing: 12) {
-                        // Header
-                        HStack {
-                            Menu {
-                                Section("Apple Intelligence") {
-                                    Button(action: { selectedProvider = "Apple Foundation" }) {
-                                        Label(
-                                            "Apple Foundation",
-                                            systemImage: getProviderIcon("Apple Foundation"))
-                                    }
-                                }
-                                .opacity(expandedContentOpacity)
-                                .offset(y: headerOffset)
-                                Section("API") {
-                                    Button(action: { selectedProvider = "Gemini API" }) {
-                                        Label(
-                                            "Gemini API", systemImage: getProviderIcon("Gemini API")
-                                        )
-                                    }
-                                    Button(action: { selectedProvider = "Ollama 1" }) {
-                                        Label("Ollama 1", systemImage: getProviderIcon("Ollama"))
-                                    }
-                                    Button(action: { selectedProvider = "Ollama 2" }) {
-                                        Label("Ollama 2", systemImage: getProviderIcon("Ollama"))
-                                    }
-                                }
-                                Section("Shortcuts") {
-                                    Button(action: { selectedProvider = "Private Cloud" }) {
-                                        Label(
-                                            "Private Cloud",
-                                            systemImage: getProviderIcon("Private Cloud"))
-                                    }
-                                    Button(action: { selectedProvider = "On-Device" }) {
-                                        Label(
-                                            "On-Device", systemImage: getProviderIcon("On-Device"))
-                                    }
-                                    Button(action: { selectedProvider = "ChatGPT" }) {
-                                        Label("ChatGPT", systemImage: getProviderIcon("ChatGPT"))
-                                    }
-                                }
-                                Section("Tools") {
-                                    Button(action: { selectedProvider = "Image Creation" }) {
-                                        Label(
-                                            "Image Creation",
-                                            systemImage: getProviderIcon("Image Creation"))
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: getProviderIcon(selectedProvider))
-                                        .foregroundStyle(
-                                            LinearGradient(
-                                                colors: [.blue, .green], startPoint: .topLeading,
-                                                endPoint: .bottomTrailing))
-                                    Text(selectedProvider)
-                                        .font(.headline)
-                                        .foregroundColor(.secondary)
-                                    Image(systemName: "chevron.down")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(
-                                    Capsule(style: .continuous)
-                                        .fill(
-                                            Color.gray.opacity(colorScheme == .dark ? 0.18 : 0.14)
-                                        )
-                                        .overlay(
-                                            Capsule(style: .continuous)
-                                                .stroke(
-                                                    Color.white.opacity(
-                                                        colorScheme == .dark ? 0.22 : 0.18),
-                                                    lineWidth: 0.8
-                                                )
-                                        )
-                                )
-                            }
-                            .menuStyle(.borderlessButton)
-                            .fixedSize()
-
-                            Spacer()
-
-                            // New Chat
-                            Button(action: {
-                                chatManager.createNewSession()
-                                withAnimation(collapseAnimation) {
-                                    isExpanded = false
-                                }
-                            }) {
-                                Image(systemName: "square.and.pencil")
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Capsule(style: .continuous)
-                                            .fill(
-                                                Color.gray.opacity(
-                                                    colorScheme == .dark ? 0.18 : 0.14)
-                                            )
-                                            .overlay(
-                                                Capsule(style: .continuous)
-                                                    .stroke(
-                                                        Color.white.opacity(
-                                                            colorScheme == .dark ? 0.22 : 0.18),
-                                                        lineWidth: 0.8
-                                                    )
-                                            )
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .help("New Chat")
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .opacity(expandedContentOpacity)
-                        .offset(y: headerOffset)
-
-                        // Messages
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                LazyVStack(alignment: .leading, spacing: 16) {
-                                    ForEach(chatManager.getCurrentMessages()) { message in
-                                        QuickAIMessageView(message: message)
-                                            .equatable()
-                                    }
-                                    if isLoading {
-                                        // Loading indicator removed in favor of streaming cursor
-                                    }
-                                }
-                                .padding(20)
-                            }
-                            .scrollIndicators(.hidden)
-                            .onChange(of: chatManager.getCurrentMessages().count) { _, _ in
-                                if let lastId = chatManager.getCurrentMessages().last?.id {
-                                    withAnimation {
-                                        proxy.scrollTo(lastId, anchor: .bottom)
-                                    }
-                                }
-                            }
-                            .onChange(of: isLoading) { _, loading in
-                                if loading {
-                                    withAnimation {
-                                        proxy.scrollTo("loading", anchor: .bottom)
-                                    }
-                                }
-                            }
-                        }
-                        .opacity(expandedContentOpacity)
-                        .offset(y: messagesOffset)
+                        headerSection
+                        messagesSection
                     }
                     .padding(10)
                     .background(
@@ -254,158 +107,7 @@ struct QuickAIView: View {
                     )
                 }
 
-                // Input Area
-                VStack(spacing: 8) {
-                    if let pdfData = selectedPDF {
-                        HStack {
-                            Image(systemName: "doc.text.fill")
-                                .foregroundColor(.red)
-                            Text("PDF attached (\(pdfData.count / 1024) KB)")
-                                .font(.caption)
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Button(action: { selectedPDF = nil }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 16)
-                    }
-
-                    HStack(alignment: .center, spacing: 12) {
-                        TextField("Request...", text: $inputText, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 16))
-                            .lineLimit(1...6)
-                            .multilineTextAlignment(.leading)
-                            .focused($isFocused)
-                            .onChange(of: inputText) { _, _ in
-                                recalcPanelSize()
-                            }
-                            .onSubmit { sendMessage() }
-                            .onPasteCommand(of: [.fileURL, .pdf]) { providers in
-                                for provider in providers {
-                                    if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
-                                        provider.loadItem(
-                                            forTypeIdentifier: "com.adobe.pdf", options: nil
-                                        ) { urlData, _ in
-                                            if let urlData = urlData as? Data,
-                                                let url = URL(
-                                                    dataRepresentation: urlData, relativeTo: nil),
-                                                let data = try? Data(contentsOf: url)
-                                            {
-                                                DispatchQueue.main.async {
-                                                    self.selectedPDF = data
-                                                }
-                                            }
-                                        }
-                                    } else if provider.hasItemConformingToTypeIdentifier(
-                                        "public.file-url")
-                                    {
-                                        provider.loadItem(
-                                            forTypeIdentifier: "public.file-url", options: nil
-                                        ) { urlData, _ in
-                                            if let urlData = urlData as? Data,
-                                                let url = URL(
-                                                    dataRepresentation: urlData, relativeTo: nil)
-                                            {
-                                                if url.pathExtension.lowercased() == "pdf",
-                                                    let data = try? Data(contentsOf: url)
-                                                {
-                                                    DispatchQueue.main.async {
-                                                        self.selectedPDF = data
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                        // Image Creation Tools
-                        if selectedProvider == "Image Creation" {
-                             // Style Picker
-                             Menu {
-                                 Section("Apple Intelligence") {
-                                     Button(action: { selectedStyle = "Animation" }) {
-                                         if selectedStyle == "Animation" { Label("Animation", systemImage: "checkmark") } else { Text("Animation") }
-                                     }
-                                     Button(action: { selectedStyle = "Illustration" }) {
-                                         if selectedStyle == "Illustration" { Label("Illustration", systemImage: "checkmark") } else { Text("Illustration") }
-                                     }
-                                     Button(action: { selectedStyle = "Sketch" }) {
-                                         if selectedStyle == "Sketch" { Label("Sketch", systemImage: "checkmark") } else { Text("Sketch") }
-                                     }
-                                 }
-                                 Divider()
-                                 Section("ChatGPT") {
-                                     Button(action: { selectedStyle = "ChatGPT" }) {
-                                         if selectedStyle == "ChatGPT" { Label("ChatGPT (Default)", systemImage: "checkmark") } else { Text("ChatGPT (Default)") }
-                                     }
-                                     Button(action: { selectedStyle = "Oil Painting (ChatGPT)" }) {
-                                         if selectedStyle == "Oil Painting (ChatGPT)" { Label("Oil Painting", systemImage: "checkmark") } else { Text("Oil Painting") }
-                                     }
-                                     Button(action: { selectedStyle = "Watercolor (ChatGPT)" }) {
-                                         if selectedStyle == "Watercolor (ChatGPT)" { Label("Watercolor", systemImage: "checkmark") } else { Text("Watercolor") }
-                                     }
-                                     Button(action: { selectedStyle = "Vector (ChatGPT)" }) {
-                                         if selectedStyle == "Vector (ChatGPT)" { Label("Vector", systemImage: "checkmark") } else { Text("Vector") }
-                                     }
-                                     Button(action: { selectedStyle = "Anime (ChatGPT)" }) {
-                                         if selectedStyle == "Anime (ChatGPT)" { Label("Anime", systemImage: "checkmark") } else { Text("Anime") }
-                                     }
-                                     Button(action: { selectedStyle = "Print (ChatGPT)" }) {
-                                         if selectedStyle == "Print (ChatGPT)" { Label("Print", systemImage: "checkmark") } else { Text("Print") }
-                                     }
-                                 }
-                             } label: {
-                                 Image(systemName: "paintpalette")
-                                     .font(.system(size: 16))
-                                     .foregroundColor(selectedStyle.isEmpty ? .secondary : .orange)
-                                     .padding(6)
-                                     .background(Color.white.opacity(0.10))
-                                     .clipShape(Circle())
-                             }
-                             .menuStyle(.borderlessButton)
-                             .help("Image Style")
-                        }
-
-                        // Thinking Level Selector
-                        if selectedProvider.contains("Ollama") || selectedProvider == "Gemini API" {
-                            Menu {
-                                thinkingOption(title: "Low", value: "low")
-                                thinkingOption(title: "Medium", value: "medium")
-                                thinkingOption(title: "High", value: "high")
-                            } label: {
-                                Image(systemName: "brain")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(
-                                        thinkingLevel == "medium" ? Color.teal : Color.green
-                                    )
-                                    .padding(6)
-                                    .background(Color.white.opacity(0.10))
-                                    .clipShape(Circle())
-                            }
-                            .menuStyle(.borderlessButton)
-                            .help("Reasoning Effort")
-                        }
-
-                        Button(action: sendMessage) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 28))
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(
-                                    sendButtonStyle(darkened: true),
-                                    Color.black.opacity(colorScheme == .dark ? 0.35 : 0.28)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(inputText.isEmpty || isLoading)
-                    }
-                    .padding(16)
-                    .background(CommandBarBackground(cornerRadius: 26))
-                }
+                inputSection
             }
         }
         .frame(width: 700)
@@ -460,7 +162,7 @@ struct QuickAIView: View {
         }
     }
 
-    private func sendButtonStyle(darkened: Bool = false) -> AnyShapeStyle {
+    func sendButtonStyle(darkened: Bool = false) -> AnyShapeStyle {
         let hour = Calendar.current.component(.hour, from: Date())
         let isNight = hour >= 19 || hour < 7
         // In dark mode or at night, use a brighter punchy gradient for contrast
@@ -489,7 +191,7 @@ struct QuickAIView: View {
         }
     }
 
-    private func recalcPanelSize() {
+    func recalcPanelSize() {
         let baseWidth: CGFloat = 700
 
         let font = NSFont.systemFont(ofSize: 16)
@@ -520,7 +222,7 @@ struct QuickAIView: View {
         case "On-Device": return "iphone"
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
-        case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
+        case "Ollama": return "laptopcomputer"
         case "Image Creation": return "paintbrush"
         case "ChatGPT": return "message"
         default: return "cpu"
@@ -686,7 +388,7 @@ struct QuickAIView: View {
                     self.chatManager.addMessage(aiMsg)
                 }
 
-                let activeModel = (selectedProvider == "Ollama 2") ? ollamaModel2 : ollamaModel
+                let activeModel = selectedOllamaModel
 
                 do {
                     var fullContent = ""
@@ -763,7 +465,7 @@ struct QuickAIView: View {
 
 extension QuickAIView {
     @ViewBuilder
-    private func styleButton(_ title: String, value: String) -> some View {
+    func styleButton(_ title: String, value: String) -> some View {
         Button(action: { selectedStyle = value }) {
             if selectedStyle == value {
                 Label(title, systemImage: "checkmark")
@@ -774,7 +476,7 @@ extension QuickAIView {
     }
 
     @ViewBuilder
-    private func thinkingOption(title: String, value: String) -> some View {
+    func thinkingOption(title: String, value: String) -> some View {
         Button(action: { thinkingLevel = value }) {
             HStack {
                 Text(title)
@@ -1075,6 +777,415 @@ extension ExpandedPanelModifier: Animatable {
             offsetY = newValue.first.second
             scale = newValue.second.first
             blur = newValue.second.second
+        }
+    }
+}
+
+extension QuickAIView {
+    
+    private var headerSection: some View {
+        HStack {
+            Menu {
+                Section("Apple Intelligence") {
+                    Button(action: { selectedProvider = "Apple Foundation" }) {
+                        Label(
+                            "Apple Foundation",
+                            systemImage: getProviderIcon("Apple Foundation"))
+                    }
+                }
+                .opacity(expandedContentOpacity)
+                .offset(y: headerOffset)
+                Section("API") {
+                    Button(action: { selectedProvider = "Gemini API" }) {
+                        Label(
+                            "Gemini API", systemImage: getProviderIcon("Gemini API")
+                        )
+                    }
+                    Button(action: { selectedProvider = "Ollama" }) {
+                        Label("Ollama", systemImage: getProviderIcon("Ollama"))
+                    }
+                }
+                Section("Shortcuts") {
+                    Button(action: { selectedProvider = "Private Cloud" }) {
+                        Label(
+                            "Private Cloud",
+                            systemImage: getProviderIcon("Private Cloud"))
+                    }
+                    Button(action: { selectedProvider = "On-Device" }) {
+                        Label(
+                            "On-Device", systemImage: getProviderIcon("On-Device"))
+                    }
+                    Button(action: { selectedProvider = "ChatGPT" }) {
+                        Label("ChatGPT", systemImage: getProviderIcon("ChatGPT"))
+                    }
+                }
+                Section("Tools") {
+                    Button(action: { selectedProvider = "Image Creation" }) {
+                        Label(
+                            "Image Creation",
+                            systemImage: getProviderIcon("Image Creation"))
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: getProviderIcon(selectedProvider))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue, .green], startPoint: .topLeading,
+                                endPoint: .bottomTrailing))
+                    Text(selectedProvider)
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(
+                            Color.gray.opacity(colorScheme == .dark ? 0.18 : 0.14)
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(
+                                    Color.white.opacity(
+                                        colorScheme == .dark ? 0.22 : 0.18),
+                                    lineWidth: 0.8
+                                )
+                        )
+                )
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+
+            Spacer()
+
+            // New Chat
+            Button(action: {
+                chatManager.createNewSession()
+                withAnimation(collapseAnimation) {
+                    isExpanded = false
+                }
+            }) {
+                Image(systemName: "square.and.pencil")
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(
+                                Color.gray.opacity(
+                                    colorScheme == .dark ? 0.18 : 0.14)
+                            )
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(
+                                        Color.white.opacity(
+                                            colorScheme == .dark ? 0.22 : 0.18),
+                                        lineWidth: 0.8
+                                    )
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .help("New Chat")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .opacity(expandedContentOpacity)
+        .offset(y: headerOffset)
+    }
+
+    private var messagesSection: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(chatManager.getCurrentMessages()) { message in
+                        QuickAIMessageView(message: message)
+                            .equatable()
+                    }
+                    if isLoading {
+                        // Loading indicator removed in favor of streaming cursor
+                    }
+                }
+                .padding(20)
+            }
+            .scrollIndicators(.hidden)
+            .onChange(of: chatManager.getCurrentMessages().count) { _, _ in
+                if let lastId = chatManager.getCurrentMessages().last?.id {
+                    withAnimation {
+                        proxy.scrollTo(lastId, anchor: .bottom)
+                    }
+                }
+            }
+            .onChange(of: isLoading) { _, loading in
+                if loading {
+                    withAnimation {
+                        proxy.scrollTo("loading", anchor: .bottom)
+                    }
+                }
+            }
+        }
+        .opacity(expandedContentOpacity)
+        .offset(y: messagesOffset)
+    }
+
+    private var inputSection: some View {
+        VStack(spacing: 8) {
+            if let pdfData = selectedPDF {
+                HStack {
+                    Image(systemName: "doc.text.fill")
+                        .foregroundColor(.red)
+                    Text("PDF attached (\(pdfData.count / 1024) KB)")
+                        .font(.caption)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Button(action: { selectedPDF = nil }) {
+                        Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+            }
+            
+            HStack(alignment: .center, spacing: 12) {
+                TextField("Request...", text: $inputText, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 16))
+                .lineLimit(1...6)
+                .multilineTextAlignment(.leading)
+                .focused($isFocused)
+                .onChange(of: inputText) { _, _ in
+                    recalcPanelSize()
+                }
+                .onSubmit { sendMessage() }
+                .onPasteCommand(of: [.fileURL, .pdf]) { providers in
+                    for provider in providers {
+                        if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
+                            provider.loadItem(
+                                forTypeIdentifier: "com.adobe.pdf", options: nil
+                            ) { urlData, _ in
+                                if let urlData = urlData as? Data,
+                                let url = URL(
+                                dataRepresentation: urlData, relativeTo: nil),
+                                let data = try? Data(contentsOf: url)
+                                {
+                                    DispatchQueue.main.async {
+                                        self.selectedPDF = data
+                                    }
+                                }
+                            }
+                        } else if provider.hasItemConformingToTypeIdentifier(
+                            "public.file-url")
+                        {
+                            provider.loadItem(
+                                forTypeIdentifier: "public.file-url", options: nil
+                            ) { urlData, _ in
+                                if let urlData = urlData as? Data,
+                                let url = URL(
+                                dataRepresentation: urlData, relativeTo: nil)
+                                {
+                                    if url.pathExtension.lowercased() == "pdf",
+                                    let data = try? Data(contentsOf: url)
+                                    {
+                                        DispatchQueue.main.async {
+                                            self.selectedPDF = data
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Image Creation Tools
+                if selectedProvider == "Image Creation" {
+                    // Style Picker
+                    Menu {
+                        Section("Apple Intelligence") {
+                            Button(action: { selectedStyle = "Animation" }) {
+                                if selectedStyle == "Animation" { Label("Animation", systemImage: "checkmark") } else { Text("Animation") }
+                            }
+                            Button(action: { selectedStyle = "Illustration" }) {
+                                if selectedStyle == "Illustration" { Label("Illustration", systemImage: "checkmark") } else { Text("Illustration") }
+                            }
+                            Button(action: { selectedStyle = "Sketch" }) {
+                                if selectedStyle == "Sketch" { Label("Sketch", systemImage: "checkmark") } else { Text("Sketch") }
+                            }
+                        }
+                        Divider()
+                        Section("ChatGPT") {
+                            Button(action: { selectedStyle = "ChatGPT" }) {
+                                if selectedStyle == "ChatGPT" { Label("ChatGPT (Default)", systemImage: "checkmark") } else { Text("ChatGPT (Default)") }
+                            }
+                            Button(action: { selectedStyle = "Oil Painting (ChatGPT)" }) {
+                                if selectedStyle == "Oil Painting (ChatGPT)" { Label("Oil Painting", systemImage: "checkmark") } else { Text("Oil Painting") }
+                            }
+                            Button(action: { selectedStyle = "Watercolor (ChatGPT)" }) {
+                                if selectedStyle == "Watercolor (ChatGPT)" { Label("Watercolor", systemImage: "checkmark") } else { Text("Watercolor") }
+                            }
+                            Button(action: { selectedStyle = "Vector (ChatGPT)" }) {
+                                if selectedStyle == "Vector (ChatGPT)" { Label("Vector", systemImage: "checkmark") } else { Text("Vector") }
+                            }
+                            Button(action: { selectedStyle = "Anime (ChatGPT)" }) {
+                                if selectedStyle == "Anime (ChatGPT)" { Label("Anime", systemImage: "checkmark") } else { Text("Anime") }
+                            }
+                            Button(action: { selectedStyle = "Print (ChatGPT)" }) {
+                                if selectedStyle == "Print (ChatGPT)" { Label("Print", systemImage: "checkmark") } else { Text("Print") }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "paintpalette")
+                        .font(.system(size: 16))
+                        .foregroundColor(selectedStyle.isEmpty ? .secondary : .orange)
+                        .padding(6)
+                        .background(Color.white.opacity(0.10))
+                        .clipShape(Circle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Image Style")
+                }
+                
+                // Thinking Level Selector
+                if selectedProvider.contains("Ollama") {
+                    Menu {
+                        Section("Favorites") {
+                            ForEach(ollamaManager.favoriteModels, id: \.self) { model in
+                                Button(action: { selectedOllamaModel = model }) {
+                                    if selectedOllamaModel == model {
+                                        Label(model, systemImage: "checkmark")
+                                    } else {
+                                        Text(model)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        ForEach(ollamaManager.sortedManufacturers, id: \.self) { manufacturer in
+                            let models = ollamaManager.availableModels
+                            .filter { !ollamaManager.isFavorite($0) }
+                            .filter { ollamaManager.getManufacturer(for: $0) == manufacturer }
+                            
+                            if !models.isEmpty {
+                                Section(manufacturer) {
+                                    ForEach(models, id: \.self) { model in
+                                        Button(action: { selectedOllamaModel = model }) {
+                                            if selectedOllamaModel == model {
+                                                Label(model, systemImage: "checkmark")
+                                            } else {
+                                                Text(model)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        Menu("Manage Favorites") {
+                            ForEach(ollamaManager.availableModels, id: \.self) { model in
+                                Button(action: { ollamaManager.toggleFavorite(model) }) {
+                                    if ollamaManager.isFavorite(model) {
+                                        Label(model, systemImage: "star.fill")
+                                    } else {
+                                        Label(model, systemImage: "star")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "server.rack")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                        .padding(6)
+                        .background(Color.white.opacity(0.10))
+                        .clipShape(Circle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Select Ollama Model")
+                    
+                    // Thinking logic
+                    let lower = selectedOllamaModel.lowercased()
+                    let mode: ThinkingMode = lower.contains("deepseek") ? .binary : (lower.contains("gpt-oss") ? .threeState : .none)
+                    
+                    if mode != .none {
+                        Menu {
+                            if mode == .binary {
+                                Button {
+                                    thinkingLevel = "high"
+                                } label: {
+                                    if thinkingLevel == "high" {
+                                        Label("Reasoning: On", systemImage: "checkmark")
+                                    } else {
+                                        Text("Reasoning: On")
+                                    }
+                                }
+                                Button {
+                                    thinkingLevel = "low"
+                                } label: {
+                                    if thinkingLevel != "high" {
+                                        Label("Reasoning: Off", systemImage: "checkmark")
+                                    } else {
+                                        Text("Reasoning: Off")
+                                    }
+                                }
+                            } else {
+                                thinkingOption(title: "Low", value: "low")
+                                thinkingOption(title: "Medium", value: "medium")
+                                thinkingOption(title: "High", value: "high")
+                            }
+                        } label: {
+                            Image(systemName: "brain")
+                            .font(.system(size: 16))
+                            .foregroundColor(
+                                (thinkingLevel == "medium" && mode == .threeState)
+                                || (thinkingLevel == "low" && mode == .binary)
+                                ? .secondary : .green
+                            )
+                            .padding(6)
+                            .background(Color.white.opacity(0.10))
+                            .clipShape(Circle())
+                        }
+                        .menuStyle(.borderlessButton)
+                        .help("Reasoning Effort")
+                    }
+                } else if selectedProvider == "Gemini API" {
+                    Menu {
+                        thinkingOption(title: "Low", value: "low")
+                        thinkingOption(title: "Medium", value: "medium")
+                        thinkingOption(title: "High", value: "high")
+                    } label: {
+                        Image(systemName: "brain")
+                        .font(.system(size: 16))
+                        .foregroundColor(
+                            thinkingLevel == "medium" ? Color.teal : Color.green
+                        )
+                        .padding(6)
+                        .background(Color.white.opacity(0.10))
+                        .clipShape(Circle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Reasoning Effort")
+                }
+                
+                Button(action: sendMessage) {
+                    Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 28))
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(
+                        sendButtonStyle(darkened: true),
+                        Color.black.opacity(colorScheme == .dark ? 0.35 : 0.28)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(inputText.isEmpty || isLoading)
+            }
+            .padding(16)
+            .background(CommandBarBackground(cornerRadius: 26))
         }
     }
 }
