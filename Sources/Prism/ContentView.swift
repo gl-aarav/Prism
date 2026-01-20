@@ -2904,10 +2904,19 @@ struct MarkdownView: View, Equatable {
     }
 
     private func parseMarkdownToAttributedString(_ text: String) -> AttributedString {
+        // If content contains inline math delimiters, we might want to defer to a richer view if possible.
+        // But since we are returning AttributedString, we stick to parsing.
+        
         let displayDelimiters = ["$$", "\\["]
 
         var firstMatch: (delimiter: String, range: Range<String.Index>)? = nil
-
+        
+        // ... (rest of logic)
+    
+        // NOTE: We rely on mathText(display=true) for block math found inside text blocks
+        // and mathText(display=false) for inline math found in parseInlineMarkdown.
+        
+        // Check for block delimiters first
         for delim in displayDelimiters {
             if let range = text.range(of: delim) {
                 if let current = firstMatch {
@@ -2927,10 +2936,19 @@ struct MarkdownView: View, Equatable {
 
             let prefix = text[..<range.lowerBound]
             let remainder = text[range.upperBound...]
+            
+            // Look for closing delimiter
+            if let closeRange = remainder.range(of: closingDelimiter) {
+                // If the closing delimiter is found immediately after (empty block), handle it
+                if closeRange.lowerBound == remainder.startIndex {
+                     return parseInlineMarkdown(String(prefix)) + parseMarkdownToAttributedString(String(remainder[closeRange.upperBound...]))
+                }
 
-            if let endRange = remainder.range(of: closingDelimiter) {
-                let mathContent = String(remainder[..<endRange.lowerBound])
-                let suffix = String(remainder[endRange.upperBound...])
+                // Proper block found
+                let mathContent = String(remainder[..<closeRange.lowerBound])
+                
+                // Advance past closing delimiter
+                let suffix = String(remainder[closeRange.upperBound...])
 
                 return parseInlineMarkdown(String(prefix))
                     + mathText(mathContent, display: true)
@@ -3253,8 +3271,8 @@ struct MarkdownView: View, Equatable {
             content = content.replacingOccurrences(of: cmd, with: "")
         }
 
-        // Fix \boxed{...} by converting to group {...} to preserve brace balance
-        content = content.replacingOccurrences(of: "\\boxed{", with: "{")
+        // \boxed{...} should be supported by SwiftMath. If not, this line was removing it.
+        // content = content.replacingOccurrences(of: "\\boxed{", with: "{")
 
         return content
     }
@@ -3265,41 +3283,75 @@ struct MarkdownView: View, Equatable {
 
     private func mathText(_ latex: String, display: Bool) -> AttributedString {
         let cleanLatex = cleanLatex(latex)
+        let fontSize: CGFloat = (display ? 16 : 14) * latexScaleFactor
 
-        // Inline math: guarantee visibility by converting to readable text
+        // If inline, use text rendering
         if !display {
-            return AttributedString(convertLatexToText(cleanLatex))
+            let text = convertLatexToText(cleanLatex)
+             // Use a serif font for math-like appearance if possible, or just system font
+            var attrStr = AttributedString(text)
+            // Italic often looks more like math
+            attrStr.font = .system(size: 14).italic()
+            return attrStr
         }
-
-        // Display math: render image
-        let fontSize: CGFloat = 16 * latexScaleFactor
+        
+        // Display math (Block) uses Image
+        let labelMode: MTMathUILabelMode = .display
+        
+        // 1. Generate Image using MTMathImage (standard API)
         let mathImage = MTMathImage(
-            latex: cleanLatex, fontSize: fontSize, textColor: .textColor, labelMode: .display)
-        let (_, image) = mathImage.asImage()
-
-        if let img = image, img.size.width > 0 && img.size.height > 0 {
-            let attachment = NSTextAttachment()
-            attachment.image = img
-
-            let yOffset = -img.size.height / 2 + (fontSize * 0.25)
-            attachment.bounds = CGRect(
-                x: 0, y: yOffset, width: img.size.width, height: img.size.height)
-
-            let nsAttrStr = NSMutableAttributedString(attachment: attachment)
-            let paragraphStyle = NSMutableParagraphStyle()
-            paragraphStyle.alignment = .center
-            nsAttrStr.addAttribute(
-                .paragraphStyle, value: paragraphStyle,
-                range: NSRange(location: 0, length: nsAttrStr.length))
-
-            let attrStr = AttributedString(nsAttrStr)
-            return AttributedString("\n") + attrStr + AttributedString("\n")
+            latex: cleanLatex, fontSize: fontSize, textColor: .textColor, labelMode: labelMode)
+        let (_, generatedImage) = mathImage.asImage()
+        
+        guard let img = generatedImage else {
+            // Fallback
+            let text = convertLatexToText(cleanLatex)
+            var attrStr = AttributedString(text)
+            attrStr.font = .system(size: 14, design: .serif).italic()
+            return attrStr
         }
 
-        // Fallback: show raw latex delimiters to hint failure
-        let delimiter = "$$"
-        return AttributedString("\(delimiter)\(latex)\(delimiter)")
+        // 2. Calculate Baseline using MTMathUILabel workaround
+        // We use a temporary label to force the layout engine to calculate metrics (descent)
+        // which are not exposed by MTMathImage.
+        let label = MTMathUILabel()
+        label.latex = cleanLatex
+        label.fontSize = fontSize
+        // labelMode must match to get same font metrics (font style might differ)
+        label.labelMode = labelMode 
+        
+        // Force calculation of fitting size (tight bounds)
+        let size = label.fittingSize
+        label.frame = CGRect(origin: .zero, size: size)
+        
+        // Trigger layout to populate 'displayList'
+        label.layout()
+        
+        // Retrieve the descent (baseline offset from bottom)
+        let baseline = label.displayList?.descent ?? 0
+        
+        // 3. Create Attachment with correct alignment
+        let attachment = NSTextAttachment()
+        attachment.image = img
+        
+        // Shift image down by 'descent' so the math baseline aligns with text baseline.
+        attachment.bounds = CGRect(
+            x: 0,
+            y: -baseline,
+            width: img.size.width,
+            height: img.size.height
+        )
+
+        let nsAttrStr = NSMutableAttributedString(attachment: attachment)
+        
+        // Center alignment for display blocks
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        nsAttrStr.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: nsAttrStr.length))
+        return AttributedString("\n") + AttributedString(nsAttrStr) + AttributedString("\n")
     }
+
+
 
     private func convertLatexToText(_ latex: String) -> String {
         var content = latex
@@ -3323,6 +3375,13 @@ struct MarkdownView: View, Equatable {
             "\\dag": "†", "\\ddag": "‡", "\\dots": "...", "\\ldots": "...",
             "\\{": "{", "\\}": "}", "\\%": "%", "\\$": "$", "\\&": "&", "\\_": "_",
             "\\i": "ı",
+            // Extras
+            "\\to": "→", "\\star": "⋆", "\\ast": "∗", "\\circ": "∘", "\\bullet": "•",
+            "\\oplus": "⊕", "\\otimes": "⊗", "\\angle": "∠", "\\perp": "⊥",
+            "\\cong": "≅", "\\sim": "∼", "\\vert": "|", "\\Vert": "‖",
+            "\\langle": "⟨", "\\rangle": "⟩",
+            "\\mathbb{R}": "ℝ", "\\mathbb{N}": "ℕ", "\\mathbb{Z}": "ℤ",
+            "\\mathbb{Q}": "ℚ", "\\mathbb{C}": "ℂ",
         ]
 
         for (key, value) in replacements {
