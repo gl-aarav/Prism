@@ -36,6 +36,23 @@ struct ChatSession: Identifiable, Codable, Equatable {
     var messages: [Message]
 }
 
+enum AttachmentType {
+    case image
+    case pdf
+}
+
+struct Attachment: Identifiable, Equatable {
+    let id = UUID()
+    let type: AttachmentType
+    let data: Data
+}
+
+struct MessageAttachment: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var type: String // "image" or "pdf"
+    var data: Data
+}
+
 struct Message: Identifiable, Codable, Equatable {
     var id = UUID()
     var content: String {
@@ -48,6 +65,7 @@ struct Message: Identifiable, Codable, Equatable {
     var model: String?
     var imageData: Data?
     var pdfData: Data?
+    var attachments: [MessageAttachment]?
     var isUser: Bool
     var timestamp = Date()
     var isStreaming: Bool = false
@@ -64,6 +82,9 @@ struct Message: Identifiable, Codable, Equatable {
         if let data = imageData {
             return NSImage(data: data)
         }
+        if let firstImg = attachments?.first(where: { $0.type == "image" }) {
+            return NSImage(data: firstImg.data)
+        }
         return nil
     }
 
@@ -73,14 +94,14 @@ struct Message: Identifiable, Codable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, content, thinkingContent, thinkingDuration, model, imageData, pdfData, isUser,
+        case id, content, thinkingContent, thinkingDuration, model, imageData, pdfData, attachments, isUser,
             timestamp
     }
 
     init(
         content: String, thinkingContent: String? = nil, thinkingDuration: TimeInterval? = nil,
         model: String? = nil,
-        image: NSImage? = nil, pdfData: Data? = nil, isUser: Bool
+        image: NSImage? = nil, pdfData: Data? = nil, attachments: [MessageAttachment]? = nil, isUser: Bool
     ) {
         self.content = content
         self.thinkingContent = thinkingContent
@@ -88,9 +109,16 @@ struct Message: Identifiable, Codable, Equatable {
         self.model = model
         self.imageData = image?.tiffRepresentation
         self.pdfData = pdfData
+        self.attachments = attachments
         self.isUser = isUser
         self._cachedImage = image
         self._cachedBlocks = Message.parseMarkdown(content)
+        
+        // If legacy params are nil but attachments exist, populate legacy for compatibility if single file?
+        // Actually, we should check attachments in accessors.
+        if self._cachedImage == nil, let atts = attachments, let firstImg = atts.first(where: { $0.type == "image" }) {
+            self._cachedImage = NSImage(data: firstImg.data)
+        }
     }
 
     init(from decoder: Decoder) throws {
@@ -103,11 +131,14 @@ struct Message: Identifiable, Codable, Equatable {
         model = try container.decodeIfPresent(String.self, forKey: .model)
         imageData = try container.decodeIfPresent(Data.self, forKey: .imageData)
         pdfData = try container.decodeIfPresent(Data.self, forKey: .pdfData)
+        attachments = try container.decodeIfPresent([MessageAttachment].self, forKey: .attachments)
         isUser = try container.decode(Bool.self, forKey: .isUser)
         timestamp = try container.decode(Date.self, forKey: .timestamp)
 
         if let data = imageData {
             _cachedImage = NSImage(data: data)
+        } else if let atts = attachments, let firstImg = atts.first(where: { $0.type == "image" }) {
+            _cachedImage = NSImage(data: firstImg.data)
         }
         _cachedBlocks = Message.parseMarkdown(content)
     }
@@ -121,6 +152,7 @@ struct Message: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(model, forKey: .model)
         try container.encode(imageData, forKey: .imageData)
         try container.encode(pdfData, forKey: .pdfData)
+        try container.encodeIfPresent(attachments, forKey: .attachments)
         try container.encode(isUser, forKey: .isUser)
         try container.encode(timestamp, forKey: .timestamp)
     }
@@ -1204,8 +1236,8 @@ enum ThinkingMode {
 struct ContentView: View {
     @ObservedObject private var chatManager = ChatManager.shared
     @State private var inputText: String = ""
-    @State private var selectedImage: NSImage? = nil
-    @State private var selectedPDF: Data? = nil
+    @State private var selectedAttachments: [Attachment] = []
+    // Legacy single selection states removed/replaced
     @State private var imageCreationStyle: String = "Animation"
     @State private var isLoading: Bool = false
     @State private var thinkingLevel: String = "medium"
@@ -1334,8 +1366,7 @@ struct ContentView: View {
                                 .safeAreaInset(edge: .bottom) {
                                     InputView(
                                         inputText: $inputText,
-                                        selectedImage: $selectedImage,
-                                        selectedPDF: $selectedPDF,
+                                        selectedAttachments: $selectedAttachments,
                                         thinkingLevel: $thinkingLevel,
                                         isLoading: isLoading,
                                         onSend: sendMessage,
@@ -1431,18 +1462,23 @@ struct ContentView: View {
     }
     func selectAttachment() {
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.image, .pdf]
-        if panel.runModal() == .OK, let url = panel.url {
-            if url.pathExtension.lowercased() == "pdf" {
-                if let data = try? Data(contentsOf: url) {
-                    selectedPDF = data
-                    selectedImage = nil
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                if url.pathExtension.lowercased() == "pdf" {
+                    if let data = try? Data(contentsOf: url) {
+                        selectedAttachments.append(Attachment(type: .pdf, data: data))
+                    }
+                } else {
+                    let imageExtensions = ["png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic"]
+                    if imageExtensions.contains(url.pathExtension.lowercased()) {
+                        if let data = try? Data(contentsOf: url) {
+                            selectedAttachments.append(Attachment(type: .image, data: data))
+                        }
+                    }
                 }
-            } else {
-                selectedImage = NSImage(contentsOf: url)
-                selectedPDF = nil
             }
         }
     }
@@ -1451,22 +1487,42 @@ struct ContentView: View {
         guard !isLoading else { return }
         guard
             !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || selectedImage != nil || selectedPDF != nil
+                || !selectedAttachments.isEmpty
         else { return }
 
+        // Convert to MessageAttachment
+        let msgAttachments = selectedAttachments.map { 
+            MessageAttachment(type: $0.type == .image ? "image" : "pdf", data: $0.data)
+        }
+        
+        // Fallback for legacy services
+        var legacyImage: NSImage?
+        var legacyPDF: Data?
+        
+        for attachment in selectedAttachments {
+            if attachment.type == .image && legacyImage == nil {
+                legacyImage = NSImage(data: attachment.data)
+            } else if attachment.type == .pdf && legacyPDF == nil {
+                legacyPDF = attachment.data
+            }
+        }
+
         let userMsg = Message(
-            content: inputText, image: selectedImage, pdfData: selectedPDF, isUser: true)
+            content: inputText, 
+            image: legacyImage, 
+            pdfData: legacyPDF, 
+            attachments: msgAttachments,
+            isUser: true
+        )
         chatManager.addMessage(userMsg)
 
         let currentInput = inputText
-        let currentImage = selectedImage
-        let currentPDF = selectedPDF
+        let currentAttachments = selectedAttachments
 
         inputText = ""
-        selectedImage = nil
-        selectedPDF = nil
+        selectedAttachments = []
 
-        performSend(input: currentInput, image: currentImage, pdfData: currentPDF)
+        performSend(input: currentInput, attachments: currentAttachments)
     }
 
     func regenerateResponse(for messageId: UUID? = nil) {
@@ -1480,8 +1536,19 @@ struct ContentView: View {
 
         // Find last user message
         if let lastUserMsg = chatManager.getCurrentMessages().last(where: { $0.isUser }) {
+            var attachments: [Attachment] = []
+            if let msgAttachments = lastUserMsg.attachments {
+                attachments = msgAttachments.map { Attachment(type: $0.type == "image" ? .image : .pdf, data: $0.data) }
+            } else {
+                 if let img = lastUserMsg.image, let tiff = img.tiffRepresentation {
+                    attachments.append(Attachment(type: .image, data: tiff))
+                }
+                if let pdf = lastUserMsg.pdfData {
+                    attachments.append(Attachment(type: .pdf, data: pdf))
+                }
+            }
             performSend(
-                input: lastUserMsg.content, image: lastUserMsg.image, pdfData: lastUserMsg.pdfData)
+                input: lastUserMsg.content, attachments: attachments)
         }
     }
 
@@ -1491,10 +1558,16 @@ struct ContentView: View {
         isLoading = false
     }
 
-    func performSend(input: String, image: NSImage?, pdfData: Data?) {
+    func performSend(input: String, attachments: [Attachment]) {
         isLoading = true
         let currentHistory = chatManager.getCurrentMessages()
         let style = imageCreationStyle
+        
+        // Helper for Image Creation legacy support
+        var firstImage: NSImage?
+        if let imgAtt = attachments.first(where: { $0.type == .image }) {
+            firstImage = NSImage(data: imgAtt.data)
+        }
 
         currentTask?.cancel()
 
@@ -1514,7 +1587,7 @@ struct ContentView: View {
                     let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
                     
                     let result = try await shortcutService.runShortcut(
-                        name: targetShortcut, input: input, style: style, image: image)
+                        name: targetShortcut, input: input, style: style, image: firstImage)
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: result.0, image: result.1, isGeneratingImage: false)
@@ -1731,7 +1804,7 @@ struct ContentView: View {
 
                 do {
                     let result = try await shortcutService.runShortcut(
-                        name: shortcutName, input: transcript, image: image)
+                        name: shortcutName, input: transcript, image: firstImage)
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId,
@@ -2219,10 +2292,55 @@ struct HeaderView: View {
     }
 }
 
+struct AttachmentPreview: View {
+    let attachment: Attachment
+    var onRemove: () -> Void
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                switch attachment.type {
+                case .image:
+                    if let image = NSImage(data: attachment.data) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                case .pdf:
+                    VStack(spacing: 2) {
+                        Image(systemName: "doc.text.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.red)
+                        Text("PDF")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.primary)
+                    }
+                    .frame(width: 60, height: 60)
+                    .background(Color.secondary.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            )
+            
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.gray)
+                    .background(Color.white.clipShape(Circle()))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 5, y: -5)
+        }
+    }
+}
+
 class PasteMonitor: ObservableObject {
     private var monitor: Any?
-    var onPaste: ((NSImage) -> Void)?
-    var onPastePDF: ((Data) -> Void)?
+    var onPaste: (([Attachment]) -> Void)?
 
     func start() {
         guard monitor == nil else { return }
@@ -2230,35 +2348,43 @@ class PasteMonitor: ObservableObject {
             guard let self = self else { return event }
             if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "v" {
                 let pb = NSPasteboard.general
+                var newAttachments: [Attachment] = []
 
-                // 1. Try reading as File URL first (to prefer high-res file over icon)
-                if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
-                    let url = urls.first
-                {
-                    if url.pathExtension.lowercased() == "pdf" {
-                        if let data = try? Data(contentsOf: url) {
-                            self.onPastePDF?(data)
-                            return nil
+                // 1. Try reading as File URLs
+                if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+                    for url in urls {
+                        if url.pathExtension.lowercased() == "pdf" {
+                            if let data = try? Data(contentsOf: url) {
+                                newAttachments.append(Attachment(type: .pdf, data: data))
+                            }
+                        } else {
+                             let imageExtensions = ["png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic"]
+                             if imageExtensions.contains(url.pathExtension.lowercased()) {
+                                 if let data = try? Data(contentsOf: url) {
+                                     newAttachments.append(Attachment(type: .image, data: data))
+                                 }
+                             }
                         }
                     }
+                }
+                
+                if !newAttachments.isEmpty {
+                     // If we found files, paste them and consume event
+                     self.onPaste?(newAttachments)
+                     return nil
+                }
 
-                    let imageExtensions = [
-                        "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
-                    ]
-                    if imageExtensions.contains(url.pathExtension.lowercased()) {
-                        if let image = NSImage(contentsOf: url) {
-                            self.onPaste?(image)
-                            return nil
+                // 2. Fallback to NSImage objects (e.g. copied from browser or screenshot)
+                if let objects = pb.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage], !objects.isEmpty {
+                    for image in objects {
+                        if let tiff = image.tiffRepresentation {
+                             newAttachments.append(Attachment(type: .image, data: tiff))
                         }
                     }
                 }
 
-                // 2. Fallback to NSImage (e.g. copied screenshots, or Finder icons if file load failed)
-                if let objects = pb.readObjects(forClasses: [NSImage.self], options: nil)
-                    as? [NSImage],
-                    let image = objects.first
-                {
-                    self.onPaste?(image)
+                if !newAttachments.isEmpty {
+                    self.onPaste?(newAttachments)
                     return nil
                 }
             }
@@ -2280,8 +2406,7 @@ class PasteMonitor: ObservableObject {
 
 struct InputView: View {
     @Binding var inputText: String
-    @Binding var selectedImage: NSImage?
-    @Binding var selectedPDF: Data?
+    @Binding var selectedAttachments: [Attachment]
     @Binding var thinkingLevel: String
     var isLoading: Bool
     var onSend: () -> Void
@@ -2320,16 +2445,9 @@ struct InputView: View {
     }
 
     private func setupMonitor() {
-        pasteMonitor.onPaste = { image in
+        pasteMonitor.onPaste = { attachments in
             DispatchQueue.main.async {
-                self.selectedImage = image
-                self.selectedPDF = nil
-            }
-        }
-        pasteMonitor.onPastePDF = { data in
-            DispatchQueue.main.async {
-                self.selectedPDF = data
-                self.selectedImage = nil
+                self.selectedAttachments.append(contentsOf: attachments)
             }
         }
         // If already focused on appear (rare but possible)
@@ -2340,47 +2458,22 @@ struct InputView: View {
 
     private var imagePreview: some View {
         Group {
-            if let image = selectedImage {
-                HStack {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 60, height: 60)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                    VStack(alignment: .leading) {
-                        Text("Image attached").font(.caption).bold()
-                        Button("Remove") { selectedImage = nil }
-                            .buttonStyle(.link)
-                            .font(.caption)
+            if !selectedAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(selectedAttachments) { attachment in
+                            AttachmentPreview(attachment: attachment) {
+                                if let index = selectedAttachments.firstIndex(where: { $0.id == attachment.id }) {
+                                    selectedAttachments.remove(at: index)
+                                }
+                            }
+                        }
                     }
-                    Spacer()
+                    .padding(8)
                 }
-                .padding()
                 .background(.ultraThinMaterial)
                 .cornerRadius(12)
-            } else if let pdfData = selectedPDF {
-                HStack {
-                    Image(systemName: "doc.text.fill")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 40, height: 40)
-                        .foregroundColor(.red)
-
-                    VStack(alignment: .leading) {
-                        Text("PDF attached").font(.caption).bold()
-                        Text("\(pdfData.count / 1024) KB").font(.caption2).foregroundColor(
-                            .secondary)
-
-                        Button("Remove") { selectedPDF = nil }
-                            .buttonStyle(.link)
-                            .font(.caption)
-                    }
-                    Spacer()
-                }
-                .padding()
-                .background(.ultraThinMaterial)
-                .cornerRadius(12)
+                .padding(.bottom, 4)
             }
         }
     }
@@ -2563,7 +2656,7 @@ struct InputView: View {
                     .foregroundStyle(
                         isLoading
                             ? AnyShapeStyle(Color.red.gradient)
-                            : (inputText.isEmpty && selectedImage == nil && selectedPDF == nil
+                            : (inputText.isEmpty && selectedAttachments.isEmpty
                                 ? AnyShapeStyle(Color.gray.gradient)
                                 : AnyShapeStyle(Color.blue.gradient)),
                         Color.black.opacity(0.2)
@@ -2571,7 +2664,7 @@ struct InputView: View {
             }
             .buttonStyle(.plain)
             .disabled(
-                (inputText.isEmpty && selectedImage == nil && selectedPDF == nil) && !isLoading)
+                (inputText.isEmpty && selectedAttachments.isEmpty) && !isLoading)
         }
         .padding(12)
         .background(.ultraThinMaterial)
@@ -2625,17 +2718,15 @@ struct InputView: View {
                         let data = try? Data(contentsOf: url)
                     {
                         DispatchQueue.main.async {
-                            self.selectedPDF = data
-                            self.selectedImage = nil
+                            self.selectedAttachments.append(Attachment(type: .pdf, data: data))
                         }
                     }
                 }
             } else if provider.canLoadObject(ofClass: NSImage.self) {
                 provider.loadObject(ofClass: NSImage.self) { image, _ in
-                    if let image = image as? NSImage {
+                    if let image = image as? NSImage, let tiff = image.tiffRepresentation {
                         DispatchQueue.main.async {
-                            self.selectedImage = image
-                            self.selectedPDF = nil
+                            self.selectedAttachments.append(Attachment(type: .image, data: tiff))
                         }
                     }
                 }
@@ -2648,18 +2739,19 @@ struct InputView: View {
                         if url.pathExtension.lowercased() == "pdf" {
                             if let data = try? Data(contentsOf: url) {
                                 DispatchQueue.main.async {
-                                    self.selectedPDF = data
-                                    self.selectedImage = nil
+                                    self.selectedAttachments.append(Attachment(type: .pdf, data: data))
                                 }
                                 return
                             }
                         }
 
                         // Handle file URL - for now just try to load as image
-                        if let image = NSImage(contentsOf: url) {
-                            DispatchQueue.main.async {
-                                self.selectedImage = image
-                                self.selectedPDF = nil
+                        let imageExtensions = ["png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic"]
+                        if imageExtensions.contains(url.pathExtension.lowercased()) {
+                            if let data = try? Data(contentsOf: url) {
+                                DispatchQueue.main.async {
+                                    self.selectedAttachments.append(Attachment(type: .image, data: data))
+                                }
                             }
                         }
                     }
