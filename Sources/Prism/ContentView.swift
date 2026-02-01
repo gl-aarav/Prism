@@ -2471,6 +2471,7 @@ struct InputView: View {
     @StateObject private var pasteMonitor = PasteMonitor()
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2813,7 +2814,7 @@ struct InputView: View {
                 .focused($isFocused)
                 .textFieldStyle(.plain)
                 .font(.system(size: 16))
-                .foregroundColor(.white)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
                 .lineLimit(1...10)
                 .onKeyPress(.return) {
                     if NSEvent.modifierFlags.contains(.shift) {
@@ -3110,12 +3111,15 @@ struct MathBlockView: View {
 
 struct MarkdownView: View, Equatable {
     let blocks: [MarkdownBlock]
+    @Environment(\.colorScheme) private var colorScheme
 
     static func == (lhs: MarkdownView, rhs: MarkdownView) -> Bool {
         return lhs.blocks == rhs.blocks
     }
 
-    private var textColor: Color { .white }
+    private var textColor: Color {
+        colorScheme == .dark ? .white : .black
+    }
 
     private func renderRichText(_ text: String, cached: AttributedString? = nil) -> Text {
         if let cached = cached {
@@ -3398,7 +3402,7 @@ struct MessageView: View, Equatable {
                         .padding(.bottom, 4)
                     }
                     Text(message.content)
-                        .foregroundColor(.white)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                         .padding(12)
                         .background(Color.blue.opacity(0.2))
                         .background(.ultraThinMaterial)
@@ -3450,11 +3454,11 @@ struct MessageView: View, Equatable {
                                     .font(.body)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .textSelection(.enabled)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
                             } else {
                                 MarkdownView(blocks: message.blocks)
                                     .equatable()
-                                    .foregroundColor(.white)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
                             }
                         }
                     }
@@ -3957,6 +3961,7 @@ struct QuickChatView: View {
     @State private var thinkingLevel: String = "medium"
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
+    @Environment(\.colorScheme) private var colorScheme
 
     // Settings (Read-only access to keys)
     @AppStorage("GeminiKey") private var geminiKey: String = ""
@@ -4165,7 +4170,7 @@ struct QuickChatView: View {
                 text: $inputText, axis: .vertical
             )
             .textFieldStyle(.plain)
-            .foregroundColor(.white)
+            .foregroundColor(colorScheme == .dark ? .white : .black)
             .lineLimit(1...6)
             .onSubmit(sendMessage)
             .padding(.vertical, 10)

@@ -563,7 +563,7 @@ struct QuickAIMessageView: View, Equatable {
                                     colors: [Color.blue.opacity(0.92), Color.cyan.opacity(0.7)],
                                     startPoint: .topLeading, endPoint: .bottomTrailing)
                             )
-                            .foregroundColor(.white)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                 }
@@ -619,7 +619,7 @@ struct QuickAIMessageView: View, Equatable {
                             if message.isStreaming {
                                 Text(activeContent + (isCursorVisible ? " ▋" : ""))
                                     .font(.system(size: 14))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .textSelection(.enabled)
                                     .id("streamingText")
@@ -1082,7 +1082,7 @@ extension QuickAIView {
                 TextField("Request...", text: $inputText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 16))
-                    .foregroundColor(.white)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
                     .lineLimit(1...6)
                     .multilineTextAlignment(.leading)
                     .focused($isFocused)
