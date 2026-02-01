@@ -38,6 +38,9 @@ struct QuickAIView: View {
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
+    @ObservedObject var geminiManager = GeminiModelManager.shared
+    @State private var showAddCustomOllamaModel = false
+    @State private var newCustomModelName = ""
     private var clampedBackgroundOpacity: Double {
         min(max(backgroundOpacity, 0.05), 0.55)
     }
@@ -1139,7 +1142,7 @@ extension QuickAIView {
                         Divider()
                         
                         Menu("Manage Favorites") {
-                            ForEach(ollamaManager.availableModels, id: \.self) { model in
+                            ForEach(ollamaManager.allModels, id: \.self) { model in
                                 Button(action: { ollamaManager.toggleFavorite(model) }) {
                                     if ollamaManager.isFavorite(model) {
                                         Label(model, systemImage: "star.fill")
@@ -1148,6 +1151,10 @@ extension QuickAIView {
                                     }
                                 }
                             }
+                        }
+                        
+                        Button(action: { showAddCustomOllamaModel = true }) {
+                            Label("Add Custom Model...", systemImage: "plus")
                         }
                     } label: {
                         Image(systemName: "server.rack")
@@ -1159,6 +1166,19 @@ extension QuickAIView {
                     }
                     .menuStyle(.borderlessButton)
                     .help("Select Ollama Model")
+                    .alert("Add Custom Ollama Model", isPresented: $showAddCustomOllamaModel) {
+                        TextField("Model Name (e.g., llama3:70b)", text: $newCustomModelName)
+                        Button("Add") {
+                            ollamaManager.addCustomModel(newCustomModelName)
+                            selectedOllamaModel = newCustomModelName
+                            newCustomModelName = ""
+                        }
+                        Button("Cancel", role: .cancel) {
+                            newCustomModelName = ""
+                        }
+                    } message: {
+                        Text("Enter the name of the model as it appears in Ollama.")
+                    }
                     
                     // Thinking logic
                     let lower = selectedOllamaModel.lowercased()
@@ -1206,6 +1226,55 @@ extension QuickAIView {
                         .help("Reasoning Effort")
                     }
                 } else if selectedProvider == "Gemini API" {
+                    Menu {
+                        Section("Favorites") {
+                            ForEach(geminiManager.favoriteModels, id: \.self) { model in
+                                Button(action: { geminiModel = model }) {
+                                    if geminiModel == model {
+                                        Label(model, systemImage: "checkmark")
+                                    } else {
+                                        Text(model)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Section("All Models") {
+                            ForEach(geminiManager.availableModels.filter { !geminiManager.isFavorite($0) }, id: \.self) { model in
+                                Button(action: { geminiModel = model }) {
+                                    if geminiModel == model {
+                                        Label(model, systemImage: "checkmark")
+                                    } else {
+                                        Text(model)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        Menu("Manage Favorites") {
+                            ForEach(geminiManager.availableModels, id: \.self) { model in
+                                Button(action: { geminiManager.toggleFavorite(model) }) {
+                                    if geminiManager.isFavorite(model) {
+                                        Label(model, systemImage: "star.fill")
+                                    } else {
+                                        Label(model, systemImage: "star")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "sparkles")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                        .padding(6)
+                        .background(Color.white.opacity(0.10))
+                        .clipShape(Circle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Select Gemini Model")
+
                     Menu {
                         thinkingOption(title: "Low", value: "low")
                         thinkingOption(title: "Medium", value: "medium")
