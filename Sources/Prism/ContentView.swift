@@ -3352,6 +3352,7 @@ struct MessageView: View, Equatable {
     @State private var isCopied = false
     @State private var showImagePreview = false
     @State private var isCursorVisible = true
+    @Environment(\.colorScheme) private var colorScheme
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     static func == (lhs: MessageView, rhs: MessageView) -> Bool {
@@ -3439,11 +3440,11 @@ struct MessageView: View, Equatable {
                                     .font(.body)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .textSelection(.enabled)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
                             } else {
                                 MarkdownView(blocks: message.blocks)
                                     .equatable()
-                                    .foregroundColor(.white)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
                             }
                         }
                     }

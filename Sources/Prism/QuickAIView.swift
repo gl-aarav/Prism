@@ -523,6 +523,7 @@ struct QuickAIMessageView: View, Equatable {
     var liveThinking: String? = nil
     @State private var isCopied = false
     @State private var isCursorVisible = true
+    @Environment(\.colorScheme) private var colorScheme
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     static func == (lhs: QuickAIMessageView, rhs: QuickAIMessageView) -> Bool {
@@ -562,7 +563,7 @@ struct QuickAIMessageView: View, Equatable {
                                     colors: [Color.blue.opacity(0.92), Color.cyan.opacity(0.7)],
                                     startPoint: .topLeading, endPoint: .bottomTrailing)
                             )
-                            .foregroundColor(.white)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                 }
@@ -654,6 +655,15 @@ struct QuickAIMessageView: View, Equatable {
                             }
                             .buttonStyle(.plain)
                             Spacer()
+                        }
+
+                        // Model disclaimer
+                        if let model = message.model {
+                            Text("Model used: \(model). Information could be inaccurate.")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary.opacity(0.8))
+                                .padding(.top, 2)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                     }
                 }
