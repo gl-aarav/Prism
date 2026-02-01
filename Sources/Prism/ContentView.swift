@@ -706,10 +706,10 @@ class OllamaService {
                 if !skipThinkingInjection && (thinkingLevel == "high" || thinkingLevel == "medium")
                 {
                     let instruction =
-                        " Please think step-by-step before answering. Wrap your thought process in  comprehend and  tags."
+                        " Please think step-by-step before answering. Wrap your thought process in <comprehend> and </comprehend> tags."
                     if finalSystemPrompt.isEmpty {
                         finalSystemPrompt = instruction
-                    } else if !finalSystemPrompt.contains(" comprehend and  tags") {
+                    } else if !finalSystemPrompt.contains("<comprehend> and </comprehend> tags") {
                         finalSystemPrompt += instruction
                     }
                 }
@@ -831,7 +831,8 @@ class OllamaService {
                         buffer += content
 
                         while true {
-                            let targetTag = isThinking ? " comprehend and  tags" : " comprehend and  tags"
+                            let targetTag =
+                                isThinking ? "</comprehend>" : "<comprehend>"
 
                             if let range = buffer.range(of: targetTag, options: .caseInsensitive) {
                                 let preTag = buffer[..<range.lowerBound]
@@ -846,9 +847,9 @@ class OllamaService {
                                 buffer.removeSubrange(..<range.upperBound)
                                 isThinking.toggle()
                             } else {
-                                // Handle partial tags to prevent splitting  comprehend and  tags across chunks
-                                //  comprehend and  tags is 8 chars,  comprehend and  tags is 7. We keep 10 chars to be safe.
-                                let keepLength = 10
+                                // Handle partial tags to prevent splitting tags across chunks
+                                // <comprehend> is 12 chars. We keep 20 chars to be safe.
+                                let keepLength = 20
 
                                 if buffer.count > keepLength {
                                     let splitIndex = buffer.index(
@@ -1309,16 +1310,16 @@ struct ContentView: View {
                                 )
                                 .frame(width: geometry.size.width, height: geometry.size.height)
                             }
-                            
+
                             // Accent Color Tint
                             let colors = appTheme.swiftUIColors
                             let startColor = colors.first ?? .blue
                             let endColor = colors.last ?? .green
-                            
+
                             LinearGradient(
                                 colors: [
                                     startColor.opacity(0.08),
-                                    endColor.opacity(0.05)
+                                    endColor.opacity(0.05),
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -1357,7 +1358,7 @@ struct ContentView: View {
                                     LazyVStack(spacing: 24) {
                                         let messages = chatManager.getCurrentMessages()
                                         if messages.isEmpty {
-                                            EmptyStateView()
+                                            EmptyStateView(appTheme: appTheme)
                                         } else {
                                             ForEach(messages) { message in
                                                 let isLast = message.id == messages.last?.id
@@ -2812,6 +2813,7 @@ struct InputView: View {
                 .focused($isFocused)
                 .textFieldStyle(.plain)
                 .font(.system(size: 16))
+                .foregroundColor(.black)
                 .lineLimit(1...10)
                 .onKeyPress(.return) {
                     if NSEvent.modifierFlags.contains(.shift) {
@@ -3275,17 +3277,22 @@ struct MarkdownView: View, Equatable {
 }
 
 struct EmptyStateView: View {
+    var appTheme: AppTheme = .default
     @State private var animate = false
 
     var body: some View {
-        VStack(spacing: 30) {
+        let colors = appTheme.swiftUIColors
+        let startColor = colors.first ?? .blue
+        let endColor = colors.last ?? .green
+
+        return VStack(spacing: 30) {
             Spacer()
 
             ZStack {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.05)],
+                            colors: [startColor.opacity(0.1), endColor.opacity(0.05)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -3298,12 +3305,12 @@ struct EmptyStateView: View {
                     .font(.system(size: 50))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [.blue, .cyan],
+                            colors: [startColor, endColor],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
+                    .shadow(color: startColor.opacity(0.3), radius: 10, x: 0, y: 5)
             }
             .onAppear {
                 withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
@@ -3315,7 +3322,13 @@ struct EmptyStateView: View {
                 Text("Hello")
                     .font(.largeTitle)
                     .fontWeight(.bold)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [startColor, endColor],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
 
                 Text("How can I help you today?")
                     .font(.title3)
@@ -3426,9 +3439,11 @@ struct MessageView: View, Equatable {
                                     .font(.body)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .textSelection(.enabled)
+                                    .foregroundColor(.white)
                             } else {
                                 MarkdownView(blocks: message.blocks)
                                     .equatable()
+                                    .foregroundColor(.white)
                             }
                         }
                     }
@@ -3978,7 +3993,7 @@ struct QuickChatView: View {
         let colors = appTheme.swiftUIColors
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
-        
+
         return ZStack {
             LinearGradient(
                 colors: [

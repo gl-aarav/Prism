@@ -76,11 +76,11 @@ struct QuickAIView: View {
                         headerSection
                         messagesSection
                     }
-// ...existing code...
+                    // ...existing code...
                     .padding(10)
                     .background(ExpandedPanelBackground(cornerRadius: 20))
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-// ...existing code...
+                    // ...existing code...
                     .compositingGroup()
                     .scaleEffect(backgroundScale, anchor: .bottom)
                     .blur(radius: backgroundBlur)
@@ -761,10 +761,10 @@ struct ExpandedPanelBackground: View {
 
     var body: some View {
         let colors = appTheme.swiftUIColors
-        
+
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
-        
+
         // Much subtler gradient for the message area
         let gradient = LinearGradient(
             stops: [
@@ -789,11 +789,11 @@ struct ExpandedPanelBackground: View {
                             : clampedBackgroundOpacity
                     )
                 )
-            
+
             // Gradient tint
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(gradient)
-                
+
             // Material blur
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(
@@ -1399,15 +1399,20 @@ extension QuickAIView {
 }
 
 struct ThinkingIndicator: View {
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @State private var isAnimating = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        let colors = appTheme.swiftUIColors
+        let startColor = colors.first ?? .blue
+        let endColor = colors.last ?? .purple
+
+        return HStack(spacing: 8) {
             ZStack {
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [.blue, .purple], startPoint: .topLeading,
+                            colors: [startColor, endColor], startPoint: .topLeading,
                             endPoint: .bottomTrailing), lineWidth: 2
                     )
                     .frame(width: 16, height: 16)
@@ -1417,7 +1422,7 @@ struct ThinkingIndicator: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [.blue, .purple], startPoint: .topLeading,
+                            colors: [startColor, endColor], startPoint: .topLeading,
                             endPoint: .bottomTrailing)
                     )
                     .frame(width: 8, height: 8)
@@ -1433,7 +1438,7 @@ struct ThinkingIndicator: View {
                 .font(.system(size: 14))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [.secondary, .primary], startPoint: .leading, endPoint: .trailing)
+                        colors: [startColor.opacity(0.8), endColor.opacity(0.8)], startPoint: .leading, endPoint: .trailing)
                 )
                 .opacity(0.8)
         }
