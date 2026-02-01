@@ -1438,7 +1438,8 @@ struct ThinkingIndicator: View {
                 .font(.system(size: 14))
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [startColor.opacity(0.8), endColor.opacity(0.8)], startPoint: .leading, endPoint: .trailing)
+                        colors: [startColor.opacity(0.8), endColor.opacity(0.8)],
+                        startPoint: .leading, endPoint: .trailing)
                 )
                 .opacity(0.8)
         }
