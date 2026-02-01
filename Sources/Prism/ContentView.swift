@@ -2813,7 +2813,7 @@ struct InputView: View {
                 .focused($isFocused)
                 .textFieldStyle(.plain)
                 .font(.system(size: 16))
-                .foregroundColor(.black)
+                .foregroundColor(.white)
                 .lineLimit(1...10)
                 .onKeyPress(.return) {
                     if NSEvent.modifierFlags.contains(.shift) {
@@ -3115,6 +3115,8 @@ struct MarkdownView: View, Equatable {
         return lhs.blocks == rhs.blocks
     }
 
+    private var textColor: Color { .white }
+
     private func renderRichText(_ text: String, cached: AttributedString? = nil) -> Text {
         if let cached = cached {
             return Text(cached)
@@ -3129,6 +3131,7 @@ struct MarkdownView: View, Equatable {
                 case .text(let text):
                     renderRichText(text, cached: block.attributedText)
                         .font(.system(size: 15))
+                        .foregroundColor(textColor)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -3161,6 +3164,7 @@ struct MarkdownView: View, Equatable {
                         ScrollView(.horizontal, showsIndicators: true) {
                             Text(code)
                                 .font(.system(.body, design: .monospaced))
+                                .foregroundColor(textColor)
                                 .padding(12)
                                 .textSelection(.enabled)
                         }
@@ -3179,6 +3183,7 @@ struct MarkdownView: View, Equatable {
                                 weight: .bold)
                         )
                         .padding(.top, 8)
+                        .foregroundColor(textColor)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 case .divider:
@@ -3188,8 +3193,10 @@ struct MarkdownView: View, Equatable {
                     HStack(alignment: .top, spacing: 8) {
                         Text("•")
                             .font(.system(size: 15))
+                            .foregroundColor(textColor)
                         renderRichText(text, cached: block.attributedText)
                             .font(.system(size: 15))
+                            .foregroundColor(textColor)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -3198,8 +3205,10 @@ struct MarkdownView: View, Equatable {
                     HStack(alignment: .top, spacing: 8) {
                         Text("\(number).")
                             .font(.system(size: 15))
+                            .foregroundColor(textColor)
                         renderRichText(text, cached: block.attributedText)
                             .font(.system(size: 15))
+                            .foregroundColor(textColor)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -3389,6 +3398,7 @@ struct MessageView: View, Equatable {
                         .padding(.bottom, 4)
                     }
                     Text(message.content)
+                        .foregroundColor(.white)
                         .padding(12)
                         .background(Color.blue.opacity(0.2))
                         .background(.ultraThinMaterial)
@@ -3440,11 +3450,11 @@ struct MessageView: View, Equatable {
                                     .font(.body)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .textSelection(.enabled)
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundColor(.white)
                             } else {
                                 MarkdownView(blocks: message.blocks)
                                     .equatable()
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundColor(.white)
                             }
                         }
                     }
@@ -4155,6 +4165,7 @@ struct QuickChatView: View {
                 text: $inputText, axis: .vertical
             )
             .textFieldStyle(.plain)
+            .foregroundColor(.white)
             .lineLimit(1...6)
             .onSubmit(sendMessage)
             .padding(.vertical, 10)
