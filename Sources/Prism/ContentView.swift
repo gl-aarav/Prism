@@ -3,8 +3,8 @@ import Foundation
 import PDFKit
 import SwiftMath
 import SwiftUI
-import WebKit
 import UniformTypeIdentifiers
+import WebKit
 
 // MARK: - Models
 
@@ -17,8 +17,6 @@ struct MarkdownBlock: Identifiable, Equatable {
         return lhs.type == rhs.type
     }
 }
-
-
 
 enum MarkdownBlockType: Equatable {
     case text(String)
@@ -52,7 +50,7 @@ struct Attachment: Identifiable, Equatable {
 
 struct MessageAttachment: Identifiable, Codable, Equatable {
     var id = UUID()
-    var type: String // "image" or "pdf"
+    var type: String  // "image" or "pdf"
     var data: Data
 }
 
@@ -97,14 +95,16 @@ struct Message: Identifiable, Codable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, content, thinkingContent, thinkingDuration, model, imageData, pdfData, attachments, isUser,
+        case id, content, thinkingContent, thinkingDuration, model, imageData, pdfData, attachments,
+            isUser,
             timestamp
     }
 
     init(
         content: String, thinkingContent: String? = nil, thinkingDuration: TimeInterval? = nil,
         model: String? = nil,
-        image: NSImage? = nil, pdfData: Data? = nil, attachments: [MessageAttachment]? = nil, isUser: Bool
+        image: NSImage? = nil, pdfData: Data? = nil, attachments: [MessageAttachment]? = nil,
+        isUser: Bool
     ) {
         self.content = content
         self.thinkingContent = thinkingContent
@@ -116,10 +116,12 @@ struct Message: Identifiable, Codable, Equatable {
         self.isUser = isUser
         self._cachedImage = image
         self._cachedBlocks = Message.parseMarkdown(content)
-        
+
         // If legacy params are nil but attachments exist, populate legacy for compatibility if single file?
         // Actually, we should check attachments in accessors.
-        if self._cachedImage == nil, let atts = attachments, let firstImg = atts.first(where: { $0.type == "image" }) {
+        if self._cachedImage == nil, let atts = attachments,
+            let firstImg = atts.first(where: { $0.type == "image" })
+        {
             self._cachedImage = NSImage(data: firstImg.data)
         }
     }
@@ -406,23 +408,23 @@ struct Message: Identifiable, Codable, Equatable {
 
         return blocks
     }
-    
+
     mutating func ensureBlocksCached() {
         if _cachedBlocks == nil {
             _cachedBlocks = Message.parseMarkdown(content)
         }
-        
+
         // Enrich blocks with computed AttributedStrings to avoid main thread hang during scrolling
         if var blocks = _cachedBlocks {
             var changed = false
             for i in 0..<blocks.count {
                 if blocks[i].attributedText == nil {
                     switch blocks[i].type {
-                    case .text(let text), .bullet(let text), .numbered(let text, _), 
-                         .blockquote(let text), .heading(let text, _):
-                         // Use the shared parser to pre-compute attributed string
-                         blocks[i].attributedText = MarkdownParser.shared.parse(text)
-                         changed = true
+                    case .text(let text), .bullet(let text), .numbered(let text, _),
+                        .blockquote(let text), .heading(let text, _):
+                        // Use the shared parser to pre-compute attributed string
+                        blocks[i].attributedText = MarkdownParser.shared.parse(text)
+                        changed = true
                     default:
                         break
                     }
@@ -486,20 +488,21 @@ class ChatManager: ObservableObject {
         }
         enrichHistory()
     }
-    
+
     private func enrichHistory() {
         Task { @MainActor in
             // Progressively enrich messages to ensure smooth scrolling
             // We iterate safely to avoid index errors if sessions change
             for sessionIndex in sessions.indices {
                 guard sessionIndex < sessions.count else { break }
-                
+
                 for msgIndex in sessions[sessionIndex].messages.indices {
-                    guard sessionIndex < sessions.count, 
-                          msgIndex < sessions[sessionIndex].messages.count else { break }
-                          
+                    guard sessionIndex < sessions.count,
+                        msgIndex < sessions[sessionIndex].messages.count
+                    else { break }
+
                     sessions[sessionIndex].messages[msgIndex].ensureBlocksCached()
-                    
+
                     // Yield frequently to prevent UI freeze
                     if msgIndex % 2 == 0 { await Task.yield() }
                 }
@@ -580,10 +583,11 @@ class ChatManager: ObservableObject {
         isStreaming: Bool = false, isGeneratingImage: Bool? = nil
     ) {
         // Find session containing the message (search all sessions to support background generation)
-        guard let sessionIndex = sessions.firstIndex(where: { session in
-            session.messages.contains(where: { $0.id == id })
-        }),
-        let msgIndex = sessions[sessionIndex].messages.firstIndex(where: { $0.id == id })
+        guard
+            let sessionIndex = sessions.firstIndex(where: { session in
+                session.messages.contains(where: { $0.id == id })
+            }),
+            let msgIndex = sessions[sessionIndex].messages.firstIndex(where: { $0.id == id })
         else { return }
 
         var msg = sessions[sessionIndex].messages[msgIndex]
@@ -602,11 +606,11 @@ class ChatManager: ObservableObject {
             // SisessionIce `Message` is a struct, modifying `msg` creates a copy.
             // Let's just rely on `imageData` update.
         }
-        
+
         if !isStreaming {
             msg.ensureBlocksCached()
         }
-        
+
         sessions[sessionIndex].messages[msgIndex] = msg
         // We don't save on every chunk to avoid disk thrashing, but we should save at the end
     }
@@ -690,7 +694,7 @@ class OllamaService {
                 // DeepSeek: Only inject if "Reasoning On" (high), otherwise rely on model default or don't force.
                 let lowerModel = model.lowercased()
                 var skipThinkingInjection = true
-                
+
                 // Logic:
                 // GPT-OSS -> Allow thinking (uses Low/Med/High)
                 // DeepSeek -> Allow thinking (uses On/Off if "high" passed effectively)
@@ -813,21 +817,22 @@ class OllamaService {
                         if let done = json["done"] as? Bool, done {
                             // If there is content in the done message, append it
                             if let message = json["message"] as? [String: Any],
-                               let content = message["content"] as? String {
+                                let content = message["content"] as? String
+                            {
                                 buffer += content
                             }
                             break
                         }
 
                         guard let message = json["message"] as? [String: Any],
-                              let content = message["content"] as? String
+                            let content = message["content"] as? String
                         else { continue }
 
                         buffer += content
 
                         while true {
                             let targetTag = isThinking ? "</think>" : "<think>"
-                            
+
                             if let range = buffer.range(of: targetTag, options: .caseInsensitive) {
                                 let preTag = buffer[..<range.lowerBound]
                                 if !preTag.isEmpty {
@@ -844,11 +849,12 @@ class OllamaService {
                                 // Handle partial tags to prevent splitting <think> or </think> across chunks
                                 // </think> is 8 chars, <think> is 7. We keep 10 chars to be safe.
                                 let keepLength = 10
-                                
+
                                 if buffer.count > keepLength {
-                                    let splitIndex = buffer.index(buffer.endIndex, offsetBy: -keepLength)
+                                    let splitIndex = buffer.index(
+                                        buffer.endIndex, offsetBy: -keepLength)
                                     let emitStr = String(buffer[..<splitIndex])
-                                    
+
                                     if !emitStr.isEmpty {
                                         if isThinking {
                                             continuation.yield(("", emitStr))
@@ -953,29 +959,10 @@ class GeminiService {
 
                 var body: [String: Any] = ["contents": contents]
 
-                var finalSystemPrompt = systemPrompt
-                // Inject instructions to force thinking output if requested
-                // Qwen/Gemma check is handled by UI hiding it mostly, but if using Gemini API with those models (unlikely), same logic applies.
-                // Assuming standard Gemini models here, we keep the injection logic for now unless model name says otherwise.
-                let lowerModel = model.lowercased()
-                let skipThinkingInjection =
-                    lowerModel.contains("qwen") || lowerModel.contains("gemma")
-
-                if !skipThinkingInjection && (thinkingLevel == "high" || thinkingLevel == "medium")
-                {
-                    let instruction =
-                        " Please think step-by-step before answering. Wrap your thought process in <think> and </think> tags."
-                    if finalSystemPrompt.isEmpty {
-                        finalSystemPrompt = instruction
-                    } else if !finalSystemPrompt.contains("<think>") {
-                        finalSystemPrompt += instruction
-                    }
-                }
-
-                if !finalSystemPrompt.isEmpty {
+                if !systemPrompt.isEmpty {
                     body["system_instruction"] = [
                         "parts": [
-                            ["text": finalSystemPrompt]
+                            ["text": systemPrompt]
                         ]
                     ]
                 }
@@ -1002,9 +989,6 @@ class GeminiService {
                         return
                     }
 
-                    var buffer = ""
-                    var isThinking = false
-
                     for try await line in result.lines {
                         if line.hasPrefix("data: ") {
                             let jsonStr = String(line.dropFirst(6))
@@ -1019,61 +1003,7 @@ class GeminiService {
                                 let text = parts.first?["text"] as? String
                             else { continue }
 
-                            buffer += text
-
-                            while true {
-                                if !isThinking {
-                                    if let range = buffer.range(
-                                        of: "<think>", options: .caseInsensitive)
-                                    {
-                                        let preTag = buffer[..<range.lowerBound]
-                                        if !preTag.isEmpty {
-                                            continuation.yield((String(preTag), nil))
-                                        }
-                                        buffer.removeSubrange(..<range.upperBound)
-                                        isThinking = true
-                                    } else {
-                                        // Handle partial tag at end
-                                        if buffer.count > 7 {
-                                            let keepIndex = buffer.index(
-                                                buffer.endIndex, offsetBy: -7)
-                                            let emitStr = buffer[..<keepIndex]
-                                            continuation.yield((String(emitStr), nil))
-                                            buffer.removeSubrange(..<keepIndex)
-                                        }
-                                        break
-                                    }
-                                } else {
-                                    if let range = buffer.range(
-                                        of: "</think>", options: .caseInsensitive)
-                                    {
-                                        let preTag = buffer[..<range.lowerBound]
-                                        if !preTag.isEmpty {
-                                            continuation.yield(("", String(preTag)))
-                                        }
-                                        buffer.removeSubrange(..<range.upperBound)
-                                        isThinking = false
-                                    } else {
-                                        // Handle partial tag </think>
-                                        if buffer.count > 8 {
-                                            let keepIndex = buffer.index(
-                                                buffer.endIndex, offsetBy: -8)
-                                            let emitStr = buffer[..<keepIndex]
-                                            continuation.yield(("", String(emitStr)))
-                                            buffer.removeSubrange(..<keepIndex)
-                                        }
-                                        break
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Flush remaining buffer
-                    if !buffer.isEmpty {
-                        if isThinking {
-                            continuation.yield(("", buffer))
-                        } else {
-                            continuation.yield((buffer, nil))
+                            continuation.yield((text, nil))
                         }
                     }
 
@@ -1087,9 +1017,11 @@ class GeminiService {
 }
 
 class ShortcutService {
-    func runShortcut(name: String, input: String, style: String? = nil, image: NSImage?) async throws -> (
-        String, NSImage?
-    ) {
+    func runShortcut(name: String, input: String, style: String? = nil, image: NSImage?)
+        async throws -> (
+            String, NSImage?
+        )
+    {
         let task = Process()
         let pipe = Pipe()
         let inputPipe = Pipe()
@@ -1103,79 +1035,80 @@ class ShortcutService {
             let tempDir = FileManager.default.temporaryDirectory
             let uniqueId = UUID().uuidString
             var filesToDelete: [URL] = []
-            let isLegacyMode = (style == nil) // Use legacy mode if style is NOT provided
-            
+            let isLegacyMode = (style == nil)  // Use legacy mode if style is NOT provided
+
             if !isLegacyMode {
                 // MARK: - JSON Strategy (Image Creation)
                 // Passes simple JSON text via Stdin: { "prompt": "...", "style": "...", "image_path": "..." }
-                
+
                 var inputDict: [String: String] = [:]
-                
+
                 let hasText = !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 if hasText {
                     inputDict["prompt"] = input
                 }
-                
+
                 if let style = style, !style.isEmpty {
                     inputDict["style"] = style
                 }
-                
+
                 // Image handling removed as requested to avoid bugs for now.
                 // Can be re-enabled here later.
-                
+
                 // Serialize to JSON
-                let jsonData = try JSONSerialization.data(withJSONObject: inputDict, options: [.prettyPrinted, .sortedKeys]) // sortedKeys for deterministic output
-                
+                let jsonData = try JSONSerialization.data(
+                    withJSONObject: inputDict, options: [.prettyPrinted, .sortedKeys])  // sortedKeys for deterministic output
+
                 // Run with NO arguments (uses Stdin)
                 task.arguments = ["run", name]
-                
+
                 try task.run()
-                
+
                 // Write JSON to Stdin
                 try inputPipe.fileHandleForWriting.write(contentsOf: jsonData)
                 try inputPipe.fileHandleForWriting.close()
-                
+
             } else {
                 // MARK: - Legacy Strategy (Standard Chat)
                 // Preserves original behavior for "Ask ChatGPT" etc.
-                
+
                 if let image = image {
                     // Image Mode: Save text and image to temporary files
                     let txtPath = tempDir.appendingPathComponent("\(uniqueId)_prompt.txt")
                     let imgPath = tempDir.appendingPathComponent("\(uniqueId)_image.png")
-                    
+
                     try input.write(to: txtPath, atomically: true, encoding: .utf8)
-                    
+
                     if let tiff = image.tiffRepresentation,
                         let bitmap = NSBitmapImageRep(data: tiff),
                         let png = bitmap.representation(using: .png, properties: [:])
                     {
                         try png.write(to: imgPath)
                     }
-                    
+
                     task.arguments = ["run", name, "-i", txtPath.path, "-i", imgPath.path]
-                    
+
                     // Close Stdin as we are using file inputs
                     try inputPipe.fileHandleForWriting.close()
-                    
+
                     filesToDelete.append(txtPath)
                     filesToDelete.append(imgPath)
-                    
+
                     try task.run()
-                    
+
                 } else {
                     // Text Mode: Pass raw text via Stdin
                     task.arguments = ["run", name]
-                    
+
                     try task.run()
-                    
+
                     if let data = input.data(using: .utf8) {
                         try inputPipe.fileHandleForWriting.write(contentsOf: data)
                         try inputPipe.fileHandleForWriting.close()
                     }
                 }
             }
-            
+
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             task.waitUntilExit()
 
@@ -1314,7 +1247,8 @@ struct ContentView: View {
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
-    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String = "Generate Image ChatGPT"
+    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
+        "Generate Image ChatGPT"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
 
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
@@ -1337,9 +1271,9 @@ struct ContentView: View {
         } else if selectedProvider.contains("Ollama") {
             let lower = selectedOllamaModel.lowercased()
             if lower.contains("gpt-oss") {
-                return .threeState // Low, Med, High
+                return .threeState  // Low, Med, High
             } else if lower.contains("deepseek") {
-                return .binary // On/Off
+                return .binary  // On/Off
             }
             // All others (llama3, etc) -> None
             return .none
@@ -1378,7 +1312,8 @@ struct ContentView: View {
 
                     // Content Layer
                     if showImageGallery {
-                        ImageGalleryView(chatManager: chatManager, showImageGallery: $showImageGallery)
+                        ImageGalleryView(
+                            chatManager: chatManager, showImageGallery: $showImageGallery)
                     } else if isWebViewProvider(selectedProvider) {
                         VStack(spacing: 0) {
                             HeaderView(
@@ -1410,8 +1345,10 @@ struct ContentView: View {
                                                 MessageView(
                                                     message: message,
                                                     liveContent: streamBuffer[message.id] ?? nil,
-                                                    liveThinking: streamThinkingBuffer[message.id] ?? nil,
-                                                    onRegenerate: (!message.isUser && !isLoading && isLast)
+                                                    liveThinking: streamThinkingBuffer[message.id]
+                                                        ?? nil,
+                                                    onRegenerate: (!message.isUser && !isLoading
+                                                        && isLast)
                                                         ? { regenerateResponse(for: message.id) }
                                                         : nil
                                                 )
@@ -1444,7 +1381,9 @@ struct ContentView: View {
                                     handleScroll(proxy: proxy)
                                 }
                                 .onChange(of: streamBuffer) { _, _ in
-                                    if isLoading, let lastId = chatManager.getCurrentMessages().last?.id {
+                                    if isLoading,
+                                        let lastId = chatManager.getCurrentMessages().last?.id
+                                    {
                                         proxy.scrollTo(lastId, anchor: .bottom)
                                     }
                                 }
@@ -1536,7 +1475,9 @@ struct ContentView: View {
                         selectedAttachments.append(Attachment(type: .pdf, data: data))
                     }
                 } else {
-                    let imageExtensions = ["png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic"]
+                    let imageExtensions = [
+                        "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
+                    ]
                     if imageExtensions.contains(url.pathExtension.lowercased()) {
                         if let data = try? Data(contentsOf: url) {
                             selectedAttachments.append(Attachment(type: .image, data: data))
@@ -1555,14 +1496,14 @@ struct ContentView: View {
         else { return }
 
         // Convert to MessageAttachment
-        let msgAttachments = selectedAttachments.map { 
+        let msgAttachments = selectedAttachments.map {
             MessageAttachment(type: $0.type == .image ? "image" : "pdf", data: $0.data)
         }
-        
+
         // Fallback for legacy services
         var legacyImage: NSImage?
         var legacyPDF: Data?
-        
+
         for attachment in selectedAttachments {
             if attachment.type == .image && legacyImage == nil {
                 legacyImage = NSImage(data: attachment.data)
@@ -1572,9 +1513,9 @@ struct ContentView: View {
         }
 
         let userMsg = Message(
-            content: inputText, 
-            image: legacyImage, 
-            pdfData: legacyPDF, 
+            content: inputText,
+            image: legacyImage,
+            pdfData: legacyPDF,
             attachments: msgAttachments,
             isUser: true
         )
@@ -1602,9 +1543,11 @@ struct ContentView: View {
         if let lastUserMsg = chatManager.getCurrentMessages().last(where: { $0.isUser }) {
             var attachments: [Attachment] = []
             if let msgAttachments = lastUserMsg.attachments {
-                attachments = msgAttachments.map { Attachment(type: $0.type == "image" ? .image : .pdf, data: $0.data) }
+                attachments = msgAttachments.map {
+                    Attachment(type: $0.type == "image" ? .image : .pdf, data: $0.data)
+                }
             } else {
-                 if let img = lastUserMsg.image, let tiff = img.tiffRepresentation {
+                if let img = lastUserMsg.image, let tiff = img.tiffRepresentation {
                     attachments.append(Attachment(type: .image, data: tiff))
                 }
                 if let pdf = lastUserMsg.pdfData {
@@ -1626,7 +1569,7 @@ struct ContentView: View {
         isLoading = true
         let currentHistory = chatManager.getCurrentMessages()
         let style = imageCreationStyle
-        
+
         // Helper for Image Creation legacy support
         var firstImage: NSImage?
         if let imgAtt = attachments.first(where: { $0.type == .image }) {
@@ -1648,20 +1591,23 @@ struct ContentView: View {
 
                 do {
                     // Only plain "ChatGPT" (no styles) uses the specialized ChatGPT shortcut
-                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
-                    
+                    let targetShortcut =
+                        (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+
                     let result = try await shortcutService.runShortcut(
                         name: targetShortcut, input: input, style: style, image: firstImage)
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: result.0, image: result.1, isGeneratingImage: false)
+                            id: aiMsgId, content: result.0, image: result.1,
+                            isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)", isGeneratingImage: false)
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -1743,12 +1689,12 @@ struct ContentView: View {
                 do {
                     var accumulatedContent = ""
                     var lastUpdateTime = Date()
-                    
+
                     for try await contentSnapshot in appleFoundationService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), systemPrompt: systemPrompt
                     ) {
                         accumulatedContent += contentSnapshot
-                        
+
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
                             let contentToUpdate = accumulatedContent
                             DispatchQueue.main.async {
@@ -1758,7 +1704,7 @@ struct ContentView: View {
                             lastUpdateTime = Date()
                         }
                     }
-                    
+
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: accumulatedContent, isStreaming: false)
@@ -1853,7 +1799,7 @@ struct ContentView: View {
                 var aiMsg = Message(content: "", model: displayModelName, isUser: false)
                 aiMsg.id = aiMsgId
                 aiMsg.isStreaming = true
-                
+
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
                 }
@@ -1899,12 +1845,12 @@ struct SidebarView: View {
     @ObservedObject var chatManager: ChatManager
     @Binding var showImageGallery: Bool
     @Namespace private var animation
-    
+
     @State private var searchText: String = ""
     @State private var isSearchVisible: Bool = false
     @State private var renamingSessionId: UUID?
     @State private var renameText: String = ""
-    
+
     // Service for summarization
     private let summarizer = AppleFoundationService()
 
@@ -1946,7 +1892,7 @@ struct SidebarView: View {
                         .padding(8)
                         .background(Color.gray.opacity(0.1))
                         .cornerRadius(8)
-                        
+
                         if filteredSessions.isEmpty {
                             Text("No chats found")
                                 .font(.caption)
@@ -1988,10 +1934,10 @@ struct SidebarView: View {
 
                 // Images
                 SidebarItem(icon: "photo", title: "Images", isSelected: showImageGallery) {
-                     withAnimation {
+                    withAnimation {
                         showImageGallery = true
                         chatManager.currentSessionId = nil
-                     }
+                    }
                 }
             }
             .padding(10)
@@ -2007,10 +1953,15 @@ struct SidebarView: View {
             // Chat List
             ScrollView {
                 LazyVStack(spacing: 2) {
-                    ForEach(chatManager.sessions.filter { !$0.messages.isEmpty || $0.id == chatManager.currentSessionId }) { session in
+                    ForEach(
+                        chatManager.sessions.filter {
+                            !$0.messages.isEmpty || $0.id == chatManager.currentSessionId
+                        }
+                    ) { session in
                         SidebarRow(
                             session: session,
-                            isSelected: !showImageGallery && chatManager.currentSessionId == session.id,
+                            isSelected: !showImageGallery
+                                && chatManager.currentSessionId == session.id,
                             isRenaming: renamingSessionId == session.id,
                             renameText: $renameText,
                             animation: animation,
@@ -2046,25 +1997,27 @@ struct SidebarView: View {
             }
         }
     }
-    
+
     private func summarize(session: ChatSession) {
         guard !session.messages.isEmpty else { return }
-        
+
         let prompt = """
-        Analyze the following conversation and provide a short, concise title (3-5 words max).
-        Return ONLY the title, no quotes or explanation.
-        """
-        
+            Analyze the following conversation and provide a short, concise title (3-5 words max).
+            Return ONLY the title, no quotes or explanation.
+            """
+
         Task {
             do {
                 var newTitle = ""
-                for try await chunk in summarizer.sendMessageStream(history: session.messages, systemPrompt: prompt) {
+                for try await chunk in summarizer.sendMessageStream(
+                    history: session.messages, systemPrompt: prompt)
+                {
                     newTitle += chunk
                 }
-                
+
                 let cleaned = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
                     .replacingOccurrences(of: "\"", with: "")
-                
+
                 DispatchQueue.main.async {
                     if !cleaned.isEmpty {
                         chatManager.renameSession(id: session.id, newTitle: cleaned)
@@ -2081,17 +2034,18 @@ struct SidebarView: View {
         savePanel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
         savePanel.nameFieldStringValue = "\(session.title).md"
         savePanel.canCreateDirectories = true
-        
+
         savePanel.begin { response in
             if response == .OK, let url = savePanel.url {
                 var markdown = "# \(session.title)\n\n"
                 markdown += "Date: \(session.date.formatted())\n\n"
-                
+
                 for message in session.messages {
-                    let role = message.isUser ? "**User**" : "**AI (\(message.model ?? "Unknown"))**"
+                    let role =
+                        message.isUser ? "**User**" : "**AI (\(message.model ?? "Unknown"))**"
                     markdown += "\(role):\n\(message.content)\n\n"
                 }
-                
+
                 do {
                     try markdown.write(to: url, atomically: true, encoding: .utf8)
                 } catch {
@@ -2113,7 +2067,7 @@ struct SidebarItem: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 16))
-                    .frame(width: 20) // Fixed width for alignment
+                    .frame(width: 20)  // Fixed width for alignment
                 Text(title)
                     .font(.system(size: 14))
                 Spacer()
@@ -2335,7 +2289,7 @@ struct HeaderView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .focusEffectDisabled()
-            .padding(.horizontal, 4) // Padding around the menu for click area
+            .padding(.horizontal, 4)  // Padding around the menu for click area
 
             Spacer()
         }
@@ -2359,7 +2313,7 @@ struct HeaderView: View {
 struct AttachmentPreview: View {
     let attachment: Attachment
     var onRemove: () -> Void
-    
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             Group {
@@ -2390,7 +2344,7 @@ struct AttachmentPreview: View {
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
-            
+
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.gray)
@@ -2415,34 +2369,40 @@ class PasteMonitor: ObservableObject {
                 var newAttachments: [Attachment] = []
 
                 // 1. Try reading as File URLs
-                if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !urls.isEmpty {
+                if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
+                    !urls.isEmpty
+                {
                     for url in urls {
                         if url.pathExtension.lowercased() == "pdf" {
                             if let data = try? Data(contentsOf: url) {
                                 newAttachments.append(Attachment(type: .pdf, data: data))
                             }
                         } else {
-                             let imageExtensions = ["png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic"]
-                             if imageExtensions.contains(url.pathExtension.lowercased()) {
-                                 if let data = try? Data(contentsOf: url) {
-                                     newAttachments.append(Attachment(type: .image, data: data))
-                                 }
-                             }
+                            let imageExtensions = [
+                                "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
+                            ]
+                            if imageExtensions.contains(url.pathExtension.lowercased()) {
+                                if let data = try? Data(contentsOf: url) {
+                                    newAttachments.append(Attachment(type: .image, data: data))
+                                }
+                            }
                         }
                     }
                 }
-                
+
                 if !newAttachments.isEmpty {
-                     // If we found files, paste them and consume event
-                     self.onPaste?(newAttachments)
-                     return nil
+                    // If we found files, paste them and consume event
+                    self.onPaste?(newAttachments)
+                    return nil
                 }
 
                 // 2. Fallback to NSImage objects (e.g. copied from browser or screenshot)
-                if let objects = pb.readObjects(forClasses: [NSImage.self], options: nil) as? [NSImage], !objects.isEmpty {
+                if let objects = pb.readObjects(forClasses: [NSImage.self], options: nil)
+                    as? [NSImage], !objects.isEmpty
+                {
                     for image in objects {
                         if let tiff = image.tiffRepresentation {
-                             newAttachments.append(Attachment(type: .image, data: tiff))
+                            newAttachments.append(Attachment(type: .image, data: tiff))
                         }
                     }
                 }
@@ -2532,7 +2492,9 @@ struct InputView: View {
                     HStack(spacing: 8) {
                         ForEach(selectedAttachments) { attachment in
                             AttachmentPreview(attachment: attachment) {
-                                if let index = selectedAttachments.firstIndex(where: { $0.id == attachment.id }) {
+                                if let index = selectedAttachments.firstIndex(where: {
+                                    $0.id == attachment.id
+                                }) {
                                     selectedAttachments.remove(at: index)
                                 }
                             }
@@ -2604,7 +2566,7 @@ struct InputView: View {
                         let models = ollamaManager.allModels
                             .filter { !ollamaManager.isFavorite($0) }
                             .filter { ollamaManager.getManufacturer(for: $0) == manufacturer }
-                        
+
                         if !models.isEmpty {
                             Section(manufacturer) {
                                 ForEach(models, id: \.self) { model in
@@ -2619,9 +2581,9 @@ struct InputView: View {
                             }
                         }
                     }
-                    
+
                     Divider()
-                    
+
                     Menu("Manage Favorites") {
                         ForEach(ollamaManager.allModels, id: \.self) { model in
                             Button(action: { ollamaManager.toggleFavorite(model) }) {
@@ -2675,9 +2637,12 @@ struct InputView: View {
                             }
                         }
                     }
-                    
+
                     Section("All Models") {
-                        ForEach(geminiManager.availableModels.filter { !geminiManager.isFavorite($0) }, id: \.self) { model in
+                        ForEach(
+                            geminiManager.availableModels.filter { !geminiManager.isFavorite($0) },
+                            id: \.self
+                        ) { model in
                             Button(action: { geminiModel = model }) {
                                 if geminiModel == model {
                                     Label(model, systemImage: "checkmark")
@@ -2687,9 +2652,9 @@ struct InputView: View {
                             }
                         }
                     }
-                    
+
                     Divider()
-                    
+
                     Menu("Manage Favorites") {
                         ForEach(geminiManager.availableModels, id: \.self) { model in
                             Button(action: { geminiManager.toggleFavorite(model) }) {
@@ -2876,18 +2841,22 @@ struct InputView: View {
                         if url.pathExtension.lowercased() == "pdf" {
                             if let data = try? Data(contentsOf: url) {
                                 DispatchQueue.main.async {
-                                    self.selectedAttachments.append(Attachment(type: .pdf, data: data))
+                                    self.selectedAttachments.append(
+                                        Attachment(type: .pdf, data: data))
                                 }
                                 return
                             }
                         }
 
                         // Handle file URL - for now just try to load as image
-                        let imageExtensions = ["png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic"]
+                        let imageExtensions = [
+                            "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
+                        ]
                         if imageExtensions.contains(url.pathExtension.lowercased()) {
                             if let data = try? Data(contentsOf: url) {
                                 DispatchQueue.main.async {
-                                    self.selectedAttachments.append(Attachment(type: .image, data: data))
+                                    self.selectedAttachments.append(
+                                        Attachment(type: .image, data: data))
                                 }
                             }
                         }
@@ -2896,7 +2865,7 @@ struct InputView: View {
             }
         }
     }
-    
+
     @ViewBuilder
     private func styleButton(_ title: String, value: String) -> some View {
         Button(action: { imageStyle = value }) {
@@ -3430,7 +3399,12 @@ struct MessageView: View, Equatable {
                                 }
                         }
                         let activeContent = liveContent ?? message.content
-                        if !activeContent.isEmpty || message.isStreaming {
+
+                        if message.isStreaming && activeContent.isEmpty
+                            && (liveThinking ?? message.thinkingContent) == nil
+                        {
+                            ThinkingIndicator()
+                        } else if !activeContent.isEmpty || message.isStreaming {
                             if message.isStreaming {
                                 Text(activeContent + (isCursorVisible ? " ▋" : ""))
                                     .font(.body)
@@ -3442,7 +3416,6 @@ struct MessageView: View, Equatable {
                             }
                         }
                     }
-
 
                     // Action Buttons
                     HStack(spacing: 12) {
@@ -3542,7 +3515,8 @@ struct SettingsView: View {
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
-    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String = "Generate Image ChatGPT"
+    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
+        "Generate Image ChatGPT"
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShowMenuBar") private var showMenuBar = true
@@ -3666,7 +3640,7 @@ struct SettingsView: View {
             Section(header: Text("Ollama")) {
                 TextField("Endpoint URL", text: $ollamaURL)
                     .textFieldStyle(.roundedBorder)
-                
+
                 VStack(alignment: .leading) {
                     Text("Custom Models").font(.headline)
                     HStack {
@@ -3677,7 +3651,7 @@ struct SettingsView: View {
                             newCustomModelName = ""
                         }
                     }
-                    
+
                     List {
                         ForEach(ollamaManager.customModels, id: \.self) { model in
                             HStack {
@@ -3716,7 +3690,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            
+
             Section {
                 Rectangle()
                     .fill(Color.clear)
@@ -3954,7 +3928,8 @@ struct QuickChatView: View {
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
-    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String = "Generate Image ChatGPT"
+    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
+        "Generate Image ChatGPT"
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
 
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
@@ -3968,9 +3943,9 @@ struct QuickChatView: View {
         if selectedProvider.contains("Ollama") {
             let lower = selectedOllamaModel.lowercased()
             if lower.contains("gpt-oss") {
-                return .threeState // Low, Med, High
+                return .threeState  // Low, Med, High
             } else if lower.contains("deepseek") {
-                return .binary // On/Off
+                return .binary  // On/Off
             }
         }
         return .none
@@ -4132,57 +4107,96 @@ struct QuickChatView: View {
 
     private var inputBar: some View {
         HStack(alignment: .center, spacing: 12) {
-            TextField(selectedProvider == "Image Creation" ? "Describe an image..." : "Ask anything...", text: $inputText, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...6)
-                .onSubmit(sendMessage)
-                .padding(.vertical, 10)
+            TextField(
+                selectedProvider == "Image Creation" ? "Describe an image..." : "Ask anything...",
+                text: $inputText, axis: .vertical
+            )
+            .textFieldStyle(.plain)
+            .lineLimit(1...6)
+            .onSubmit(sendMessage)
+            .padding(.vertical, 10)
 
             if selectedProvider == "Image Creation" {
-                 // Style Picker
-                 Menu {
-                     Section("Apple Intelligence") {
-                         Button(action: { imageCreationStyle = "Animation" }) {
-                             if imageCreationStyle == "Animation" { Label("Animation", systemImage: "checkmark") } else { Text("Animation") }
-                         }
-                         Button(action: { imageCreationStyle = "Illustration" }) {
-                             if imageCreationStyle == "Illustration" { Label("Illustration", systemImage: "checkmark") } else { Text("Illustration") }
-                         }
-                         Button(action: { imageCreationStyle = "Sketch" }) {
-                             if imageCreationStyle == "Sketch" { Label("Sketch", systemImage: "checkmark") } else { Text("Sketch") }
-                         }
-                     }
-                     Divider()
-                     Section("ChatGPT") {
-                         Button(action: { imageCreationStyle = "ChatGPT" }) {
-                             if imageCreationStyle == "ChatGPT" { Label("ChatGPT (Default)", systemImage: "checkmark") } else { Text("ChatGPT (Default)") }
-                         }
-                         Button(action: { imageCreationStyle = "Oil Painting (ChatGPT)" }) {
-                             if imageCreationStyle == "Oil Painting (ChatGPT)" { Label("Oil Painting", systemImage: "checkmark") } else { Text("Oil Painting") }
-                         }
-                         Button(action: { imageCreationStyle = "Watercolor (ChatGPT)" }) {
-                             if imageCreationStyle == "Watercolor (ChatGPT)" { Label("Watercolor", systemImage: "checkmark") } else { Text("Watercolor") }
-                         }
-                         Button(action: { imageCreationStyle = "Vector (ChatGPT)" }) {
-                             if imageCreationStyle == "Vector (ChatGPT)" { Label("Vector", systemImage: "checkmark") } else { Text("Vector") }
-                         }
-                         Button(action: { imageCreationStyle = "Anime (ChatGPT)" }) {
-                             if imageCreationStyle == "Anime (ChatGPT)" { Label("Anime", systemImage: "checkmark") } else { Text("Anime") }
-                         }
-                         Button(action: { imageCreationStyle = "Print (ChatGPT)" }) {
-                             if imageCreationStyle == "Print (ChatGPT)" { Label("Print", systemImage: "checkmark") } else { Text("Print") }
-                         }
-                     }
-                 } label: {
-                     Image(systemName: "paintpalette")
-                         .font(.system(size: 16))
-                         .foregroundColor(imageCreationStyle.isEmpty ? .secondary : .orange)
-                         .padding(6)
-                         .background(Color.secondary.opacity(0.1))
-                         .clipShape(Circle())
-                 }
-                 .menuStyle(.borderlessButton)
-                 .help("Image Style")
+                // Style Picker
+                Menu {
+                    Section("Apple Intelligence") {
+                        Button(action: { imageCreationStyle = "Animation" }) {
+                            if imageCreationStyle == "Animation" {
+                                Label("Animation", systemImage: "checkmark")
+                            } else {
+                                Text("Animation")
+                            }
+                        }
+                        Button(action: { imageCreationStyle = "Illustration" }) {
+                            if imageCreationStyle == "Illustration" {
+                                Label("Illustration", systemImage: "checkmark")
+                            } else {
+                                Text("Illustration")
+                            }
+                        }
+                        Button(action: { imageCreationStyle = "Sketch" }) {
+                            if imageCreationStyle == "Sketch" {
+                                Label("Sketch", systemImage: "checkmark")
+                            } else {
+                                Text("Sketch")
+                            }
+                        }
+                    }
+                    Divider()
+                    Section("ChatGPT") {
+                        Button(action: { imageCreationStyle = "ChatGPT" }) {
+                            if imageCreationStyle == "ChatGPT" {
+                                Label("ChatGPT (Default)", systemImage: "checkmark")
+                            } else {
+                                Text("ChatGPT (Default)")
+                            }
+                        }
+                        Button(action: { imageCreationStyle = "Oil Painting (ChatGPT)" }) {
+                            if imageCreationStyle == "Oil Painting (ChatGPT)" {
+                                Label("Oil Painting", systemImage: "checkmark")
+                            } else {
+                                Text("Oil Painting")
+                            }
+                        }
+                        Button(action: { imageCreationStyle = "Watercolor (ChatGPT)" }) {
+                            if imageCreationStyle == "Watercolor (ChatGPT)" {
+                                Label("Watercolor", systemImage: "checkmark")
+                            } else {
+                                Text("Watercolor")
+                            }
+                        }
+                        Button(action: { imageCreationStyle = "Vector (ChatGPT)" }) {
+                            if imageCreationStyle == "Vector (ChatGPT)" {
+                                Label("Vector", systemImage: "checkmark")
+                            } else {
+                                Text("Vector")
+                            }
+                        }
+                        Button(action: { imageCreationStyle = "Anime (ChatGPT)" }) {
+                            if imageCreationStyle == "Anime (ChatGPT)" {
+                                Label("Anime", systemImage: "checkmark")
+                            } else {
+                                Text("Anime")
+                            }
+                        }
+                        Button(action: { imageCreationStyle = "Print (ChatGPT)" }) {
+                            if imageCreationStyle == "Print (ChatGPT)" {
+                                Label("Print", systemImage: "checkmark")
+                            } else {
+                                Text("Print")
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "paintpalette")
+                        .font(.system(size: 16))
+                        .foregroundColor(imageCreationStyle.isEmpty ? .secondary : .orange)
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .menuStyle(.borderlessButton)
+                .help("Image Style")
             }
 
             if selectedProvider.contains("Ollama") {
@@ -4198,9 +4212,12 @@ struct QuickChatView: View {
                             }
                         }
                     }
-                    
+
                     Section("All Models") {
-                        ForEach(ollamaManager.availableModels.filter { !ollamaManager.isFavorite($0) }, id: \.self) { model in
+                        ForEach(
+                            ollamaManager.availableModels.filter { !ollamaManager.isFavorite($0) },
+                            id: \.self
+                        ) { model in
                             Button(action: { selectedOllamaModel = model }) {
                                 if selectedOllamaModel == model {
                                     Label(model, systemImage: "checkmark")
@@ -4210,9 +4227,9 @@ struct QuickChatView: View {
                             }
                         }
                     }
-                    
+
                     Divider()
-                    
+
                     Menu("Manage Favorites") {
                         ForEach(ollamaManager.availableModels, id: \.self) { model in
                             Button(action: { ollamaManager.toggleFavorite(model) }) {
@@ -4377,7 +4394,7 @@ struct QuickChatView: View {
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
         case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
-        case "Image Creation": return "paintbrush" // Fixed icon name
+        case "Image Creation": return "paintbrush"  // Fixed icon name
         case "ChatGPT": return "message"
         default: return "cpu"
         }
@@ -4407,13 +4424,13 @@ struct QuickChatView: View {
                 do {
                     var fullContent = ""
                     var lastUpdateTime = Date()
-                    
+
                     for try await chunk in appleFoundationService.sendMessageStream(
                         history: chatManager.getCurrentMessages(),
                         systemPrompt: systemPrompt
                     ) {
                         fullContent += chunk
-                        
+
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
                             let contentToUpdate = fullContent
                             DispatchQueue.main.async {
@@ -4423,7 +4440,7 @@ struct QuickChatView: View {
                             lastUpdateTime = Date()
                         }
                     }
-                    
+
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: fullContent, isStreaming: false)
@@ -4578,21 +4595,24 @@ struct QuickChatView: View {
 
                 do {
                     // Only plain "ChatGPT" (no styles) uses the specialized ChatGPT shortcut
-                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+                    let targetShortcut =
+                        (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
 
                     let result = try await shortcutService.runShortcut(
                         name: targetShortcut, input: content, style: style, image: nil)
 
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: result.0, image: result.1, isGeneratingImage: false)
+                            id: aiMsgId, content: result.0, image: result.1,
+                            isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)", isGeneratingImage: false)
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -4663,7 +4683,7 @@ struct ImageGalleryView: View {
     @ObservedObject var chatManager: ChatManager
     @Binding var showImageGallery: Bool
     @State private var selectedImageForPreview: NSImage? = nil
-    
+
     var images: [(UUID, UUID, NSImage, String)] {
         var result: [(UUID, UUID, NSImage, String)] = []
         for session in chatManager.sessions {
@@ -4713,12 +4733,15 @@ struct ImageGalleryView: View {
                                 pasteboard.writeObjects([item.2])
                             }
                             if #available(macOS 13.0, *) {
-                                ShareLink(item: Image(nsImage: item.2), preview: SharePreview(item.3, image: Image(nsImage: item.2)))
+                                ShareLink(
+                                    item: Image(nsImage: item.2),
+                                    preview: SharePreview(item.3, image: Image(nsImage: item.2)))
                             } else {
                                 Button("Share") {
                                     let picker = NSSharingServicePicker(items: [item.2])
                                     if let view = NSApp.keyWindow?.contentView {
-                                        picker.show(relativeTo: .zero, of: view, preferredEdge: .minY)
+                                        picker.show(
+                                            relativeTo: .zero, of: view, preferredEdge: .minY)
                                     }
                                 }
                             }
@@ -4740,7 +4763,7 @@ struct ImageGalleryView: View {
                                 selectedImageForPreview = nil
                             }
                         }
-                    
+
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -4759,4 +4782,3 @@ struct ImageGalleryView: View {
         }
     }
 }
-

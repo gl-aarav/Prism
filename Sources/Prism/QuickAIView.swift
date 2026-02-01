@@ -33,7 +33,8 @@ struct QuickAIView: View {
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
-    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String = "Generate Image ChatGPT"
+    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
+        "Generate Image ChatGPT"
     @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
@@ -58,15 +59,15 @@ struct QuickAIView: View {
     private var expandAnimation: Animation {
         .spring(response: 0.5, dampingFraction: 0.82, blendDuration: 0.1)
     }
-    
+
     private var staggeredExpandAnimation: Animation {
         .spring(response: 0.55, dampingFraction: 0.78, blendDuration: 0.08)
     }
-    
+
     private var collapseAnimation: Animation {
         .spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.05)
     }
-    
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -75,25 +76,11 @@ struct QuickAIView: View {
                         headerSection
                         messagesSection
                     }
+// ...existing code...
                     .padding(10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(
-                                (colorScheme == .dark ? Color.black : Color.white).opacity(
-                                    colorScheme == .dark
-                                        ? clampedBackgroundOpacity + 0.08
-                                        : clampedBackgroundOpacity
-                                )
-                            )
-                            .background(
-                                .ultraThinMaterial.opacity(
-                                    colorScheme == .dark
-                                        ? clampedBackgroundOpacity + 0.16
-                                        : clampedBackgroundOpacity + 0.12
-                                )
-                            )
-                    )
+                    .background(ExpandedPanelBackground(cornerRadius: 20))
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+// ...existing code...
                     .compositingGroup()
                     .scaleEffect(backgroundScale, anchor: .bottom)
                     .blur(radius: backgroundBlur)
@@ -101,12 +88,16 @@ struct QuickAIView: View {
                     .transition(
                         .asymmetric(
                             insertion: .modifier(
-                                active: ExpandedPanelModifier(opacity: 0, offsetY: 40, scale: 0.88, blur: 8),
-                                identity: ExpandedPanelModifier(opacity: 1, offsetY: 0, scale: 1, blur: 0)
+                                active: ExpandedPanelModifier(
+                                    opacity: 0, offsetY: 40, scale: 0.88, blur: 8),
+                                identity: ExpandedPanelModifier(
+                                    opacity: 1, offsetY: 0, scale: 1, blur: 0)
                             ),
                             removal: .modifier(
-                                active: ExpandedPanelModifier(opacity: 0, offsetY: 25, scale: 0.92, blur: 6),
-                                identity: ExpandedPanelModifier(opacity: 1, offsetY: 0, scale: 1, blur: 0)
+                                active: ExpandedPanelModifier(
+                                    opacity: 0, offsetY: 25, scale: 0.92, blur: 6),
+                                identity: ExpandedPanelModifier(
+                                    opacity: 1, offsetY: 0, scale: 1, blur: 0)
                             )
                         )
                     )
@@ -267,21 +258,24 @@ struct QuickAIView: View {
 
                 do {
                     // Only plain "ChatGPT" (no styles) uses the specialized ChatGPT shortcut
-                    let targetShortcut = (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
-                    
+                    let targetShortcut =
+                        (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
+
                     let result = try await shortcutService.runShortcut(
                         name: targetShortcut, input: content, style: style, image: nil)
 
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: result.0, image: result.1, isGeneratingImage: false)
+                            id: aiMsgId, content: result.0, image: result.1,
+                            isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
                 } catch {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)", isGeneratingImage: false)
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isGeneratingImage: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -364,12 +358,12 @@ struct QuickAIView: View {
                 do {
                     var accumulatedContent = ""
                     var lastUpdateTime = Date()
-                    
+
                     for try await contentSnapshot in appleFoundationService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), systemPrompt: systemPrompt
                     ) {
                         accumulatedContent += contentSnapshot
-                        
+
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
                             let contentToUpdate = accumulatedContent
                             DispatchQueue.main.async {
@@ -379,7 +373,7 @@ struct QuickAIView: View {
                             lastUpdateTime = Date()
                         }
                     }
-                    
+
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: accumulatedContent, isStreaming: false)
@@ -532,7 +526,8 @@ struct QuickAIMessageView: View, Equatable {
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     static func == (lhs: QuickAIMessageView, rhs: QuickAIMessageView) -> Bool {
-        return lhs.message == rhs.message && lhs.liveContent == rhs.liveContent && lhs.liveThinking == rhs.liveThinking
+        return lhs.message == rhs.message && lhs.liveContent == rhs.liveContent
+            && lhs.liveThinking == rhs.liveThinking
     }
 
     var body: some View {
@@ -614,19 +609,24 @@ struct QuickAIMessageView: View, Equatable {
                         }
 
                         let activeContent = liveContent ?? message.content
-                        if !activeContent.isEmpty || message.isStreaming {
+
+                        if message.isStreaming && activeContent.isEmpty
+                            && (liveThinking ?? message.thinkingContent) == nil
+                        {
+                            ThinkingIndicator()
+                        } else if !activeContent.isEmpty || message.isStreaming {
                             if message.isStreaming {
                                 Text(activeContent + (isCursorVisible ? " ▋" : ""))
                                     .font(.system(size: 14))
                                     .foregroundStyle(.primary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .textSelection(.enabled)
-                                    .id("streamingText") 
+                                    .id("streamingText")
                             } else {
                                 MarkdownView(blocks: message.blocks)
                             }
                         }
-                    
+
                         // Copy Button
                         HStack {
                             Button(action: {
@@ -681,8 +681,9 @@ struct QuickAIMessageView: View, Equatable {
         let tempDir = FileManager.default.temporaryDirectory
         let fileURL = tempDir.appendingPathComponent("Prism_Preview_\(UUID().uuidString).png")
         if let tiff = image.tiffRepresentation,
-           let bitmap = NSBitmapImageRep(data: tiff),
-           let png = bitmap.representation(using: .png, properties: [:]) {
+            let bitmap = NSBitmapImageRep(data: tiff),
+            let png = bitmap.representation(using: .png, properties: [:])
+        {
             try? png.write(to: fileURL)
             NSWorkspace.shared.open(fileURL)
         }
@@ -695,7 +696,7 @@ struct QuickAIMessageView: View, Equatable {
         // and usually isn't an NSPanel unless it's a utility style
         // We'll trust NSApp.activate to do most of the work, but we should unhide the app
         NSApp.unhide(nil)
-        
+
         for window in NSApp.windows {
             // Filter out QuickAI Panel by its known frame size or controller type if possible,
             // or just order forward normal windows.
@@ -703,7 +704,7 @@ struct QuickAIMessageView: View, Equatable {
             // But relying on unhide + activate is usually sufficient for single-window apps.
             // If the main window was closed, we might need new implementation, but let's assume it's just hidden/backgrounded.
             if window.isVisible && !(window.styleMask.contains(.nonactivatingPanel)) {
-                 window.makeKeyAndOrderFront(nil)
+                window.makeKeyAndOrderFront(nil)
             }
         }
     }
@@ -717,13 +718,10 @@ struct CommandBarBackground: View {
 
     var body: some View {
         let colors = appTheme.swiftUIColors
-        // If default, use Blue/Green/Red logic or keep original
-        // Original was Blue -> Green
-        // We will construct a gradient from the theme colors
-        
+
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
-        
+
         let gradient = LinearGradient(
             stops: [
                 .init(
@@ -740,39 +738,107 @@ struct CommandBarBackground: View {
         return ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.ultraThinMaterial.opacity(min(max(commandBarVibrancy, 0.05), 0.9)))
+
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(gradient)
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(
                     colorScheme == .dark
-                        ? Color.black.opacity(0.35)
-                        : Color.white.opacity(0.28),
-                    lineWidth: 1
+                        ? Color.white.opacity(0.12) : Color.black.opacity(0.08), lineWidth: 0.5)
+        }
+    }
+}
+
+struct ExpandedPanelBackground: View {
+    var cornerRadius: CGFloat = 20
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+    @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
+
+    private var clampedBackgroundOpacity: Double {
+        min(max(backgroundOpacity, 0.05), 0.55)
+    }
+
+    var body: some View {
+        let colors = appTheme.swiftUIColors
+        
+        let startColor = colors.first ?? .blue
+        let endColor = colors.last ?? .green
+        
+        // Much subtler gradient for the message area
+        let gradient = LinearGradient(
+            stops: [
+                .init(
+                    color: startColor.opacity(colorScheme == .dark ? 0.08 : 0.12),
+                    location: 0.0),
+                .init(
+                    color: endColor.opacity(colorScheme == .dark ? 0.05 : 0.08),
+                    location: 1.0),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        return ZStack {
+            // Base layer - adaptive fill
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    (colorScheme == .dark ? Color.black : Color.white).opacity(
+                        colorScheme == .dark
+                            ? clampedBackgroundOpacity + 0.08
+                            : clampedBackgroundOpacity
+                    )
+                )
+            
+            // Background image if present
+            if !backgroundImagePath.isEmpty,
+                let image = NSImage(contentsOfFile: backgroundImagePath)
+            {
+                GeometryReader { geo in
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                }
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .opacity(0.15) // Very subtle for readability
+            }
+            
+            // Gradient tint
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(gradient)
+                
+            // Material blur
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    .ultraThinMaterial.opacity(
+                        colorScheme == .dark
+                            ? clampedBackgroundOpacity + 0.16
+                            : clampedBackgroundOpacity + 0.12
+                    )
                 )
         }
-        .drawingGroup()
-        .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 4)
-        // Mask shadow and contents to a fixed-radius rect so added height doesn't overly round corners
-        .mask(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
 struct GeneratingImagePlaceholder: View {
     @State private var phase: CGFloat = 0
     @Environment(\.colorScheme) var colorScheme
-    
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 16)
                 .fill(colorScheme == .dark ? Color.black : Color.white)
-            
+
             // Shimmering Effect
             GeometryReader { geo in
                 LinearGradient(
                     colors: [
                         .clear,
                         (colorScheme == .dark ? Color.white : Color.black).opacity(0.1),
-                        .clear
+                        .clear,
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
@@ -781,7 +847,7 @@ struct GeneratingImagePlaceholder: View {
                 .offset(x: -geo.size.width + (geo.size.width * 2 * phase))
             }
             .mask(RoundedRectangle(cornerRadius: 16))
-            
+
             // Border
             RoundedRectangle(cornerRadius: 16)
                 .stroke(
@@ -805,7 +871,7 @@ struct ExpandedPanelModifier: ViewModifier {
     var offsetY: CGFloat
     var scale: CGFloat
     var blur: CGFloat
-    
+
     func body(content: Content) -> some View {
         content
             .opacity(opacity)
@@ -816,7 +882,9 @@ struct ExpandedPanelModifier: ViewModifier {
 }
 
 extension ExpandedPanelModifier: Animatable {
-    var animatableData: AnimatablePair<AnimatablePair<Double, CGFloat>, AnimatablePair<CGFloat, CGFloat>> {
+    var animatableData:
+        AnimatablePair<AnimatablePair<Double, CGFloat>, AnimatablePair<CGFloat, CGFloat>>
+    {
         get {
             AnimatablePair(AnimatablePair(opacity, offsetY), AnimatablePair(scale, blur))
         }
@@ -830,7 +898,7 @@ extension ExpandedPanelModifier: Animatable {
 }
 
 extension QuickAIView {
-    
+
     private var headerSection: some View {
         HStack {
             Menu {
@@ -956,10 +1024,10 @@ extension QuickAIView {
                             liveContent: streamBuffer[message.id],
                             liveThinking: streamThinkingBuffer[message.id]
                         )
-                            .equatable()
+                        .equatable()
                     }
                     if isLoading {
-                        // Loading indicator removed in favor of streaming cursor
+
                     }
                 }
                 .padding(20)
@@ -975,7 +1043,8 @@ extension QuickAIView {
             // Auto-scroll during generation
             .onChange(of: chatManager.getCurrentMessages().last?.content.count) { _, _ in
                 if let lastId = chatManager.getCurrentMessages().last?.id,
-                   chatManager.getCurrentMessages().last?.isStreaming == true {
+                    chatManager.getCurrentMessages().last?.isStreaming == true
+                {
                     proxy.scrollTo(lastId, anchor: .bottom)
                 }
             }
@@ -1008,111 +1077,147 @@ extension QuickAIView {
                     Spacer()
                     Button(action: { selectedPDF = nil }) {
                         Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                            .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 16)
             }
-            
+
             HStack(alignment: .center, spacing: 12) {
                 TextField("Request...", text: $inputText, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: 16))
-                .lineLimit(1...6)
-                .multilineTextAlignment(.leading)
-                .focused($isFocused)
-                .onChange(of: inputText) { _, _ in
-                    recalcPanelSize()
-                }
-                .onSubmit { sendMessage() }
-                .onPasteCommand(of: [.fileURL, .pdf]) { providers in
-                    for provider in providers {
-                        if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
-                            provider.loadItem(
-                                forTypeIdentifier: "com.adobe.pdf", options: nil
-                            ) { urlData, _ in
-                                if let urlData = urlData as? Data,
-                                let url = URL(
-                                dataRepresentation: urlData, relativeTo: nil),
-                                let data = try? Data(contentsOf: url)
-                                {
-                                    DispatchQueue.main.async {
-                                        self.selectedPDF = data
-                                    }
-                                }
-                            }
-                        } else if provider.hasItemConformingToTypeIdentifier(
-                            "public.file-url")
-                        {
-                            provider.loadItem(
-                                forTypeIdentifier: "public.file-url", options: nil
-                            ) { urlData, _ in
-                                if let urlData = urlData as? Data,
-                                let url = URL(
-                                dataRepresentation: urlData, relativeTo: nil)
-                                {
-                                    if url.pathExtension.lowercased() == "pdf",
-                                    let data = try? Data(contentsOf: url)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 16))
+                    .lineLimit(1...6)
+                    .multilineTextAlignment(.leading)
+                    .focused($isFocused)
+                    .onChange(of: inputText) { _, _ in
+                        recalcPanelSize()
+                    }
+                    .onSubmit { sendMessage() }
+                    .onPasteCommand(of: [.fileURL, .pdf]) { providers in
+                        for provider in providers {
+                            if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
+                                provider.loadItem(
+                                    forTypeIdentifier: "com.adobe.pdf", options: nil
+                                ) { urlData, _ in
+                                    if let urlData = urlData as? Data,
+                                        let url = URL(
+                                            dataRepresentation: urlData, relativeTo: nil),
+                                        let data = try? Data(contentsOf: url)
                                     {
                                         DispatchQueue.main.async {
                                             self.selectedPDF = data
                                         }
                                     }
                                 }
+                            } else if provider.hasItemConformingToTypeIdentifier(
+                                "public.file-url")
+                            {
+                                provider.loadItem(
+                                    forTypeIdentifier: "public.file-url", options: nil
+                                ) { urlData, _ in
+                                    if let urlData = urlData as? Data,
+                                        let url = URL(
+                                            dataRepresentation: urlData, relativeTo: nil)
+                                    {
+                                        if url.pathExtension.lowercased() == "pdf",
+                                            let data = try? Data(contentsOf: url)
+                                        {
+                                            DispatchQueue.main.async {
+                                                self.selectedPDF = data
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                }
-                
+
                 // Image Creation Tools
                 if selectedProvider == "Image Creation" {
                     // Style Picker
                     Menu {
                         Section("Apple Intelligence") {
                             Button(action: { selectedStyle = "Animation" }) {
-                                if selectedStyle == "Animation" { Label("Animation", systemImage: "checkmark") } else { Text("Animation") }
+                                if selectedStyle == "Animation" {
+                                    Label("Animation", systemImage: "checkmark")
+                                } else {
+                                    Text("Animation")
+                                }
                             }
                             Button(action: { selectedStyle = "Illustration" }) {
-                                if selectedStyle == "Illustration" { Label("Illustration", systemImage: "checkmark") } else { Text("Illustration") }
+                                if selectedStyle == "Illustration" {
+                                    Label("Illustration", systemImage: "checkmark")
+                                } else {
+                                    Text("Illustration")
+                                }
                             }
                             Button(action: { selectedStyle = "Sketch" }) {
-                                if selectedStyle == "Sketch" { Label("Sketch", systemImage: "checkmark") } else { Text("Sketch") }
+                                if selectedStyle == "Sketch" {
+                                    Label("Sketch", systemImage: "checkmark")
+                                } else {
+                                    Text("Sketch")
+                                }
                             }
                         }
                         Divider()
                         Section("ChatGPT") {
                             Button(action: { selectedStyle = "ChatGPT" }) {
-                                if selectedStyle == "ChatGPT" { Label("ChatGPT (Default)", systemImage: "checkmark") } else { Text("ChatGPT (Default)") }
+                                if selectedStyle == "ChatGPT" {
+                                    Label("ChatGPT (Default)", systemImage: "checkmark")
+                                } else {
+                                    Text("ChatGPT (Default)")
+                                }
                             }
                             Button(action: { selectedStyle = "Oil Painting (ChatGPT)" }) {
-                                if selectedStyle == "Oil Painting (ChatGPT)" { Label("Oil Painting", systemImage: "checkmark") } else { Text("Oil Painting") }
+                                if selectedStyle == "Oil Painting (ChatGPT)" {
+                                    Label("Oil Painting", systemImage: "checkmark")
+                                } else {
+                                    Text("Oil Painting")
+                                }
                             }
                             Button(action: { selectedStyle = "Watercolor (ChatGPT)" }) {
-                                if selectedStyle == "Watercolor (ChatGPT)" { Label("Watercolor", systemImage: "checkmark") } else { Text("Watercolor") }
+                                if selectedStyle == "Watercolor (ChatGPT)" {
+                                    Label("Watercolor", systemImage: "checkmark")
+                                } else {
+                                    Text("Watercolor")
+                                }
                             }
                             Button(action: { selectedStyle = "Vector (ChatGPT)" }) {
-                                if selectedStyle == "Vector (ChatGPT)" { Label("Vector", systemImage: "checkmark") } else { Text("Vector") }
+                                if selectedStyle == "Vector (ChatGPT)" {
+                                    Label("Vector", systemImage: "checkmark")
+                                } else {
+                                    Text("Vector")
+                                }
                             }
                             Button(action: { selectedStyle = "Anime (ChatGPT)" }) {
-                                if selectedStyle == "Anime (ChatGPT)" { Label("Anime", systemImage: "checkmark") } else { Text("Anime") }
+                                if selectedStyle == "Anime (ChatGPT)" {
+                                    Label("Anime", systemImage: "checkmark")
+                                } else {
+                                    Text("Anime")
+                                }
                             }
                             Button(action: { selectedStyle = "Print (ChatGPT)" }) {
-                                if selectedStyle == "Print (ChatGPT)" { Label("Print", systemImage: "checkmark") } else { Text("Print") }
+                                if selectedStyle == "Print (ChatGPT)" {
+                                    Label("Print", systemImage: "checkmark")
+                                } else {
+                                    Text("Print")
+                                }
                             }
                         }
                     } label: {
                         Image(systemName: "paintpalette")
-                        .font(.system(size: 16))
-                        .foregroundColor(selectedStyle.isEmpty ? .secondary : .orange)
-                        .padding(6)
-                        .background(Color.white.opacity(0.10))
-                        .clipShape(Circle())
+                            .font(.system(size: 16))
+                            .foregroundColor(selectedStyle.isEmpty ? .secondary : .orange)
+                            .padding(6)
+                            .background(Color.white.opacity(0.10))
+                            .clipShape(Circle())
                     }
                     .menuStyle(.borderlessButton)
                     .help("Image Style")
                 }
-                
+
                 // Thinking Level Selector
                 if selectedProvider.contains("Ollama") {
                     Menu {
@@ -1127,12 +1232,12 @@ extension QuickAIView {
                                 }
                             }
                         }
-                        
+
                         ForEach(ollamaManager.sortedManufacturers, id: \.self) { manufacturer in
                             let models = ollamaManager.availableModels
-                            .filter { !ollamaManager.isFavorite($0) }
-                            .filter { ollamaManager.getManufacturer(for: $0) == manufacturer }
-                            
+                                .filter { !ollamaManager.isFavorite($0) }
+                                .filter { ollamaManager.getManufacturer(for: $0) == manufacturer }
+
                             if !models.isEmpty {
                                 Section(manufacturer) {
                                     ForEach(models, id: \.self) { model in
@@ -1147,9 +1252,9 @@ extension QuickAIView {
                                 }
                             }
                         }
-                        
+
                         Divider()
-                        
+
                         Menu("Manage Favorites") {
                             ForEach(ollamaManager.allModels, id: \.self) { model in
                                 Button(action: { ollamaManager.toggleFavorite(model) }) {
@@ -1161,17 +1266,17 @@ extension QuickAIView {
                                 }
                             }
                         }
-                        
+
                         Button(action: { showAddCustomOllamaModel = true }) {
                             Label("Add Custom Model...", systemImage: "plus")
                         }
                     } label: {
                         Image(systemName: "server.rack")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary)
-                        .padding(6)
-                        .background(Color.white.opacity(0.10))
-                        .clipShape(Circle())
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                            .padding(6)
+                            .background(Color.white.opacity(0.10))
+                            .clipShape(Circle())
                     }
                     .menuStyle(.borderlessButton)
                     .help("Select Ollama Model")
@@ -1188,11 +1293,13 @@ extension QuickAIView {
                     } message: {
                         Text("Enter the name of the model as it appears in Ollama.")
                     }
-                    
+
                     // Thinking logic
                     let lower = selectedOllamaModel.lowercased()
-                    let mode: ThinkingMode = lower.contains("deepseek") ? .binary : (lower.contains("gpt-oss") ? .threeState : .none)
-                    
+                    let mode: ThinkingMode =
+                        lower.contains("deepseek")
+                        ? .binary : (lower.contains("gpt-oss") ? .threeState : .none)
+
                     if mode != .none {
                         Menu {
                             if mode == .binary {
@@ -1221,15 +1328,15 @@ extension QuickAIView {
                             }
                         } label: {
                             Image(systemName: "brain")
-                            .font(.system(size: 16))
-                            .foregroundColor(
-                                (thinkingLevel == "medium" && mode == .threeState)
-                                || (thinkingLevel == "low" && mode == .binary)
-                                ? .secondary : .green
-                            )
-                            .padding(6)
-                            .background(Color.white.opacity(0.10))
-                            .clipShape(Circle())
+                                .font(.system(size: 16))
+                                .foregroundColor(
+                                    (thinkingLevel == "medium" && mode == .threeState)
+                                        || (thinkingLevel == "low" && mode == .binary)
+                                        ? .secondary : .green
+                                )
+                                .padding(6)
+                                .background(Color.white.opacity(0.10))
+                                .clipShape(Circle())
                         }
                         .menuStyle(.borderlessButton)
                         .help("Reasoning Effort")
@@ -1247,9 +1354,13 @@ extension QuickAIView {
                                 }
                             }
                         }
-                        
+
                         Section("All Models") {
-                            ForEach(geminiManager.availableModels.filter { !geminiManager.isFavorite($0) }, id: \.self) { model in
+                            ForEach(
+                                geminiManager.availableModels.filter {
+                                    !geminiManager.isFavorite($0)
+                                }, id: \.self
+                            ) { model in
                                 Button(action: { geminiModel = model }) {
                                     if geminiModel == model {
                                         Label(model, systemImage: "checkmark")
@@ -1259,9 +1370,9 @@ extension QuickAIView {
                                 }
                             }
                         }
-                        
+
                         Divider()
-                        
+
                         Menu("Manage Favorites") {
                             ForEach(geminiManager.availableModels, id: \.self) { model in
                                 Button(action: { geminiManager.toggleFavorite(model) }) {
@@ -1275,41 +1386,24 @@ extension QuickAIView {
                         }
                     } label: {
                         Image(systemName: "sparkles")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary)
-                        .padding(6)
-                        .background(Color.white.opacity(0.10))
-                        .clipShape(Circle())
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                            .padding(6)
+                            .background(Color.white.opacity(0.10))
+                            .clipShape(Circle())
                     }
                     .menuStyle(.borderlessButton)
                     .help("Select Gemini Model")
-
-                    Menu {
-                        thinkingOption(title: "Low", value: "low")
-                        thinkingOption(title: "Medium", value: "medium")
-                        thinkingOption(title: "High", value: "high")
-                    } label: {
-                        Image(systemName: "brain")
-                        .font(.system(size: 16))
-                        .foregroundColor(
-                            thinkingLevel == "medium" ? Color.teal : Color.green
-                        )
-                        .padding(6)
-                        .background(Color.white.opacity(0.10))
-                        .clipShape(Circle())
-                    }
-                    .menuStyle(.borderlessButton)
-                    .help("Reasoning Effort")
                 }
-                
+
                 Button(action: sendMessage) {
                     Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(
-                        sendButtonStyle(darkened: true),
-                        Color.black.opacity(colorScheme == .dark ? 0.35 : 0.28)
-                    )
+                        .font(.system(size: 28))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(
+                            sendButtonStyle(darkened: true),
+                            Color.black.opacity(colorScheme == .dark ? 0.35 : 0.28)
+                        )
                 }
                 .buttonStyle(.plain)
                 .disabled(inputText.isEmpty || isLoading)
@@ -1317,5 +1411,49 @@ extension QuickAIView {
             .padding(16)
             .background(CommandBarBackground(cornerRadius: 20))
         }
+    }
+}
+
+struct ThinkingIndicator: View {
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [.blue, .purple], startPoint: .topLeading,
+                            endPoint: .bottomTrailing), lineWidth: 2
+                    )
+                    .frame(width: 16, height: 16)
+                    .opacity(isAnimating ? 0.3 : 1.0)
+                    .scaleEffect(isAnimating ? 1.2 : 0.8)
+
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.blue, .purple], startPoint: .topLeading,
+                            endPoint: .bottomTrailing)
+                    )
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(isAnimating ? 0.8 : 1.2)
+            }
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                    isAnimating = true
+                }
+            }
+
+            Text("Thinking...")
+                .font(.system(size: 14))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.secondary, .primary], startPoint: .leading, endPoint: .trailing)
+                )
+                .opacity(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 4)
     }
 }
