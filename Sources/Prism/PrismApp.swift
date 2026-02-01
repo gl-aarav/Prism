@@ -54,15 +54,24 @@ class AppState: ObservableObject {
 
 struct PrismMenuBarIcon: View {
     @State private var isAnimating = false
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
     var body: some View {
         HStack(spacing: 0) {
             Image(systemName: "triangle")
                 .font(.system(size: 14))
+                .foregroundColor(appTheme.swiftUIColors.first)
                 .opacity(0.8)
                 .overlay(
                     Image(systemName: "triangle.fill")
                         .font(.system(size: 14))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: appTheme.swiftUIColors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .opacity(isAnimating ? 0.6 : 0.0)
                         .blur(radius: 2)
                 )
@@ -77,9 +86,6 @@ struct PrismMenuBarIcon: View {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
-    private var appearanceObservation: NSKeyValueObservation?
-    private var lightIcon: NSImage?
-    private var darkIcon: NSImage?
 
     override init() {
         super.init()
@@ -114,17 +120,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         HotKeyManager.shared.register()
 
-        loadIcons()
-        appearanceObservation = NSApp.observe(\.effectiveAppearance, options: [.initial, .new]) {
-            [weak self] app, _ in
-            self?.updateAppIcon(for: app.effectiveAppearance)
-        }
+        IconManager.shared.updateIcon()
 
         print("Prism has launched!")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        appearanceObservation = nil
+        
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -164,77 +166,5 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         return true
-    }
-
-    private func loadIcons() {
-        lightIcon = loadIcon(named: "AppIconLight") ?? loadIcon(named: "AppIcon")
-        darkIcon = loadIcon(named: "AppIconDark") ?? lightIcon
-    }
-
-    private func loadIcon(named: String) -> NSImage? {
-        guard let url = Bundle.main.url(forResource: named, withExtension: "png"),
-            let base = NSImage(contentsOf: url)
-        else { return nil }
-        return roundedIcon(from: base)
-    }
-
-    func refreshAppIcon() {
-        // Dispatch async to allow activation policy changes to settle before updating the dock icon
-        DispatchQueue.main.async { [weak self] in
-            let appearance = NSApp.effectiveAppearance
-            self?.updateAppIcon(for: appearance)
-        }
-    }
-
-    private func roundedIcon(from image: NSImage) -> NSImage {
-        let size = image.size
-        // Slightly inset and round more to match native macOS icon silhouette
-        let inset = min(size.width, size.height) * 0.095  // slightly larger glyph (~1px more)
-        let imageRect = NSRect(origin: .zero, size: size).insetBy(dx: inset, dy: inset)
-        let radius = min(imageRect.width, imageRect.height) * 0.25
-
-        let newImage = NSImage(size: size)
-        newImage.lockFocus()
-        NSGraphicsContext.current?.imageInterpolation = .high
-
-        // Shadow backdrop to mimic native icon lift
-        let shadow = NSShadow()
-        shadow.shadowBlurRadius = min(size.width, size.height) * 0.11
-        shadow.shadowOffset = NSSize(width: 0, height: -size.height * 0.018)
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
-        shadow.set()
-
-        let shadowPath = NSBezierPath(roundedRect: imageRect, xRadius: radius, yRadius: radius)
-        NSColor.black.withAlphaComponent(0.55).setFill()
-        shadowPath.fill()
-
-        // Clear shadow for subsequent drawing
-        NSShadow().set()
-
-        // Clip to rounded rect and draw scaled image
-        shadowPath.addClip()
-        image.draw(in: imageRect, from: .zero, operation: .sourceOver, fraction: 1.0)
-
-        newImage.unlockFocus()
-        newImage.isTemplate = false
-        return newImage
-    }
-
-    private func updateAppIcon(for appearance: NSAppearance) {
-        // Fallback to checking system preference directly
-        let isSystemDark = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
-        let match = appearance.bestMatch(from: [.darkAqua, .aqua])
-
-        if isSystemDark || match == .darkAqua {
-            if let icon = darkIcon {
-                NSApp.applicationIconImage = icon
-                return
-            }
-        }
-
-        // Only set light icon if we are NOT in dark mode
-        if let icon = lightIcon {
-            NSApp.applicationIconImage = icon
-        }
     }
 }

@@ -3546,6 +3546,7 @@ struct SettingsView: View {
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShowMenuBar") private var showMenuBar = true
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("EnableQuickAI") private var enableQuickAI = true
     @AppStorage("QuickAIBackgroundOpacity") private var quickAIBackgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var quickAICommandBarVibrancy: Double = 0.55
@@ -3563,6 +3564,17 @@ struct SettingsView: View {
                     .frame(height: 50)
             }
             .listRowBackground(Color.clear)
+
+            Section(header: Text("Appearance")) {
+                Picker("App Theme", selection: $appTheme) {
+                    ForEach(AppTheme.allCases) { theme in
+                        Text(theme.rawValue).tag(theme)
+                    }
+                }
+                .onChange(of: appTheme) { _, newValue in
+                    IconManager.shared.updateIcon(theme: newValue)
+                }
+            }
 
             Section(header: Text("General")) {
                 Toggle("Show Menu Bar Icon", isOn: $showMenuBar)

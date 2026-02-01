@@ -77,7 +77,7 @@ struct QuickAIView: View {
                     }
                     .padding(10)
                     .background(
-                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .fill(
                                 (colorScheme == .dark ? Color.black : Color.white).opacity(
                                     colorScheme == .dark
@@ -93,7 +93,7 @@ struct QuickAIView: View {
                                 )
                             )
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .compositingGroup()
                     .scaleEffect(backgroundScale, anchor: .bottom)
                     .blur(radius: backgroundBlur)
@@ -710,18 +710,27 @@ struct QuickAIMessageView: View, Equatable {
 }
 
 struct CommandBarBackground: View {
-    var cornerRadius: CGFloat = 26
+    var cornerRadius: CGFloat = 20
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
     var body: some View {
+        let colors = appTheme.swiftUIColors
+        // If default, use Blue/Green/Red logic or keep original
+        // Original was Blue -> Green
+        // We will construct a gradient from the theme colors
+        
+        let startColor = colors.first ?? .blue
+        let endColor = colors.last ?? .green
+        
         let gradient = LinearGradient(
             stops: [
                 .init(
-                    color: Color.blue.opacity(colorScheme == .dark ? 0.34 : 0.44),
+                    color: startColor.opacity(colorScheme == .dark ? 0.34 : 0.44),
                     location: 0.0),
                 .init(
-                    color: Color.green.opacity(colorScheme == .dark ? 0.30 : 0.38),
+                    color: endColor.opacity(colorScheme == .dark ? 0.30 : 0.38),
                     location: 1.0),
             ],
             startPoint: .topLeading,
@@ -1306,7 +1315,7 @@ extension QuickAIView {
                 .disabled(inputText.isEmpty || isLoading)
             }
             .padding(16)
-            .background(CommandBarBackground(cornerRadius: 26))
+            .background(CommandBarBackground(cornerRadius: 20))
         }
     }
 }
