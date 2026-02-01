@@ -754,7 +754,6 @@ struct ExpandedPanelBackground: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
-    @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
 
     private var clampedBackgroundOpacity: Double {
         min(max(backgroundOpacity, 0.05), 0.55)
@@ -790,21 +789,6 @@ struct ExpandedPanelBackground: View {
                             : clampedBackgroundOpacity
                     )
                 )
-            
-            // Background image if present
-            if !backgroundImagePath.isEmpty,
-                let image = NSImage(contentsOfFile: backgroundImagePath)
-            {
-                GeometryReader { geo in
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()
-                }
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .opacity(0.15) // Very subtle for readability
-            }
             
             // Gradient tint
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

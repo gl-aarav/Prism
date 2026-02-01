@@ -706,10 +706,10 @@ class OllamaService {
                 if !skipThinkingInjection && (thinkingLevel == "high" || thinkingLevel == "medium")
                 {
                     let instruction =
-                        " Please think step-by-step before answering. Wrap your thought process in <think> and </think> tags."
+                        " Please think step-by-step before answering. Wrap your thought process in  comprehend and  tags."
                     if finalSystemPrompt.isEmpty {
                         finalSystemPrompt = instruction
-                    } else if !finalSystemPrompt.contains("<think>") {
+                    } else if !finalSystemPrompt.contains(" comprehend and  tags") {
                         finalSystemPrompt += instruction
                     }
                 }
@@ -831,7 +831,7 @@ class OllamaService {
                         buffer += content
 
                         while true {
-                            let targetTag = isThinking ? "</think>" : "<think>"
+                            let targetTag = isThinking ? " comprehend and  tags" : " comprehend and  tags"
 
                             if let range = buffer.range(of: targetTag, options: .caseInsensitive) {
                                 let preTag = buffer[..<range.lowerBound]
@@ -846,8 +846,8 @@ class OllamaService {
                                 buffer.removeSubrange(..<range.upperBound)
                                 isThinking.toggle()
                             } else {
-                                // Handle partial tags to prevent splitting <think> or </think> across chunks
-                                // </think> is 8 chars, <think> is 7. We keep 10 chars to be safe.
+                                // Handle partial tags to prevent splitting  comprehend and  tags across chunks
+                                //  comprehend and  tags is 8 chars,  comprehend and  tags is 7. We keep 10 chars to be safe.
                                 let keepLength = 10
 
                                 if buffer.count > keepLength {
@@ -1250,6 +1250,7 @@ struct ContentView: View {
     @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
         "Generate Image ChatGPT"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome: Bool = false
@@ -1289,23 +1290,41 @@ struct ContentView: View {
                 ZStack {
                     // Background Layer
                     GeometryReader { geometry in
-                        if !backgroundImagePath.isEmpty,
-                            let image = NSImage(contentsOfFile: backgroundImagePath)
-                        {
-                            Image(nsImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
+                        ZStack {
+                            if !backgroundImagePath.isEmpty,
+                                let image = NSImage(contentsOfFile: backgroundImagePath)
+                            {
+                                Image(nsImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(width: geometry.size.width, height: geometry.size.height)
+                                    .clipped()
+                                    .opacity(0.3)
+                            } else {
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color(nsColor: .windowBackgroundColor),
+                                        Color.blue.opacity(0.05),
+                                    ]), startPoint: .top, endPoint: .bottom
+                                )
                                 .frame(width: geometry.size.width, height: geometry.size.height)
-                                .clipped()
-                                .opacity(0.3)
-                        } else {
+                            }
+                            
+                            // Accent Color Tint
+                            let colors = appTheme.swiftUIColors
+                            let startColor = colors.first ?? .blue
+                            let endColor = colors.last ?? .green
+                            
                             LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color(nsColor: .windowBackgroundColor),
-                                    Color.blue.opacity(0.05),
-                                ]), startPoint: .top, endPoint: .bottom
+                                colors: [
+                                    startColor.opacity(0.08),
+                                    endColor.opacity(0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
                             .frame(width: geometry.size.width, height: geometry.size.height)
+                            .ignoresSafeArea()
                         }
                     }
                     .ignoresSafeArea()
@@ -1770,7 +1789,8 @@ struct ContentView: View {
                 } catch {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -2752,34 +2772,30 @@ struct InputView: View {
                     onSend()
                 }
             }) {
-                Image(systemName: isLoading ? "stop.circle.fill" : "arrow.up.circle.fill")
+                Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 28))
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(
-                        isLoading
-                            ? AnyShapeStyle(Color.red.gradient)
-                            : (inputText.isEmpty && selectedAttachments.isEmpty
-                                ? AnyShapeStyle(Color.gray.gradient)
-                                : AnyShapeStyle(Color.blue.gradient)),
-                        Color.black.opacity(0.2)
-                    )
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(Color.primary)
+                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(.plain)
             .disabled(
                 (inputText.isEmpty && selectedAttachments.isEmpty) && !isLoading)
         }
         .padding(12)
-        .background(.ultraThinMaterial)
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(30)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.white.opacity(0.04))
+                .background(.ultraThinMaterial)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 30)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(
                     LinearGradient(
-                        colors: [.white.opacity(0.3), .white.opacity(0.1)],
+                        colors: [.white.opacity(0.28), .white.opacity(0.12)],
                         startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
     }
 
     private var inputField: some View {
@@ -3002,10 +3018,10 @@ struct KaTeXView: NSViewRepresentable {
             <!doctype html>
             <html>
                 <head>
-                    <meta charset=\"utf-8\">
-                    <link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css\">
-                    <script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js\"></script>
-                    <script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js\"></script>
+                    <meta charset="utf-8">
+                    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+                    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+                    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
                     <style>
                         :root { color-scheme: light dark; }
                         body { margin:0; padding:8px; background: transparent; color: #111; font-size: \(fontSize)pt; text-align: center; overflow: hidden; }
@@ -3015,7 +3031,7 @@ struct KaTeXView: NSViewRepresentable {
                     </style>
                 </head>
                 <body>
-                    <div id=\"math\"></div>
+                    <div id="math"></div>
                     <script>
                         function sendHeight() {
                             const h = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
@@ -3517,13 +3533,14 @@ struct SettingsView: View {
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
     @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
         "Generate Image ChatGPT"
-    @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShowMenuBar") private var showMenuBar = true
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("EnableQuickAI") private var enableQuickAI = true
     @AppStorage("QuickAIBackgroundOpacity") private var quickAIBackgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var quickAICommandBarVibrancy: Double = 0.55
+    @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
+
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
@@ -3930,7 +3947,13 @@ struct QuickChatView: View {
     @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
     @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
         "Generate Image ChatGPT"
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome: Bool = false
+    @State private var showSplash: Bool = !AppState.shared.hasShownSplash
+    @State private var currentTask: Task<Void, Never>?
+    @State private var showImageGallery: Bool = false
 
     @State private var columnVisibility = NavigationSplitViewVisibility.automatic
 
@@ -3952,12 +3975,16 @@ struct QuickChatView: View {
     }
 
     var body: some View {
-        ZStack {
+        let colors = appTheme.swiftUIColors
+        let startColor = colors.first ?? .blue
+        let endColor = colors.last ?? .green
+        
+        return ZStack {
             LinearGradient(
                 colors: [
-                    primaryColor.opacity(0.42),
-                    primaryColor.opacity(0.26),
-                    secondaryColor.opacity(0.18),
+                    startColor.opacity(0.42),
+                    endColor.opacity(0.26),
+                    Color(nsColor: .windowBackgroundColor).opacity(0.18),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -4072,7 +4099,7 @@ struct QuickChatView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(
                     LinearGradient(
-                        colors: [.white.opacity(0.25), .white.opacity(0.1)],
+                        colors: [.white.opacity(0.25), .white.opacity(0.12)],
                         startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16))
