@@ -727,7 +727,7 @@ struct CommandBarBackground: View {
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
     var body: some View {
-        let colors = appTheme.swiftUIColors
+        let colors = appTheme.colors
 
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
@@ -770,7 +770,7 @@ struct ExpandedPanelBackground: View {
     }
 
     var body: some View {
-        let colors = appTheme.swiftUIColors
+        let colors = appTheme.colors
 
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
@@ -1414,7 +1414,7 @@ struct ThinkingIndicator: View {
     @State private var isAnimating = false
 
     var body: some View {
-        let colors = appTheme.swiftUIColors
+        let colors = appTheme.colors
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .purple
 

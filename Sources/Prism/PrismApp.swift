@@ -8,7 +8,7 @@ struct PrismApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(AppState.shared) // If needed or just environmentObject(ChatManager.shared)
+                .environmentObject(AppState.shared)  // If needed or just environmentObject(ChatManager.shared)
                 .navigationTitle("Prism")
         }
         .windowStyle(.hiddenTitleBar)
@@ -60,14 +60,14 @@ struct PrismMenuBarIcon: View {
         HStack(spacing: 0) {
             Image(systemName: "triangle")
                 .font(.system(size: 14))
-                .foregroundColor(appTheme.swiftUIColors.first)
+                .foregroundColor(appTheme.colors.first)
                 .opacity(0.8)
                 .overlay(
                     Image(systemName: "triangle.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: appTheme.swiftUIColors,
+                                colors: appTheme.colors,
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -126,7 +126,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        
+
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

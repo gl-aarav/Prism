@@ -37,8 +37,8 @@ enum AppTheme: String, CaseIterable, Identifiable {
         }
     }
 
-    var swiftUIColors: [Color] {
-        return gradientColors.map { Color(nsColor: $0) }
+    var colors: [Color] {
+        gradientColors.map { Color(nsColor: $0) }
     }
 }
 
@@ -121,7 +121,7 @@ struct PrismIconView: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(
                     RadialGradient(
-                        gradient: Gradient(colors: theme.swiftUIColors),
+                        gradient: Gradient(colors: theme.colors),
                         center: .center,
                         startRadius: 0,
                         endRadius: iconSize  // Gradient radius approx width of icon

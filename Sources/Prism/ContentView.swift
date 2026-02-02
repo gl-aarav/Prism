@@ -1312,7 +1312,7 @@ struct ContentView: View {
                             }
 
                             // Accent Color Tint
-                            let colors = appTheme.swiftUIColors
+                            let colors = appTheme.colors
                             let startColor = colors.first ?? .blue
                             let endColor = colors.last ?? .green
 
@@ -1773,7 +1773,7 @@ struct ContentView: View {
                             DispatchQueue.main.async {
                                 self.chatManager.updateMessage(
                                     id: aiMsgId, content: contentToUpdate,
-                                    thinkingContent: thinkingToUpdate)
+                                    thinkingContent: thinkingToUpdate, isStreaming: true)
                             }
                             lastUpdateTime = Date()
                         }
@@ -2119,6 +2119,7 @@ struct SidebarRow: View {
     var onSummarize: () -> Void
     var onExport: () -> Void
 
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @State private var offset: CGFloat = 0
     @FocusState private var isFocused: Bool
 
@@ -2143,7 +2144,7 @@ struct SidebarRow: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color.blue.opacity(0.8), Color.cyan],
+                            colors: appTheme.colors,
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -3294,7 +3295,7 @@ struct EmptyStateView: View {
     @State private var animate = false
 
     var body: some View {
-        let colors = appTheme.swiftUIColors
+        let colors = appTheme.colors
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
 
@@ -3586,14 +3587,52 @@ struct SettingsView: View {
             }
             .listRowBackground(Color.clear)
 
-            Section(header: Text("Appearance")) {
-                Picker("App Theme", selection: $appTheme) {
-                    ForEach(AppTheme.allCases) { theme in
-                        Text(theme.rawValue).tag(theme)
+            Section(header: Text("Theme")) {
+                HStack(alignment: .top) {
+                    Text("Color")
+                        .padding(.top, 6)
+                    Spacer()
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(AppTheme.allCases) { theme in
+                                VStack(spacing: 4) {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: theme.colors,
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 22, height: 22)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                        )
+                                        .padding(3)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(
+                                                    Color.accentColor,
+                                                    lineWidth: appTheme == theme ? 2 : 0)
+                                        )
+                                        .onTapGesture {
+                                            appTheme = theme
+                                            IconManager.shared.updateIcon(theme: theme)
+                                        }
+
+                                    Text(
+                                        theme.rawValue == "Default" ? "Multicolor" : theme.rawValue
+                                    )
+                                    .font(.caption2)
+                                    .foregroundColor(appTheme == theme ? .secondary : .clear)
+                                    .fixedSize()
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 2)
                     }
-                }
-                .onChange(of: appTheme) { _, newValue in
-                    IconManager.shared.updateIcon(theme: newValue)
                 }
             }
 
@@ -4006,7 +4045,7 @@ struct QuickChatView: View {
     }
 
     var body: some View {
-        let colors = appTheme.swiftUIColors
+        let colors = appTheme.colors
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
 
