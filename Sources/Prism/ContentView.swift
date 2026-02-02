@@ -661,6 +661,15 @@ class ChatManager: ObservableObject {
     }
 }
 
+struct OllamaAPIError: LocalizedError {
+    let statusCode: Int
+    let message: String
+
+    var errorDescription: String? {
+        return "Ollama Error \(statusCode): \(message)"
+    }
+}
+
 class OllamaService {
     private let session: URLSession
 
@@ -776,10 +785,11 @@ class OllamaService {
                 // Apply native thinking parameter
                 if lowerModel.contains("gpt-oss") {
                     body["think"] = thinkingLevel
-                } else if lowerModel.contains("deepseek") || lowerModel.contains("qwen")
-                    || lowerModel.contains("r1")
-                {
-                    // Only enable thinking if explicitly set to "high" (On)
+                } else if lowerModel.contains("deepseek") || lowerModel.contains("r1") {
+                    // DeepSeek models with thinking enabled often default to Chinese.
+                    // If no system prompt is provided, enforce English.
+                    // Note: We removed 'qwen' from here as qwen models (like qwen3-coder) generally don't support top-level 'think' param in Ollama
+                    // and sending it causes a 400 Bad Request.
                     if thinkingLevel == "high" {
                         body["think"] = true
                     }
@@ -789,10 +799,27 @@ class OllamaService {
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
                     let (result, response) = try await session.bytes(for: request)
 
-                    guard let httpResponse = response as? HTTPURLResponse,
-                        httpResponse.statusCode == 200
-                    else {
+                    guard let httpResponse = response as? HTTPURLResponse else {
                         continuation.finish(throwing: URLError(.badServerResponse))
+                        return
+                    }
+
+                    if httpResponse.statusCode != 200 {
+                        var errorMsg = ""
+                        for try await line in result.lines {
+                            errorMsg += line
+                        }
+                        // Simple cleanup of JSON format if present
+                        if let data = errorMsg.data(using: .utf8),
+                            let json = try? JSONSerialization.jsonObject(with: data)
+                                as? [String: Any],
+                            let msg = json["error"] as? String
+                        {
+                            errorMsg = msg
+                        }
+                        continuation.finish(
+                            throwing: OllamaAPIError(
+                                statusCode: httpResponse.statusCode, message: errorMsg))
                         return
                     }
 
