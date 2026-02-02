@@ -698,7 +698,8 @@ class OllamaService {
                     // If no system prompt is provided, enforce English.
                     messages.append([
                         "role": "system",
-                        "content": "You are a helpful AI assistant. Please think and respond in English.",
+                        "content":
+                            "You are a helpful AI assistant. Please think and respond in English.",
                     ])
                 }
 
