@@ -687,39 +687,14 @@ class OllamaService {
 
                 var messages: [[String: Any]] = []
 
-                var finalSystemPrompt = systemPrompt
-                // Inject instructions to force thinking output if requested, mainly for models that don't do it by default
-                // or to ensure the parser can catch it.
-                // Qwen and Gemma models: Do not inject thinking instructions.
-                // DeepSeek: Only inject if "Reasoning On" (high), otherwise rely on model default or don't force.
-                let lowerModel = model.lowercased()
-                var skipThinkingInjection = true
-
-                // Logic:
-                // GPT-OSS -> Allow thinking (uses Low/Med/High)
-                // DeepSeek -> Allow thinking (uses On/Off if "high" passed effectively)
-                // All others -> Skip thinking
-                if lowerModel.contains("gpt-oss") || lowerModel.contains("deepseek") {
-                    skipThinkingInjection = false
-                }
-
-                if !skipThinkingInjection && (thinkingLevel == "high" || thinkingLevel == "medium")
-                {
-                    let instruction =
-                        " Please think step-by-step before answering. Wrap your thought process in <comprehend> and </comprehend> tags."
-                    if finalSystemPrompt.isEmpty {
-                        finalSystemPrompt = instruction
-                    } else if !finalSystemPrompt.contains("<comprehend> and </comprehend> tags") {
-                        finalSystemPrompt += instruction
-                    }
-                }
-
-                if !finalSystemPrompt.isEmpty {
+                if !systemPrompt.isEmpty {
                     messages.append([
                         "role": "system",
-                        "content": finalSystemPrompt,
+                        "content": systemPrompt,
                     ])
                 }
+
+                let lowerModel = model.lowercased()
 
                 let isVisionModel =
                     model.contains("qwen3-vl") || model.contains("gemma3") || model.contains("clip")
@@ -781,12 +756,19 @@ class OllamaService {
                         return message
                     })
 
-                let body: [String: Any] = [
+                var body: [String: Any] = [
                     "model": model.isEmpty ? "llama3" : model,
                     "messages": messages,
                     "stream": true,
                     "options": [:],
                 ]
+
+                // Apply native thinking parameter
+                if lowerModel.contains("gpt-oss") {
+                    body["think"] = thinkingLevel
+                } else if lowerModel.contains("deepseek") || lowerModel.contains("qwen") || lowerModel.contains("r1") {
+                    body["think"] = true
+                }
 
                 do {
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -799,84 +781,35 @@ class OllamaService {
                         return
                     }
 
-                    var buffer = ""
-                    var isThinking = false
-
-                    // Simple logic to inject reasoning prompt if needed
-                    // We do this by ensuring the system prompt provided in params includes the instruction
-                    // But we can't easily change it here since we already sent the request.
-                    // Ideally check before sending request.
-
                     for try await line in result.lines {
                         guard let data = line.data(using: .utf8),
                             let json = try? JSONSerialization.jsonObject(with: data)
                                 as? [String: Any]
                         else { continue }
 
-                        // Check done FIRST to avoid skipping if message/content is missing in final chunk
                         if let done = json["done"] as? Bool, done {
-                            // If there is content in the done message, append it
-                            if let message = json["message"] as? [String: Any],
+                            if let message = json["message"] as? [String: Any] {
                                 let content = message["content"] as? String
-                            {
-                                buffer += content
+                                let thinking = message["thinking"] as? String
+                                if let thinking = thinking, !thinking.isEmpty {
+                                    continuation.yield(("", thinking))
+                                }
+                                if let content = content, !content.isEmpty {
+                                    continuation.yield((content, nil))
+                                }
                             }
                             break
                         }
 
-                        guard let message = json["message"] as? [String: Any],
-                            let content = message["content"] as? String
-                        else { continue }
-
-                        buffer += content
-
-                        while true {
-                            let targetTag =
-                                isThinking ? "</comprehend>" : "<comprehend>"
-
-                            if let range = buffer.range(of: targetTag, options: .caseInsensitive) {
-                                let preTag = buffer[..<range.lowerBound]
-                                if !preTag.isEmpty {
-                                    let text = String(preTag)
-                                    if isThinking {
-                                        continuation.yield(("", text))
-                                    } else {
-                                        continuation.yield((text, nil))
-                                    }
-                                }
-                                buffer.removeSubrange(..<range.upperBound)
-                                isThinking.toggle()
-                            } else {
-                                // Handle partial tags to prevent splitting tags across chunks
-                                // <comprehend> is 12 chars. We keep 20 chars to be safe.
-                                let keepLength = 20
-
-                                if buffer.count > keepLength {
-                                    let splitIndex = buffer.index(
-                                        buffer.endIndex, offsetBy: -keepLength)
-                                    let emitStr = String(buffer[..<splitIndex])
-
-                                    if !emitStr.isEmpty {
-                                        if isThinking {
-                                            continuation.yield(("", emitStr))
-                                        } else {
-                                            continuation.yield((emitStr, nil))
-                                        }
-                                        buffer.removeSubrange(..<splitIndex)
-                                    }
-                                }
-                                // If buffer is small, keep it for next chunk to ensure we don't split a tag
-                                break
-                            }
+                        guard let message = json["message"] as? [String: Any] else { continue }
+                        let content = message["content"] as? String
+                        let thinking = message["thinking"] as? String
+                        
+                        if let thinking = thinking, !thinking.isEmpty {
+                            continuation.yield(("", thinking))
                         }
-                    }
-
-                    // Flush remaining buffer
-                    if !buffer.isEmpty {
-                        if isThinking {
-                            continuation.yield(("", buffer))
-                        } else {
-                            continuation.yield((buffer, nil))
+                        if let content = content, !content.isEmpty {
+                            continuation.yield((content, nil))
                         }
                     }
 
