@@ -686,15 +686,21 @@ class OllamaService {
                 request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
                 var messages: [[String: Any]] = []
+                let lowerModel = model.lowercased()
 
                 if !systemPrompt.isEmpty {
                     messages.append([
                         "role": "system",
                         "content": systemPrompt,
                     ])
+                } else if lowerModel.contains("deepseek") || lowerModel.contains("r1") {
+                    // DeepSeek models with thinking enabled often default to Chinese.
+                    // If no system prompt is provided, enforce English.
+                    messages.append([
+                        "role": "system",
+                        "content": "You are a helpful AI assistant. Please think and respond in English.",
+                    ])
                 }
-
-                let lowerModel = model.lowercased()
 
                 let isVisionModel =
                     model.contains("qwen3-vl") || model.contains("gemma3") || model.contains("clip")
@@ -769,7 +775,10 @@ class OllamaService {
                 } else if lowerModel.contains("deepseek") || lowerModel.contains("qwen")
                     || lowerModel.contains("r1")
                 {
-                    body["think"] = true
+                    // Only enable thinking if explicitly set to "high" (On)
+                    if thinkingLevel == "high" {
+                        body["think"] = true
+                    }
                 }
 
                 do {
