@@ -523,6 +523,7 @@ struct QuickAIMessageView: View, Equatable {
     var liveThinking: String? = nil
     @State private var isCopied = false
     @State private var isCursorVisible = true
+    @State private var isThinkingExpanded = false
     @Environment(\.colorScheme) private var colorScheme
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -573,7 +574,7 @@ struct QuickAIMessageView: View, Equatable {
                         GeneratingImagePlaceholder()
                     } else {
                         if let thinking = (liveThinking ?? message.thinkingContent) {
-                            DisclosureGroup {
+                            DisclosureGroup(isExpanded: $isThinkingExpanded) {
                                 Text(thinking)
                                     .font(.system(size: 12, design: .monospaced))
                                     .foregroundStyle(.secondary)
@@ -677,6 +678,18 @@ struct QuickAIMessageView: View, Equatable {
         .onReceive(cursorTimer) { _ in
             if message.isStreaming {
                 isCursorVisible.toggle()
+            }
+        }
+        .onChange(of: liveThinking) { _, newValue in
+            if let val = newValue, !val.isEmpty, liveContent == nil || liveContent!.isEmpty {
+                isThinkingExpanded = true
+            }
+        }
+        .onChange(of: liveContent) { _, newValue in
+            if let val = newValue, !val.isEmpty {
+                withAnimation {
+                    isThinkingExpanded = false
+                }
             }
         }
     }

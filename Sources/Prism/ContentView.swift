@@ -442,7 +442,10 @@ struct Message: Identifiable, Codable, Equatable {
         if lhs.isUser != rhs.isUser { return false }
         if lhs.timestamp != rhs.timestamp { return false }
         if lhs.content != rhs.content { return false }
+        if lhs.thinkingContent != rhs.thinkingContent { return false }
         if lhs.isStreaming != rhs.isStreaming { return false }
+        if lhs.model != rhs.model { return false }
+        if lhs.isGeneratingImage != rhs.isGeneratingImage { return false }
 
         // Optimization: Avoid deep data comparison for images if possible
         // If both have no image, equal.
@@ -3311,11 +3314,13 @@ struct MessageView: View, Equatable {
     @State private var isCopied = false
     @State private var showImagePreview = false
     @State private var isCursorVisible = true
+    @State private var isThinkingExpanded = false
     @Environment(\.colorScheme) private var colorScheme
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     static func == (lhs: MessageView, rhs: MessageView) -> Bool {
-        return lhs.message == rhs.message
+        return lhs.message == rhs.message && lhs.liveContent == rhs.liveContent
+            && lhs.liveThinking == rhs.liveThinking
     }
 
     var body: some View {
@@ -3361,7 +3366,7 @@ struct MessageView: View, Equatable {
                         GeneratingImagePlaceholder()
                     } else {
                         if let thinking = (liveThinking ?? message.thinkingContent) {
-                            DisclosureGroup {
+                            DisclosureGroup(isExpanded: $isThinkingExpanded) {
                                 Text(thinking)
                                     .font(.system(size: 12, design: .monospaced))
                                     .foregroundColor(.secondary)
@@ -3464,6 +3469,31 @@ struct MessageView: View, Equatable {
         .onReceive(cursorTimer) { _ in
             if message.isStreaming {
                 isCursorVisible.toggle()
+            }
+        }
+        .onChange(of: liveThinking) { _, newValue in
+            if let val = newValue, !val.isEmpty, liveContent == nil || liveContent!.isEmpty {
+                isThinkingExpanded = true
+            }
+        }
+        .onChange(of: liveContent) { _, newValue in
+            if let val = newValue, !val.isEmpty {
+                withAnimation {
+                    isThinkingExpanded = false
+                }
+            }
+        }
+        .onChange(of: message.thinkingContent) { _, newValue in
+            let currentContent = liveContent ?? message.content
+            if let val = newValue, !val.isEmpty, currentContent.isEmpty {
+                isThinkingExpanded = true
+            }
+        }
+        .onChange(of: message.content) { _, newValue in
+            if !newValue.isEmpty {
+                withAnimation {
+                    isThinkingExpanded = false
+                }
             }
         }
     }
