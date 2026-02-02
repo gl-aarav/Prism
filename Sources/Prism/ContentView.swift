@@ -766,7 +766,9 @@ class OllamaService {
                 // Apply native thinking parameter
                 if lowerModel.contains("gpt-oss") {
                     body["think"] = thinkingLevel
-                } else if lowerModel.contains("deepseek") || lowerModel.contains("qwen") || lowerModel.contains("r1") {
+                } else if lowerModel.contains("deepseek") || lowerModel.contains("qwen")
+                    || lowerModel.contains("r1")
+                {
                     body["think"] = true
                 }
 
@@ -804,7 +806,7 @@ class OllamaService {
                         guard let message = json["message"] as? [String: Any] else { continue }
                         let content = message["content"] as? String
                         let thinking = message["thinking"] as? String
-                        
+
                         if let thinking = thinking, !thinking.isEmpty {
                             continuation.yield(("", thinking))
                         }
