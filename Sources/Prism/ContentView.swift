@@ -2942,9 +2942,15 @@ struct ThumbnailView: View {
 
 private let latexScaleFactor: CGFloat = 2.0 / 3.0  // ~1.5x smaller rendering
 
+class NonScrollableWebView: WKWebView {
+    override func scrollWheel(with event: NSEvent) {
+        nextResponder?.scrollWheel(with: event)
+    }
+}
+
 struct MathView: NSViewRepresentable {
     var equation: String
-    var fontSize: CGFloat = 20 * latexScaleFactor
+    var fontSize: CGFloat = 20
 
     func makeNSView(context: Context) -> MTMathUILabel {
         let view = MTMathUILabel()
@@ -2979,7 +2985,7 @@ struct KaTeXView: NSViewRepresentable {
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         config.userContentController.add(context.coordinator, name: "height")
 
-        let webView = WKWebView(frame: .zero, configuration: config)
+        let webView = NonScrollableWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         return webView
@@ -2992,6 +2998,12 @@ struct KaTeXView: NSViewRepresentable {
             .replacingOccurrences(of: "`", with: "\\`")
             .replacingOccurrences(of: "${", with: "\\${")
             .replacingOccurrences(of: "\n", with: " ")
+
+        if context.coordinator.isLoaded {
+            let js = "window.updateLatex(String.raw`\(escapedLatex)`)"
+            nsView.evaluateJavaScript(js, completionHandler: nil)
+            return
+        }
 
         let html = """
             <!doctype html>
@@ -3016,13 +3028,21 @@ struct KaTeXView: NSViewRepresentable {
                             const h = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
                             window.webkit.messageHandlers.height.postMessage(h);
                         }
-                        document.addEventListener('DOMContentLoaded', () => {
+                        
+                        window.updateLatex = function(latexRaw) {
                             try {
-                                katex.render(String.raw`\(escapedLatex)`, document.getElementById('math'), { displayMode: true, throwOnError: false });
+                                katex.render(latexRaw, document.getElementById('math'), { displayMode: true, throwOnError: true });
                             } catch (e) {
-                                document.getElementById('math').innerText = e.toString();
+                                document.getElementById('math').innerText = latexRaw;
+                                document.getElementById('math').style.fontFamily = 'monospace';
+                                document.getElementById('math').style.whiteSpace = 'pre-wrap';
                             }
-                            setTimeout(sendHeight, 30);
+                            // Allow a moment for rendering layout
+                            setTimeout(sendHeight, 0);
+                        }
+
+                        document.addEventListener('DOMContentLoaded', () => {
+                           window.updateLatex(String.raw`\(escapedLatex)`);
                         });
                     </script>
                 </body>
@@ -3034,6 +3054,7 @@ struct KaTeXView: NSViewRepresentable {
 
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: KaTeXView
+        var isLoaded = false
 
         init(parent: KaTeXView) {
             self.parent = parent
@@ -3052,6 +3073,7 @@ struct KaTeXView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            isLoaded = true
             webView.evaluateJavaScript(
                 "(function(){ const h = document.documentElement.scrollHeight || document.body.scrollHeight || 0; window.webkit.messageHandlers.height.postMessage(h); })();"
             ) { _, _ in }
@@ -3064,7 +3086,8 @@ struct MathBlockView: View {
     @State private var height: CGFloat = 60
     @State private var didRender = false
 
-    private var scaledFontSize: CGFloat { 14 * latexScaleFactor }
+    // Reduced font size by 25% (18 * 0.75 = 13.5)
+    private var scaledFontSize: CGFloat { 13.5 }
 
     var body: some View {
         VStack {
@@ -3073,13 +3096,7 @@ struct MathBlockView: View {
             )
             .frame(height: height)
             .frame(maxWidth: .infinity)
-            .opacity(didRender ? 1 : 0)
-
-            if !didRender {
-                MathView(equation: equation, fontSize: scaledFontSize)
-                    .frame(minHeight: 30)
-                    .padding(.vertical, 4)
-            }
+            // Always visible to avoid jumping. Errors are suppressed in JS.
         }
         .padding(.vertical, 4)
     }
@@ -3106,7 +3123,7 @@ struct MarkdownView: View, Equatable {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(blocks, id: \.id) { block in
+            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                 switch block.type {
                 case .text(let text):
                     renderRichText(text, cached: block.attributedText)
