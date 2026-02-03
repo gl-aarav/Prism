@@ -3127,6 +3127,10 @@ struct RichTextView: NSViewRepresentable {
     }
     
     func updateNSView(_ nsView: WKWebView, context: Context) {
+        // IMPORTANT: Only reload if content changed - loadHTMLString is expensive!
+        guard context.coordinator.lastContent != content else { return }
+        context.coordinator.lastContent = content
+        
         // Escape HTML special chars but preserve LaTeX delimiters
         let escapedContent = content
             .replacingOccurrences(of: "&", with: "&amp;")
@@ -3196,6 +3200,7 @@ struct RichTextView: NSViewRepresentable {
     
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: RichTextView
+        var lastContent: String? = nil  // Track to prevent redundant reloads
         
         init(parent: RichTextView) {
             self.parent = parent
