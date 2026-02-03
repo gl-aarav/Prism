@@ -8,6 +8,7 @@ class GeminiModelManager: ObservableObject {
 
     @Published var availableModels: [String] = [
         "gemini-3-pro-preview",
+        "gemini-3-flash-preview",
         "gemini-3-pro-image-preview",
         "gemini-2.5-pro",
         "gemini-2.5-flash",
