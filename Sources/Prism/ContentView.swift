@@ -3275,6 +3275,29 @@ struct TextBlockView: View {
     }
 }
 
+// MARK: - TableCellView (supports LaTeX in table cells)
+struct TableCellView: View {
+    let text: String
+    let isHeader: Bool
+    @State private var webViewHeight: CGFloat = 20
+    @Environment(\.colorScheme) private var colorScheme
+    
+    var body: some View {
+        if containsInlineMath(text) {
+            RichTextView(content: text, fontSize: 14, height: $webViewHeight)
+                .frame(height: webViewHeight)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            Text(MarkdownParser.shared.parse(text))
+                .font(.system(size: 14, weight: isHeader ? .semibold : .regular))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .textSelection(.enabled)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
 struct MarkdownView: View, Equatable {
     let blocks: [MarkdownBlock]
     @Environment(\.colorScheme) private var colorScheme
@@ -3410,9 +3433,7 @@ struct MarkdownView: View, Equatable {
                             // Header
                             GridRow {
                                 ForEach(headers.indices, id: \.self) { i in
-                                    renderRichText(headers[i])
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .multilineTextAlignment(.leading)
+                                    TableCellView(text: headers[i], isHeader: true)
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 12)
                                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -3428,8 +3449,7 @@ struct MarkdownView: View, Equatable {
                                 GridRow {
                                     ForEach(0..<headers.count, id: \.self) { j in
                                         let content = j < rows[i].count ? rows[i][j] : ""
-                                        renderRichText(content)
-                                            .font(.system(size: 14))
+                                        TableCellView(text: content, isHeader: false)
                                             .padding(.horizontal, 16)
                                             .padding(.vertical, 12)
                                             .frame(maxWidth: .infinity, alignment: .topLeading)
