@@ -3222,7 +3222,6 @@ struct RichTextView: NSViewRepresentable {
 func containsInlineMath(_ text: String) -> Bool {
     // Check for $...$ (but not $$)
     if let range = text.range(of: "\\$[^$]+\\$", options: .regularExpression) {
-        let match = text[range]
         // Make sure it's not part of $$
         let startIdx = range.lowerBound
         if startIdx > text.startIndex {
