@@ -161,56 +161,51 @@ struct MarkdownParser {
         let cleanLatex = cleanLatex(latex)
         let fontSize: CGFloat = (display ? 16 : 14) * latexScaleFactor
 
-        // If inline, use text rendering
+        // For inline math, use text conversion since SwiftUI Text doesn't support NSTextAttachment
         if !display {
             let text = convertLatexToText(cleanLatex)
-            // Use a serif font for math-like appearance if possible, or just system font
+            // If conversion produced meaningful text, use it; otherwise show original
+            if text.isEmpty || text == cleanLatex {
+                // Show original LaTeX in monospace as fallback
+                var attrStr = AttributedString("$\(latex)$")
+                attrStr.font = .system(size: 14, design: .monospaced)
+                attrStr.foregroundColor = .secondary
+                return attrStr
+            }
             var attrStr = AttributedString(text)
-            // Italic often looks more like math
-            attrStr.font = .system(size: 14).italic()
+            attrStr.font = .system(size: 15).italic()
             return attrStr
         }
 
-        // Display math (Block) uses Image
+        // Display math uses MTMathImage
         let labelMode: MTMathUILabelMode = .display
 
-        // 1. Generate Image using MTMathImage (standard API)
         let mathImage = MTMathImage(
             latex: cleanLatex, fontSize: fontSize, textColor: .textColor, labelMode: labelMode)
         let (_, generatedImage) = mathImage.asImage()
 
         guard let img = generatedImage else {
-            // Fallback
+            // Fallback to text conversion if rendering fails
             let text = convertLatexToText(cleanLatex)
             var attrStr = AttributedString(text)
             attrStr.font = .system(size: 14, design: .serif).italic()
             return attrStr
         }
 
-        // 2. Calculate Baseline using MTMathUILabel workaround
-        // We use a temporary label to force the layout engine to calculate metrics (descent)
-        // which are not exposed by MTMathImage.
+        // Calculate Baseline using MTMathUILabel workaround
         let label = MTMathUILabel()
         label.latex = cleanLatex
         label.fontSize = fontSize
-        // labelMode must match to get same font metrics (font style might differ)
         label.labelMode = labelMode
 
-        // Force calculation of fitting size (tight bounds)
         let size = label.fittingSize
         label.frame = CGRect(origin: .zero, size: size)
-
-        // Trigger layout to populate 'displayList'
         label.layout()
 
-        // Retrieve the descent (baseline offset from bottom)
         let baseline = label.displayList?.descent ?? 0
 
-        // 3. Create Attachment with correct alignment
         let attachment = NSTextAttachment()
         attachment.image = img
-
-        // Shift image down by 'descent' so the math baseline aligns with text baseline.
         attachment.bounds = CGRect(
             x: 0,
             y: -baseline,
@@ -219,8 +214,6 @@ struct MarkdownParser {
         )
 
         let nsAttrStr = NSMutableAttributedString(attachment: attachment)
-
-        // Center alignment for display blocks
         return AttributedString("\n") + AttributedString(nsAttrStr) + AttributedString("\n")
     }
 
@@ -277,10 +270,21 @@ struct MarkdownParser {
         content = replaceSuperscripts(content)
         content = replaceSubscripts(content)
 
-        // 7. Cleanup remaining commands
+        // 7. Cleanup remaining commands - preserve spaces
         content = content.replacingOccurrences(of: "\\", with: "")
         content = content.replacingOccurrences(of: "{", with: "")
         content = content.replacingOccurrences(of: "}", with: "")
+        
+        // Collapse multiple spaces
+        while content.contains("  ") {
+            content = content.replacingOccurrences(of: "  ", with: " ")
+        }
+        content = content.trimmingCharacters(in: .whitespaces)
+        
+        // Fallback: if conversion resulted in empty/whitespace, return original latex
+        if content.isEmpty {
+            return latex
+        }
 
         return content
     }
@@ -520,7 +524,8 @@ struct MarkdownParser {
     func cleanLatex(_ latex: String) -> String {
         var content = latex
 
-        // Fix common typos
+        // Fix common typos and variants
+        content = content.replacingOccurrences(of: "\\dfrac", with: "\\frac")
         content = content.replacingOccurrences(of: "\\tfrac", with: "\\frac")
         content = content.replacingOccurrences(of: "\\trac", with: "\\frac")
 

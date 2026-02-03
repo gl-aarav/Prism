@@ -3102,6 +3102,175 @@ struct MathBlockView: View {
     }
 }
 
+// MARK: - RichTextView (Text with inline LaTeX support)
+struct RichTextView: NSViewRepresentable {
+    let content: String
+    let fontSize: CGFloat
+    @Binding var height: CGFloat
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+    
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        let prefs = WKWebpagePreferences()
+        prefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = prefs
+        config.preferences.javaScriptCanOpenWindowsAutomatically = false
+        config.userContentController.add(context.coordinator, name: "height")
+        
+        let webView = NonScrollableWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.setValue(false, forKey: "drawsBackground")
+        return webView
+    }
+    
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        // Escape HTML special chars but preserve LaTeX delimiters
+        let escapedContent = content
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\n", with: "<br>")
+        
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+            <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+            <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+                onload="renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                        {left: '\\\\(', right: '\\\\)', display: false},
+                        {left: '\\\\[', right: '\\\\]', display: true}
+                    ],
+                    throwOnError: false
+                }); sendHeight();">
+            </script>
+            <style>
+                :root { color-scheme: light dark; }
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: \(fontSize)px;
+                    line-height: 1.5;
+                    padding: 0;
+                    background: transparent;
+                    color: #111;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
+                }
+                @media (prefers-color-scheme: dark) { body { color: #f5f5f5; } }
+                .katex { font-size: 1em; }
+                .katex-display { margin: 8px 0; overflow-x: auto; }
+                code {
+                    font-family: ui-monospace, monospace;
+                    background: rgba(128,128,128,0.2);
+                    padding: 1px 4px;
+                    border-radius: 3px;
+                }
+                strong { font-weight: 600; }
+                em { font-style: italic; }
+            </style>
+        </head>
+        <body>
+            <div id="content">\(escapedContent)</div>
+            <script>
+                function sendHeight() {
+                    const h = document.body.scrollHeight || 20;
+                    window.webkit.messageHandlers.height.postMessage(h);
+                }
+                document.addEventListener('DOMContentLoaded', sendHeight);
+            </script>
+        </body>
+        </html>
+        """
+        
+        nsView.loadHTMLString(html, baseURL: nil)
+    }
+    
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        var parent: RichTextView
+        
+        init(parent: RichTextView) {
+            self.parent = parent
+        }
+        
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "height" else { return }
+            if let h = message.body as? Double {
+                DispatchQueue.main.async {
+                    self.parent.height = max(20, CGFloat(h))
+                }
+            }
+        }
+        
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            webView.evaluateJavaScript(
+                "(function(){ const h = document.body.scrollHeight || 20; window.webkit.messageHandlers.height.postMessage(h); })();"
+            ) { _, _ in }
+        }
+    }
+}
+
+// Helper to check if text contains inline math
+func containsInlineMath(_ text: String) -> Bool {
+    // Check for $...$ (but not $$)
+    if let range = text.range(of: "\\$[^$]+\\$", options: .regularExpression) {
+        let match = text[range]
+        // Make sure it's not part of $$
+        let startIdx = range.lowerBound
+        if startIdx > text.startIndex {
+            let prevIdx = text.index(before: startIdx)
+            if text[prevIdx] == "$" { return false }
+        }
+        return true
+    }
+    // Check for \(...\)
+    if text.contains("\\(") && text.contains("\\)") {
+        return true
+    }
+    return false
+}
+
+// MARK: - TextBlockView (conditionally uses RichTextView for inline math)
+struct TextBlockView: View {
+    let text: String
+    let cachedAttributedText: AttributedString?
+    let textColor: Color
+    @State private var webViewHeight: CGFloat = 20
+    
+    var body: some View {
+        if containsInlineMath(text) {
+            RichTextView(content: text, fontSize: 15, height: $webViewHeight)
+                .frame(height: webViewHeight)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            // Use native Text for performance when no inline math
+            if let cached = cachedAttributedText {
+                Text(cached)
+                    .font(.system(size: 15))
+                    .foregroundColor(textColor)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(MarkdownParser.shared.parse(text))
+                    .font(.system(size: 15))
+                    .foregroundColor(textColor)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
 struct MarkdownView: View, Equatable {
     let blocks: [MarkdownBlock]
     @Environment(\.colorScheme) private var colorScheme
@@ -3126,12 +3295,11 @@ struct MarkdownView: View, Equatable {
             ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                 switch block.type {
                 case .text(let text):
-                    renderRichText(text, cached: block.attributedText)
-                        .font(.system(size: 15))
-                        .foregroundColor(textColor)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                    TextBlockView(
+                        text: text,
+                        cachedAttributedText: block.attributedText,
+                        textColor: textColor
+                    )
                 case .code(let code, let language):
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
@@ -3191,11 +3359,11 @@ struct MarkdownView: View, Equatable {
                         Text("•")
                             .font(.system(size: 15))
                             .foregroundColor(textColor)
-                        renderRichText(text, cached: block.attributedText)
-                            .font(.system(size: 15))
-                            .foregroundColor(textColor)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
+                        TextBlockView(
+                            text: text,
+                            cachedAttributedText: block.attributedText,
+                            textColor: textColor
+                        )
                     }
                     .padding(.leading, 8)
                 case .numbered(let text, let number):
@@ -3203,11 +3371,11 @@ struct MarkdownView: View, Equatable {
                         Text("\(number).")
                             .font(.system(size: 15))
                             .foregroundColor(textColor)
-                        renderRichText(text, cached: block.attributedText)
-                            .font(.system(size: 15))
-                            .foregroundColor(textColor)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
+                        TextBlockView(
+                            text: text,
+                            cachedAttributedText: block.attributedText,
+                            textColor: textColor
+                        )
                     }
                     .padding(.leading, 8)
                 case .blockquote(let text):
