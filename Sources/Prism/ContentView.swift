@@ -3186,10 +3186,14 @@ struct RichTextView: NSViewRepresentable {
             <div id="content">\(escapedContent)</div>
             <script>
                 function sendHeight() {
-                    const h = document.body.scrollHeight || 20;
+                    const content = document.getElementById('content');
+                    const h = content ? content.offsetHeight : (document.body.scrollHeight || 20);
                     window.webkit.messageHandlers.height.postMessage(h);
                 }
-                document.addEventListener('DOMContentLoaded', sendHeight);
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Wait a tiny bit for KaTeX to render
+                    setTimeout(sendHeight, 50);
+                });
             </script>
         </body>
         </html>
@@ -3216,8 +3220,9 @@ struct RichTextView: NSViewRepresentable {
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            // Wait a bit for KaTeX to render, then measure content div
             webView.evaluateJavaScript(
-                "(function(){ const h = document.body.scrollHeight || 20; window.webkit.messageHandlers.height.postMessage(h); })();"
+                "(function(){ setTimeout(function(){ const c = document.getElementById('content'); const h = c ? c.offsetHeight : (document.body.scrollHeight || 20); window.webkit.messageHandlers.height.postMessage(h); }, 50); })();"
             ) { _, _ in }
         }
     }
@@ -3279,14 +3284,15 @@ struct TextBlockView: View {
 struct TableCellView: View {
     let text: String
     let isHeader: Bool
-    @State private var webViewHeight: CGFloat = 20
+    @State private var webViewHeight: CGFloat = 24
     @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         if containsInlineMath(text) {
             RichTextView(content: text, fontSize: 14, height: $webViewHeight)
-                .frame(height: webViewHeight)
+                .frame(height: min(webViewHeight, 80))  // Clamp to reasonable max for table cells
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         } else {
             Text(MarkdownParser.shared.parse(text))
                 .font(.system(size: 14, weight: isHeader ? .semibold : .regular))
