@@ -3086,8 +3086,8 @@ struct MathBlockView: View {
     @State private var height: CGFloat = 60
     @State private var didRender = false
 
-    // Reduced font size by 25% (18 * 0.75 = 13.5)
-    private var scaledFontSize: CGFloat { 13.5 }
+    // Reduced font size by another 25% (13.5 * 0.75 = 10.125)
+    private var scaledFontSize: CGFloat { 10.125 }
 
     var body: some View {
         VStack {
