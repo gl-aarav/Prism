@@ -3428,10 +3428,8 @@ struct MessageView: View, Equatable {
                             ThinkingIndicator()
                         } else if !activeContent.isEmpty || message.isStreaming {
                             if message.isStreaming {
-                                Text(activeContent + (isCursorVisible ? " ▋" : ""))
-                                    .font(.body)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .textSelection(.enabled)
+                                let displayContent = activeContent + (isCursorVisible ? " ▋" : "")
+                                MarkdownView(blocks: Message.parseMarkdown(displayContent))
                                     .foregroundColor(colorScheme == .dark ? .white : .black)
                             } else {
                                 MarkdownView(blocks: message.blocks)

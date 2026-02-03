@@ -617,16 +617,10 @@ struct QuickAIMessageView: View, Equatable {
                         {
                             ThinkingIndicator()
                         } else if !activeContent.isEmpty || message.isStreaming {
-                            if message.isStreaming {
-                                Text(activeContent + (isCursorVisible ? " ▋" : ""))
-                                    .font(.system(size: 14))
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .textSelection(.enabled)
-                                    .id("streamingText")
-                            } else {
-                                MarkdownView(blocks: message.blocks)
-                            }
+                            let displayContent = activeContent + (message.isStreaming && isCursorVisible ? " ▋" : "")
+                            MarkdownView(blocks: Message.parseMarkdown(displayContent))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .id("streamingMarkdown")
                         }
 
                         // Copy Button
