@@ -1863,134 +1863,141 @@ struct SidebarView: View {
         }
     }
 
+    var topSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // New Chat
+            SidebarItem(icon: "square.and.pencil", title: "New chat") {
+                showImageGallery = false
+                chatManager.createNewSession()
+            }
+
+            // Search
+            SidebarItem(icon: "magnifyingglass", title: "Search chats") {
+                isSearchVisible.toggle()
+            }
+            .popover(isPresented: $isSearchVisible, arrowEdge: .leading) {
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                        TextField("Search chats...", text: $searchText)
+                            .textFieldStyle(.plain)
+                    }
+                    .padding(8)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
+
+                    if filteredSessions.isEmpty {
+                        Text("No chats found")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding()
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 4) {
+                                ForEach(filteredSessions) { session in
+                                    Button(action: {
+                                        showImageGallery = false
+                                        chatManager.currentSessionId = session.id
+                                        isSearchVisible = false
+                                    }) {
+                                        HStack {
+                                            Text(session.title)
+                                                .lineLimit(1)
+                                                .font(.system(size: 13))
+                                            Spacer()
+                                            Text(session.date, style: .date)
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        .padding(8)
+                                        .background(Color.primary.opacity(0.05))
+                                        .cornerRadius(6)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 300)
+                    }
+                }
+                .padding()
+                .frame(width: 300)
+            }
+
+            // Images
+            SidebarItem(icon: "photo", title: "Images", isSelected: showImageGallery) {
+                withAnimation {
+                    showImageGallery = true
+                    chatManager.currentSessionId = nil
+                }
+            }
+        }
+    }
+
+
+    var sectionHeader: some View {
+        Text("Your chats")
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+    }
+
+    var chatList: some View {
+        ScrollView {
+            LazyVStack(spacing: 2) {
+                ForEach(
+                    chatManager.sessions.filter {
+                        !$0.messages.isEmpty || $0.id == chatManager.currentSessionId
+                    }
+                ) { session in
+                    SidebarRow(
+                        session: session,
+                        isSelected: !showImageGallery
+                            && chatManager.currentSessionId == session.id,
+                        isRenaming: renamingSessionId == session.id,
+                        renameText: $renameText,
+                        animation: animation,
+                        onSelect: {
+                            showImageGallery = false
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                chatManager.currentSessionId = session.id
+                            }
+                        },
+                        onDelete: {
+                            withAnimation {
+                                chatManager.deleteSession(id: session.id)
+                            }
+                        },
+                        onRename: {
+                            renameText = session.title
+                            renamingSessionId = session.id
+                        },
+                        onCommitRename: {
+                            chatManager.renameSession(id: session.id, newTitle: renameText)
+                            renamingSessionId = nil
+                        },
+                        onSummarize: {
+                            summarize(session: session)
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 10)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Top Section
-            VStack(alignment: .leading, spacing: 4) {
-                // New Chat
-                SidebarItem(icon: "square.and.pencil", title: "New chat") {
-                    showImageGallery = false
-                    chatManager.createNewSession()
-                }
+            topSection
+                .padding(10)
 
-                // Search
-                SidebarItem(icon: "magnifyingglass", title: "Search chats") {
-                    isSearchVisible.toggle()
-                }
-                .popover(isPresented: $isSearchVisible, arrowEdge: .leading) {
-                    VStack(spacing: 12) {
-                        HStack {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(.secondary)
-                            TextField("Search chats...", text: $searchText)
-                                .textFieldStyle(.plain)
-                        }
-                        .padding(8)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
+            sectionHeader
 
-                        if filteredSessions.isEmpty {
-                            Text("No chats found")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding()
-                        } else {
-                            ScrollView {
-                                LazyVStack(spacing: 4) {
-                                    ForEach(filteredSessions) { session in
-                                        Button(action: {
-                                            showImageGallery = false
-                                            chatManager.currentSessionId = session.id
-                                            isSearchVisible = false
-                                        }) {
-                                            HStack {
-                                                Text(session.title)
-                                                    .lineLimit(1)
-                                                    .font(.system(size: 13))
-                                                Spacer()
-                                                Text(session.date, style: .date)
-                                                    .font(.caption2)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                            .padding(8)
-                                            .background(Color.primary.opacity(0.05))
-                                            .cornerRadius(6)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                            .frame(maxHeight: 300)
-                        }
-                    }
-                    .padding()
-                    .frame(width: 300)
-                }
-
-                // Images
-                SidebarItem(icon: "photo", title: "Images", isSelected: showImageGallery) {
-                    withAnimation {
-                        showImageGallery = true
-                        chatManager.currentSessionId = nil
-                    }
-                }
-            }
-            .padding(10)
-
-            // Section Header
-            Text("Your chats")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
-
-            // Chat List
-            ScrollView {
-                LazyVStack(spacing: 2) {
-                    ForEach(
-                        chatManager.sessions.filter {
-                            !$0.messages.isEmpty || $0.id == chatManager.currentSessionId
-                        }
-                    ) { session in
-                        SidebarRow(
-                            session: session,
-                            isSelected: !showImageGallery
-                                && chatManager.currentSessionId == session.id,
-                            isRenaming: renamingSessionId == session.id,
-                            renameText: $renameText,
-                            animation: animation,
-                            onSelect: {
-                                showImageGallery = false
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                    chatManager.currentSessionId = session.id
-                                }
-                            },
-                            onDelete: {
-                                withAnimation {
-                                    chatManager.deleteSession(id: session.id)
-                                }
-                            },
-                            onRename: {
-                                renameText = session.title
-                                renamingSessionId = session.id
-                            },
-                            onCommitRename: {
-                                chatManager.renameSession(id: session.id, newTitle: renameText)
-                                renamingSessionId = nil
-                            },
-                            onSummarize: {
-                                summarize(session: session)
-                            },
-                            onExport: {
-                                exportChat(session: session)
-                            }
-                        )
-                    }
-                }
-                .padding(.horizontal, 10)
-            }
+            chatList
         }
     }
 
@@ -2025,31 +2032,7 @@ struct SidebarView: View {
         }
     }
 
-    private func exportChat(session: ChatSession) {
-        let savePanel = NSSavePanel()
-        savePanel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
-        savePanel.nameFieldStringValue = "\(session.title).md"
-        savePanel.canCreateDirectories = true
 
-        savePanel.begin { response in
-            if response == .OK, let url = savePanel.url {
-                var markdown = "# \(session.title)\n\n"
-                markdown += "Date: \(session.date.formatted())\n\n"
-
-                for message in session.messages {
-                    let role =
-                        message.isUser ? "**User**" : "**AI (\(message.model ?? "Unknown"))**"
-                    markdown += "\(role):\n\(message.content)\n\n"
-                }
-
-                do {
-                    try markdown.write(to: url, atomically: true, encoding: .utf8)
-                } catch {
-                    print("Failed to save file: \(error)")
-                }
-            }
-        }
-    }
 }
 
 struct SidebarItem: View {
@@ -2092,7 +2075,7 @@ struct SidebarRow: View {
     var onRename: () -> Void
     var onCommitRename: () -> Void
     var onSummarize: () -> Void
-    var onExport: () -> Void
+
 
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @State private var offset: CGFloat = 0
@@ -2204,9 +2187,6 @@ struct SidebarRow: View {
                 }
                 Button("Rename with Apple Intelligence") {
                     onSummarize()
-                }
-                Button("Export as Markdown") {
-                    onExport()
                 }
                 Divider()
                 Button("Delete", role: .destructive) {
