@@ -1895,7 +1895,7 @@ struct SidebarView: View {
                             .padding()
                     } else {
                         ScrollView {
-                            LazyVStack(spacing: 4) {
+                            VStack(spacing: 4) {
                                 ForEach(filteredSessions) { session in
                                     Button(action: {
                                         showImageGallery = false
@@ -1948,7 +1948,7 @@ struct SidebarView: View {
 
     var chatList: some View {
         ScrollView {
-            LazyVStack(spacing: 2) {
+            VStack(spacing: 2) {
                 ForEach(
                     chatManager.sessions.filter {
                         !$0.messages.isEmpty || $0.id == chatManager.currentSessionId
@@ -4373,7 +4373,7 @@ struct QuickChatView: View {
     private var messagesSection: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
                     ForEach(chatManager.getCurrentMessages()) { message in
                         MessageView(
                             message: message,
