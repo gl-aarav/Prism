@@ -3891,6 +3891,11 @@ struct SettingsView: View {
                 Toggle("Enable Quick AI Hotkey", isOn: $enableQuickAI)
                     .toggleStyle(.switch)
 
+                if enableQuickAI {
+                    HotkeyPickerView()
+                }
+
+
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Quick AI Background Opacity")
@@ -5127,5 +5132,93 @@ struct ImageGalleryView: View {
                 .zIndex(100)
             }
         }
+    }
+}
+
+// MARK: - Hotkey Picker View
+
+struct HotkeyPickerView: View {
+    @ObservedObject private var hotkeyManager = HotKeyManager.shared
+    @State private var useControl: Bool = true
+    @State private var useOption: Bool = false
+    @State private var useCommand: Bool = false
+    @State private var useShift: Bool = false
+    @State private var selectedKey: HotkeyKeyCode = .space
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Quick AI Hotkey")
+                Spacer()
+                Text(hotkeyManager.hotkeyDisplayString)
+                    .font(.system(.body, design: .monospaced))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.secondary.opacity(0.15))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            
+            HStack(spacing: 16) {
+                Text("Modifiers:")
+                    .foregroundStyle(.secondary)
+                
+                Toggle("⌃ Control", isOn: $useControl)
+                    .toggleStyle(.checkbox)
+                Toggle("⌥ Option", isOn: $useOption)
+                    .toggleStyle(.checkbox)
+                Toggle("⇧ Shift", isOn: $useShift)
+                    .toggleStyle(.checkbox)
+                Toggle("⌘ Command", isOn: $useCommand)
+                    .toggleStyle(.checkbox)
+            }
+            
+            HStack {
+                Text("Key:")
+                    .foregroundStyle(.secondary)
+                Picker("", selection: $selectedKey) {
+                    ForEach(HotkeyKeyCode.allCases, id: \.rawValue) { keyCode in
+                        Text(keyCode.displayString).tag(keyCode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 120)
+                
+                Spacer()
+                
+                Button("Apply") {
+                    applyHotkey()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(.vertical, 4)
+        .onAppear {
+            loadCurrentSettings()
+        }
+    }
+    
+    private func loadCurrentSettings() {
+        let mods = hotkeyManager.currentModifiers
+        useControl = mods.contains(.control)
+        useOption = mods.contains(.option)
+        useCommand = mods.contains(.command)
+        useShift = mods.contains(.shift)
+        selectedKey = hotkeyManager.currentKeyCode
+    }
+    
+    private func applyHotkey() {
+        var modifiers = HotkeyModifiers()
+        if useControl { modifiers.insert(.control) }
+        if useOption { modifiers.insert(.option) }
+        if useCommand { modifiers.insert(.command) }
+        if useShift { modifiers.insert(.shift) }
+        
+        // Ensure at least one modifier is selected
+        if modifiers.isEmpty {
+            modifiers = .control
+            useControl = true
+        }
+        
+        hotkeyManager.updateHotkey(modifiers: modifiers, keyCode: selectedKey)
     }
 }

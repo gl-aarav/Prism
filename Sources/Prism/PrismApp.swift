@@ -90,7 +90,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     override init() {
         super.init()
         AppDelegate.shared = self
-        UserDefaults.standard.register(defaults: ["ShowMenuBar": true, "EnableQuickAI": true])
+        UserDefaults.standard.register(defaults: [
+            "ShowMenuBar": true,
+            "EnableQuickAI": true
+        ])
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

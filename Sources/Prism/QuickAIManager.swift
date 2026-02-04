@@ -208,6 +208,60 @@ class QuickAIManager: ObservableObject {
     }
 }
 
+extension QuickAIManager {
+    /// Paste text into the previously active application
+    /// - Parameter text: The text to paste
+    func pasteToActiveApp(text: String) {
+        // 1. Copy text to clipboard
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        
+        // 2. Close Quick AI panel
+        panel?.orderOut(nil)
+        
+        // 3. Activate previous app
+        guard let previousApp = previousApp else {
+            // If no previous app, just hide ourselves
+            NSApp.hide(nil)
+            
+            // Simulate paste after brief delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.simulatePaste()
+            }
+            return
+        }
+        
+        previousApp.activate()
+        self.previousApp = nil
+        
+        // 4. Simulate Cmd+V after a brief delay to ensure app is ready
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            self.simulatePaste()
+        }
+    }
+    
+    /// Simulate Cmd+V keystroke
+    private func simulatePaste() {
+        // Create key down event for 'V' with Command modifier
+        let source = CGEventSource(stateID: .hidSystemState)
+        
+        // Key code for 'V' is 9
+        guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else {
+            return
+        }
+        
+        // Add Command modifier
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+        
+        // Post the events
+        keyDown.post(tap: .cghidEventTap)
+        keyUp.post(tap: .cghidEventTap)
+    }
+}
+
 class QuickAIPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }

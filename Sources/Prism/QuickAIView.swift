@@ -113,6 +113,7 @@ struct QuickAIView: View {
             if !chatManager.getCurrentMessages().isEmpty {
                 isExpanded = true
             }
+            
             recalcPanelSize()
         }
         .onChange(of: isExpanded) { _, expanded in
@@ -522,6 +523,7 @@ struct QuickAIMessageView: View, Equatable {
     var liveContent: String? = nil
     var liveThinking: String? = nil
     @State private var isCopied = false
+    @State private var isPasted = false
     @State private var isCursorVisible = true
     @State private var isThinkingExpanded = false
     @Environment(\.colorScheme) private var colorScheme
@@ -624,7 +626,7 @@ struct QuickAIMessageView: View, Equatable {
                         }
 
                         // Copy Button
-                        HStack {
+                        HStack(spacing: 8) {
                             Button(action: {
                                 let pasteboard = NSPasteboard.general
                                 pasteboard.clearContents()
@@ -649,6 +651,26 @@ struct QuickAIMessageView: View, Equatable {
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
                             .buttonStyle(.plain)
+                            
+                            // Paste to App button (only for text content)
+                            if message.image == nil && !message.content.isEmpty {
+                                Button(action: {
+                                    QuickAIManager.shared.pasteToActiveApp(text: message.content)
+                                }) {
+                                    Label(
+                                        "Paste to App",
+                                        systemImage: "arrow.up.doc"
+                                    )
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .padding(4)
+                                    .background(Color.black.opacity(0.05))
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                                .buttonStyle(.plain)
+                                .help("Paste this response into the previous app")
+                            }
+                            
                             Spacer()
                         }
 
