@@ -3110,14 +3110,9 @@ struct RichTextView: NSViewRepresentable {
         // IMPORTANT: Only reload if content changed - loadHTMLString is expensive!
         guard context.coordinator.lastContent != content else { return }
         context.coordinator.lastContent = content
-        
-        // Escape HTML special chars but preserve LaTeX delimiters
-        let escapedContent = content
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-            .replacingOccurrences(of: "\n", with: "<br>")
-        
+
+        let processedContent = processMarkdownToHTML(content)
+
         let html = """
         <!DOCTYPE html>
         <html>
@@ -3163,7 +3158,7 @@ struct RichTextView: NSViewRepresentable {
             </style>
         </head>
         <body>
-            <div id="content">\(escapedContent)</div>
+            <div id="content">\(processedContent)</div>
             <script>
                 function sendHeight() {
                     const content = document.getElementById('content');
@@ -3178,8 +3173,66 @@ struct RichTextView: NSViewRepresentable {
         </body>
         </html>
         """
-        
+
         nsView.loadHTMLString(html, baseURL: nil)
+    }
+
+    private func processMarkdownToHTML(_ input: String) -> String {
+        // 1. Escape HTML first
+        var text = input
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+
+        // 2. Protect Math Blocks
+        // We use a simplified regex to find likely math blocks and replace them with tokens
+        var mathBlocks: [String] = []
+        let mathPattern = #"(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\\)\$(?:[^$]+)(?<!\\)\$)"#
+        
+        if let regex = try? NSRegularExpression(pattern: mathPattern) {
+            let nsString = text as NSString
+            let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsString.length))
+            
+            // Iterate backwards to replace without invalidating ranges
+            for match in matches.reversed() {
+                let range = match.range
+                let mathContent = nsString.substring(with: range)
+                let token = "MATH_BLOCK_\(mathBlocks.count)"
+                mathBlocks.append(mathContent)
+                text = (text as NSString).replacingCharacters(in: range, with: token)
+            }
+        }
+
+        // 3. Process Markdown (Simple Regex)
+        // Bold: **text**
+        text = text.replacingOccurrences(of: "\\*\\*(.*?)\\*\\*", with: "<strong>$1</strong>", options: .regularExpression)
+        // Italic: *text* (avoiding ** match collision by order - simple approach)
+        // Note: This regex is simplistic and might misfire on complex nested cases, but sufficient for basic rich text support.
+        text = text.replacingOccurrences(of: "(?<!\\*)\\*(?!\\s)(.*?)(?<!\\s)\\*(?!\\*)", with: "<em>$1</em>", options: .regularExpression)
+        // Inline Code: `text`
+        text = text.replacingOccurrences(of: "`([^`]+)`", with: "<code>$1</code>", options: .regularExpression)
+
+        // 4. Restore Math Blocks
+        // Iterate backwards through the array since we appended them in reverse order of discovery? 
+        // No, we appended them as we found them (backwards iteration means first found is last in array?)
+        // Let's check:
+        // Iteration: reversed(). Match 1 (end of string). Appended to mathBlocks[0]. Replaced.
+        // Match 2 (start of string). Appended to mathBlocks[1]. Replaced.
+        // So mathBlocks[0] corresponds to the LAST token in text.
+        // mathBlocks[1] corresponds to the FIRST token.
+        // Token format "MATH_BLOCK_\(count)". 
+        // When we replace, we used mathBlocks.count BEFORE appending. 
+        // i.e. 0, then 1.
+        // So MATH_BLOCK_0 is the LAST block.
+        
+        for (index, block) in mathBlocks.enumerated() {
+            text = text.replacingOccurrences(of: "MATH_BLOCK_\(index)", with: block)
+        }
+        
+        // 5. Convert newlines to breaks
+        text = text.replacingOccurrences(of: "\n", with: "<br>")
+
+        return text
     }
     
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {

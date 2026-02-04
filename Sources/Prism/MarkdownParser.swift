@@ -151,6 +151,10 @@ struct MarkdownParser {
                         + mathAttrStr
                         + parseInlineMarkdown(suffix)
                 }
+            } else {
+                // No closing delimiter found. Treat opening delimiter as text and continue.
+                return AttributedString(String(prefix)) + AttributedString(delimiter)
+                    + parseInlineMarkdown(String(remainder))
             }
         }
 
