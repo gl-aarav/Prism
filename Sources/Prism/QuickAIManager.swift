@@ -4,7 +4,7 @@ import SwiftUI
 class QuickAIManager: ObservableObject {
     static let shared = QuickAIManager()
     var panel: QuickAIPanel?
-    private var previousApp: NSRunningApplication?
+    var previousApp: NSRunningApplication?
     private var resizeWorkItem: DispatchWorkItem?
     private var pendingResize: CGSize?
     private var isApplyingResize = false
@@ -265,4 +265,27 @@ extension QuickAIManager {
 class QuickAIPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+    
+    override func resignKey() {
+        super.resignKey()
+        
+        // Auto-hide when clicking outside the panel
+        DispatchQueue.main.async {
+            // Only hide if we're still visible but no longer key window
+            if self.isVisible && !self.isKeyWindow {
+                self.orderOut(nil)
+                
+                // Return focus to previous app if needed
+                let otherWindowsVisible = NSApp.windows.contains { $0 != self && $0.isVisible }
+                if !otherWindowsVisible {
+                    if let previousApp = QuickAIManager.shared.previousApp {
+                        previousApp.activate(options: [])
+                        QuickAIManager.shared.previousApp = nil
+                    } else {
+                        NSApp.hide(nil)
+                    }
+                }
+            }
+        }
+    }
 }
