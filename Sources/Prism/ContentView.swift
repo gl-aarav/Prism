@@ -3323,16 +3323,15 @@ struct TableCellView: View {
     var body: some View {
         if containsInlineMath(text) {
             RichTextView(content: text, fontSize: 14, height: $webViewHeight)
-                .frame(height: min(webViewHeight, 80))  // Clamp to reasonable max for table cells
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
+                .frame(height: min(webViewHeight, 300))
+                .frame(minWidth: 300, alignment: .leading) // Min width for math cells
         } else {
             Text(MarkdownParser.shared.parse(text))
                 .font(.system(size: 14, weight: isHeader ? .semibold : .regular))
                 .foregroundColor(colorScheme == .dark ? .white : .black)
                 .textSelection(.enabled)
                 .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minWidth: 120, maxWidth: 500, alignment: .leading) // Constrain text cells
         }
     }
 }
@@ -3475,7 +3474,8 @@ struct MarkdownView: View, Equatable {
                                     TableCellView(text: headers[i], isHeader: true)
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 12)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.vertical, 12)
+                                        .frame(maxHeight: .infinity, alignment: .leading)
                                         .background(Color.primary.opacity(0.04))
                                         .overlay(
                                             Divider(), alignment: .bottom
@@ -3491,7 +3491,8 @@ struct MarkdownView: View, Equatable {
                                         TableCellView(text: content, isHeader: false)
                                             .padding(.horizontal, 16)
                                             .padding(.vertical, 12)
-                                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                                            .padding(.vertical, 12)
+                                            .frame(maxHeight: .infinity, alignment: .topLeading)
                                             .background(
                                                 i % 2 == 0
                                                     ? Color.clear : Color.primary.opacity(0.04))  // Alternating row color
