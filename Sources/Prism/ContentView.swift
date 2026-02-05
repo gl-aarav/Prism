@@ -3992,31 +3992,33 @@ struct SettingsView: View {
                 TextField("Endpoint URL", text: $ollamaURL)
                     .textFieldStyle(.roundedBorder)
 
-                VStack(alignment: .leading) {
-                    Text("Custom Models").font(.headline)
-                    HStack {
-                        TextField("Add model (e.g. llama3:70b)", text: $newCustomModelName)
-                            .textFieldStyle(.roundedBorder)
-                        Button("Add") {
-                            ollamaManager.addCustomModel(newCustomModelName)
-                            newCustomModelName = ""
-                        }
+                Text("Custom Models").font(.headline)
+                    .padding(.top, 8)
+                
+                HStack {
+                    TextField("Add model (e.g. llama3:70b)", text: $newCustomModelName)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Add") {
+                        ollamaManager.addCustomModel(newCustomModelName)
+                        newCustomModelName = ""
                     }
+                }
 
-                    List {
-                        ForEach(ollamaManager.customModels, id: \.self) { model in
-                            HStack {
-                                Text(model)
-                                Spacer()
-                                Button(role: .destructive) {
-                                    ollamaManager.removeCustomModel(model)
-                                } label: {
-                                    Image(systemName: "trash")
-                                }
-                            }
+                ForEach(ollamaManager.customModels, id: \.self) { model in
+                    HStack {
+                        Text(model)
+                        Spacer()
+                        Button(role: .destructive) {
+                            ollamaManager.removeCustomModel(model)
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
                         }
+                        .buttonStyle(.borderless)
                     }
-                    .frame(height: 100)
+                    .padding(8)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(6)
                 }
             }
 
