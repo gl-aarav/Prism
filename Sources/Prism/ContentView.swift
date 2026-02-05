@@ -195,7 +195,7 @@ struct Message: Identifiable, Codable, Equatable {
                                 type: .text(currentText.trimmingCharacters(in: .newlines))))
                         currentText = ""
                     }
-                    codeLanguage = String(line.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                    codeLanguage = String(trimmedLine.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                     inCodeBlock = true
                 }
             } else if inCodeBlock {
@@ -403,7 +403,13 @@ struct Message: Identifiable, Codable, Equatable {
             i += 1
         }
 
-        if !currentText.isEmpty {
+        if inCodeBlock && !codeBlockContent.isEmpty {
+            // Unclosed code block (e.g. during streaming) – flush as code block
+            blocks.append(
+                MarkdownBlock(
+                    type: .code(
+                        codeBlockContent.trimmingCharacters(in: .newlines), codeLanguage)))
+        } else if !currentText.isEmpty {
             blocks.append(MarkdownBlock(type: .text(currentText.trimmingCharacters(in: .newlines))))
         }
 
