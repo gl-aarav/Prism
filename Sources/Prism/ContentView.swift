@@ -3323,6 +3323,75 @@ struct TextBlockView: View {
     }
 }
 
+// MARK: - Code Block View (color-scheme adaptive)
+struct CodeBlockView: View {
+    let code: String
+    let language: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var headerBg: Color {
+        colorScheme == .dark
+            ? Color(nsColor: NSColor(white: 0.10, alpha: 1.0))
+            : Color(nsColor: NSColor(white: 0.82, alpha: 1.0))
+    }
+
+    private var bodyBg: Color {
+        colorScheme == .dark
+            ? Color(nsColor: NSColor(white: 0.14, alpha: 1.0))
+            : Color(nsColor: NSColor(white: 0.88, alpha: 1.0))
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.12)
+            : Color.black.opacity(0.10)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                if !language.isEmpty {
+                    Text(language)
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.gray)
+                }
+                Spacer()
+                Button(action: {
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.setString(code, forType: .string)
+                }) {
+                    Image(systemName: "doc.on.doc")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .buttonStyle(.plain)
+                .help("Copy Code")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(headerBg)
+
+            ScrollView(.horizontal, showsIndicators: true) {
+                Text(
+                    SyntaxHighlighter.shared.highlight(
+                        code, language: language, isDark: colorScheme == .dark)
+                )
+                .font(.system(.body, design: .monospaced))
+                .padding(12)
+                .textSelection(.enabled)
+            }
+        }
+        .background(bodyBg)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(borderColor, lineWidth: 1)
+        )
+    }
+}
+
 // MARK: - TableCellView (supports LaTeX in table cells)
 struct TableCellView: View {
     let text: String
@@ -3341,8 +3410,7 @@ struct TableCellView: View {
                 .foregroundColor(colorScheme == .dark ? .white : .black)
                 .multilineTextAlignment(.leading)
                 .lineLimit(nil)
-                .frame(minWidth: 120, maxWidth: 500, alignment: .leading)  // Constrain text cells first
-                .fixedSize(horizontal: false, vertical: true)  // Then fix size to content
+                .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
         }
     }
@@ -3378,45 +3446,7 @@ struct MarkdownView: View, Equatable {
                         textColor: textColor
                     )
                 case .code(let code, let language):
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            if !language.isEmpty {
-                                Text(language)
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.gray)
-                            }
-                            Spacer()
-                            Button(action: {
-                                let pasteboard = NSPasteboard.general
-                                pasteboard.clearContents()
-                                pasteboard.setString(code, forType: .string)
-                            }) {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Copy Code")
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 4)
-                        .background(Color.black.opacity(0.2))
-
-                        ScrollView(.horizontal, showsIndicators: true) {
-                            Text(code)
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundColor(textColor)
-                                .padding(12)
-                                .textSelection(.enabled)
-                        }
-                    }
-                    .background(Color.black.opacity(0.1))
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
+                    CodeBlockView(code: code, language: language)
                 case .heading(let text, let level):
                     renderRichText(text, cached: block.attributedText)
                         .font(
@@ -3478,50 +3508,47 @@ struct MarkdownView: View, Equatable {
                             .frame(maxWidth: .infinity)
                     }
                 case .table(let headers, let rows):
-                    let columnWidth: CGFloat = max(200, 600 / CGFloat(max(headers.count, 1)))
-                    ScrollView(.horizontal, showsIndicators: true) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            // Header
-                            HStack(alignment: .top, spacing: 0) {
-                                ForEach(headers.indices, id: \.self) { i in
-                                    TableCellView(text: headers[i], isHeader: true)
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 10)
-                                        .frame(width: columnWidth, alignment: .leading)
-                                }
-                            }
-                            .background(Color.primary.opacity(0.06))
-
-                            Divider()
-
-                            // Rows
-                            ForEach(rows.indices, id: \.self) { i in
-                                HStack(alignment: .top, spacing: 0) {
-                                    ForEach(0..<headers.count, id: \.self) { j in
-                                        let content = j < rows[i].count ? rows[i][j] : ""
-                                        TableCellView(text: content, isHeader: false)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 10)
-                                            .frame(width: columnWidth, alignment: .topLeading)
-                                    }
-                                }
-                                .background(
-                                    i % 2 == 0
-                                        ? Color.clear : Color.primary.opacity(0.03))
-
-                                if i < rows.count - 1 {
-                                    Divider().opacity(0.3)
-                                }
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Header
+                        HStack(alignment: .top, spacing: 0) {
+                            ForEach(headers.indices, id: \.self) { i in
+                                TableCellView(text: headers[i], isHeader: true)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
-                        .background(Color.primary.opacity(0.02))
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                        )
-                        .padding(.vertical, 4)
+                        .background(Color.primary.opacity(0.06))
+
+                        Divider()
+
+                        // Rows
+                        ForEach(rows.indices, id: \.self) { i in
+                            HStack(alignment: .top, spacing: 0) {
+                                ForEach(0..<headers.count, id: \.self) { j in
+                                    let content = j < rows[i].count ? rows[i][j] : ""
+                                    TableCellView(text: content, isHeader: false)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 10)
+                                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                                }
+                            }
+                            .background(
+                                i % 2 == 0
+                                    ? Color.clear : Color.primary.opacity(0.03))
+
+                            if i < rows.count - 1 {
+                                Divider().opacity(0.3)
+                            }
+                        }
                     }
+                    .background(Color.primary.opacity(0.02))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                    )
+                    .padding(.vertical, 4)
                 }
             }
         }
