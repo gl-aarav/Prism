@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import KeyboardShortcuts
 import PDFKit
 import SwiftMath
 import SwiftUI
@@ -717,8 +718,10 @@ class OllamaService {
 
                 let isVisionModel =
                     model.contains("qwen3-vl") || model.contains("gemma3") || model.contains("clip")
-                    || model.contains("llava") || model.contains("deepseek-vl") || model.contains("janus")
-                    || model.contains("minicpm-v") || model.contains("deepseek-ocr") || model.contains("olmocr")
+                    || model.contains("llava") || model.contains("deepseek-vl")
+                    || model.contains("janus")
+                    || model.contains("minicpm-v") || model.contains("deepseek-ocr")
+                    || model.contains("olmocr")
 
                 messages.append(
                     contentsOf: history.map { msg in
@@ -1937,7 +1940,6 @@ struct SidebarView: View {
         }
     }
 
-
     var sectionHeader: some View {
         Text("Your chats")
             .font(.caption)
@@ -2033,7 +2035,6 @@ struct SidebarView: View {
         }
     }
 
-
 }
 
 struct SidebarItem: View {
@@ -2076,7 +2077,6 @@ struct SidebarRow: View {
     var onRename: () -> Void
     var onCommitRename: () -> Void
     var onSummarize: () -> Void
-
 
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @State private var offset: CGFloat = 0
@@ -3088,11 +3088,11 @@ struct RichTextView: NSViewRepresentable {
     let content: String
     let fontSize: CGFloat
     @Binding var height: CGFloat
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
     }
-    
+
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         let prefs = WKWebpagePreferences()
@@ -3100,13 +3100,13 @@ struct RichTextView: NSViewRepresentable {
         config.defaultWebpagePreferences = prefs
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         config.userContentController.add(context.coordinator, name: "height")
-        
+
         let webView = NonScrollableWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         return webView
     }
-    
+
     func updateNSView(_ nsView: WKWebView, context: Context) {
         // IMPORTANT: Only reload if content changed - loadHTMLString is expensive!
         guard context.coordinator.lastContent != content else { return }
@@ -3115,72 +3115,73 @@ struct RichTextView: NSViewRepresentable {
         let processedContent = processMarkdownToHTML(content)
 
         let html = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-            <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-            <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
-                onload="renderMathInElement(document.body, {
-                    delimiters: [
-                        {left: '$$', right: '$$', display: true},
-                        {left: '$', right: '$', display: false},
-                        {left: '\\\\(', right: '\\\\)', display: false},
-                        {left: '\\\\[', right: '\\\\]', display: true}
-                    ],
-                    throwOnError: false
-                }); sendHeight();">
-            </script>
-            <style>
-                :root { color-scheme: light dark; }
-                * { margin: 0; padding: 0; box-sizing: border-box; }
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: \(fontSize)px;
-                    line-height: 1.5;
-                    padding: 0;
-                    background: transparent;
-                    color: #111;
-                    word-wrap: break-word;
-                    overflow-wrap: break-word;
-                }
-                @media (prefers-color-scheme: dark) { body { color: #f5f5f5; } }
-                .katex { font-size: 1em; }
-                .katex-display { margin: 8px 0; overflow-x: auto; }
-                code {
-                    font-family: ui-monospace, monospace;
-                    background: rgba(128,128,128,0.2);
-                    padding: 1px 4px;
-                    border-radius: 3px;
-                }
-                strong { font-weight: 600; }
-                em { font-style: italic; }
-            </style>
-        </head>
-        <body>
-            <div id="content">\(processedContent)</div>
-            <script>
-                function sendHeight() {
-                    const content = document.getElementById('content');
-                    const h = content ? content.offsetHeight : (document.body.scrollHeight || 20);
-                    window.webkit.messageHandlers.height.postMessage(h);
-                }
-                document.addEventListener('DOMContentLoaded', function() {
-                    // Wait a tiny bit for KaTeX to render
-                    setTimeout(sendHeight, 50);
-                });
-            </script>
-        </body>
-        </html>
-        """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+                <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+                <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+                    onload="renderMathInElement(document.body, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\\\(', right: '\\\\)', display: false},
+                            {left: '\\\\[', right: '\\\\]', display: true}
+                        ],
+                        throwOnError: false
+                    }); sendHeight();">
+                </script>
+                <style>
+                    :root { color-scheme: light dark; }
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-size: \(fontSize)px;
+                        line-height: 1.5;
+                        padding: 0;
+                        background: transparent;
+                        color: #111;
+                        word-wrap: break-word;
+                        overflow-wrap: break-word;
+                    }
+                    @media (prefers-color-scheme: dark) { body { color: #f5f5f5; } }
+                    .katex { font-size: 1em; }
+                    .katex-display { margin: 8px 0; overflow-x: auto; }
+                    code {
+                        font-family: ui-monospace, monospace;
+                        background: rgba(128,128,128,0.2);
+                        padding: 1px 4px;
+                        border-radius: 3px;
+                    }
+                    strong { font-weight: 600; }
+                    em { font-style: italic; }
+                </style>
+            </head>
+            <body>
+                <div id="content">\(processedContent)</div>
+                <script>
+                    function sendHeight() {
+                        const content = document.getElementById('content');
+                        const h = content ? content.offsetHeight : (document.body.scrollHeight || 20);
+                        window.webkit.messageHandlers.height.postMessage(h);
+                    }
+                    document.addEventListener('DOMContentLoaded', function() {
+                        // Wait a tiny bit for KaTeX to render
+                        setTimeout(sendHeight, 50);
+                    });
+                </script>
+            </body>
+            </html>
+            """
 
         nsView.loadHTMLString(html, baseURL: nil)
     }
 
     private func processMarkdownToHTML(_ input: String) -> String {
         // 1. Escape HTML first
-        var text = input
+        var text =
+            input
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
@@ -3188,12 +3189,14 @@ struct RichTextView: NSViewRepresentable {
         // 2. Protect Math Blocks
         // We use a simplified regex to find likely math blocks and replace them with tokens
         var mathBlocks: [String] = []
-        let mathPattern = #"(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\\)\$(?:[^$]+)(?<!\\)\$)"#
-        
+        let mathPattern =
+            #"(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|(?<!\\)\$(?:[^$]+)(?<!\\)\$)"#
+
         if let regex = try? NSRegularExpression(pattern: mathPattern) {
             let nsString = text as NSString
-            let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsString.length))
-            
+            let matches = regex.matches(
+                in: text, range: NSRange(location: 0, length: nsString.length))
+
             // Iterate backwards to replace without invalidating ranges
             for match in matches.reversed() {
                 let range = match.range
@@ -3206,45 +3209,51 @@ struct RichTextView: NSViewRepresentable {
 
         // 3. Process Markdown (Simple Regex)
         // Bold: **text**
-        text = text.replacingOccurrences(of: "\\*\\*(.*?)\\*\\*", with: "<strong>$1</strong>", options: .regularExpression)
+        text = text.replacingOccurrences(
+            of: "\\*\\*(.*?)\\*\\*", with: "<strong>$1</strong>", options: .regularExpression)
         // Italic: *text* (avoiding ** match collision by order - simple approach)
         // Note: This regex is simplistic and might misfire on complex nested cases, but sufficient for basic rich text support.
-        text = text.replacingOccurrences(of: "(?<!\\*)\\*(?!\\s)(.*?)(?<!\\s)\\*(?!\\*)", with: "<em>$1</em>", options: .regularExpression)
+        text = text.replacingOccurrences(
+            of: "(?<!\\*)\\*(?!\\s)(.*?)(?<!\\s)\\*(?!\\*)", with: "<em>$1</em>",
+            options: .regularExpression)
         // Inline Code: `text`
-        text = text.replacingOccurrences(of: "`([^`]+)`", with: "<code>$1</code>", options: .regularExpression)
+        text = text.replacingOccurrences(
+            of: "`([^`]+)`", with: "<code>$1</code>", options: .regularExpression)
 
         // 4. Restore Math Blocks
-        // Iterate backwards through the array since we appended them in reverse order of discovery? 
+        // Iterate backwards through the array since we appended them in reverse order of discovery?
         // No, we appended them as we found them (backwards iteration means first found is last in array?)
         // Let's check:
         // Iteration: reversed(). Match 1 (end of string). Appended to mathBlocks[0]. Replaced.
         // Match 2 (start of string). Appended to mathBlocks[1]. Replaced.
         // So mathBlocks[0] corresponds to the LAST token in text.
         // mathBlocks[1] corresponds to the FIRST token.
-        // Token format "MATH_BLOCK_\(count)". 
-        // When we replace, we used mathBlocks.count BEFORE appending. 
+        // Token format "MATH_BLOCK_\(count)".
+        // When we replace, we used mathBlocks.count BEFORE appending.
         // i.e. 0, then 1.
         // So MATH_BLOCK_0 is the LAST block.
-        
+
         for (index, block) in mathBlocks.enumerated() {
             text = text.replacingOccurrences(of: "MATH_BLOCK_\(index)", with: block)
         }
-        
+
         // 5. Convert newlines to breaks
         text = text.replacingOccurrences(of: "\n", with: "<br>")
 
         return text
     }
-    
+
     class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: RichTextView
         var lastContent: String? = nil  // Track to prevent redundant reloads
-        
+
         init(parent: RichTextView) {
             self.parent = parent
         }
-        
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+
+        func userContentController(
+            _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
+        ) {
             guard message.name == "height" else { return }
             if let h = message.body as? Double {
                 DispatchQueue.main.async {
@@ -3252,7 +3261,7 @@ struct RichTextView: NSViewRepresentable {
                 }
             }
         }
-        
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             // Wait a bit for KaTeX to render, then measure content div
             webView.evaluateJavaScript(
@@ -3287,7 +3296,7 @@ struct TextBlockView: View {
     let cachedAttributedText: AttributedString?
     let textColor: Color
     @State private var webViewHeight: CGFloat = 20
-    
+
     var body: some View {
         if containsInlineMath(text) {
             RichTextView(content: text, fontSize: 15, height: $webViewHeight)
@@ -3320,19 +3329,19 @@ struct TableCellView: View {
     let isHeader: Bool
     @State private var webViewHeight: CGFloat = 24
     @Environment(\.colorScheme) private var colorScheme
-    
+
     var body: some View {
         if containsInlineMath(text) {
             RichTextView(content: text, fontSize: 14, height: $webViewHeight)
                 .frame(height: min(webViewHeight, 300))
-                .frame(minWidth: 300, alignment: .leading) // Min width for math cells
+                .frame(minWidth: 300, alignment: .leading)  // Min width for math cells
         } else {
             Text(MarkdownParser.shared.parse(text))
                 .font(.system(size: 14, weight: isHeader ? .semibold : .regular))
                 .foregroundColor(colorScheme == .dark ? .white : .black)
                 .textSelection(.enabled)
                 .multilineTextAlignment(.leading)
-                .frame(minWidth: 120, maxWidth: 500, alignment: .leading) // Constrain text cells
+                .frame(minWidth: 120, maxWidth: 500, alignment: .leading)  // Constrain text cells
         }
     }
 }
@@ -3893,9 +3902,12 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
 
                 if enableQuickAI {
-                    HotkeyPickerView()
+                    HStack {
+                        Text("Global Shortcut")
+                        Spacer()
+                        KeyboardShortcuts.Recorder(for: .toggleQuickAI)
+                    }
                 }
-
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -5133,93 +5145,5 @@ struct ImageGalleryView: View {
                 .zIndex(100)
             }
         }
-    }
-}
-
-// MARK: - Hotkey Picker View
-
-struct HotkeyPickerView: View {
-    @ObservedObject private var hotkeyManager = HotKeyManager.shared
-    @State private var useControl: Bool = true
-    @State private var useOption: Bool = false
-    @State private var useCommand: Bool = false
-    @State private var useShift: Bool = false
-    @State private var selectedKey: HotkeyKeyCode = .space
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Quick AI Hotkey")
-                Spacer()
-                Text(hotkeyManager.hotkeyDisplayString)
-                    .font(.system(.body, design: .monospaced))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.secondary.opacity(0.15))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-            }
-            
-            HStack(spacing: 16) {
-                Text("Modifiers:")
-                    .foregroundStyle(.secondary)
-                
-                Toggle("⌃ Control", isOn: $useControl)
-                    .toggleStyle(.checkbox)
-                Toggle("⌥ Option", isOn: $useOption)
-                    .toggleStyle(.checkbox)
-                Toggle("⇧ Shift", isOn: $useShift)
-                    .toggleStyle(.checkbox)
-                Toggle("⌘ Command", isOn: $useCommand)
-                    .toggleStyle(.checkbox)
-            }
-            
-            HStack {
-                Text("Key:")
-                    .foregroundStyle(.secondary)
-                Picker("", selection: $selectedKey) {
-                    ForEach(HotkeyKeyCode.allCases, id: \.rawValue) { keyCode in
-                        Text(keyCode.displayString).tag(keyCode)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 120)
-                
-                Spacer()
-                
-                Button("Apply") {
-                    applyHotkey()
-                }
-                .buttonStyle(.borderedProminent)
-            }
-        }
-        .padding(.vertical, 4)
-        .onAppear {
-            loadCurrentSettings()
-        }
-    }
-    
-    private func loadCurrentSettings() {
-        let mods = hotkeyManager.currentModifiers
-        useControl = mods.contains(.control)
-        useOption = mods.contains(.option)
-        useCommand = mods.contains(.command)
-        useShift = mods.contains(.shift)
-        selectedKey = hotkeyManager.currentKeyCode
-    }
-    
-    private func applyHotkey() {
-        var modifiers = HotkeyModifiers()
-        if useControl { modifiers.insert(.control) }
-        if useOption { modifiers.insert(.option) }
-        if useCommand { modifiers.insert(.command) }
-        if useShift { modifiers.insert(.shift) }
-        
-        // Ensure at least one modifier is selected
-        if modifiers.isEmpty {
-            modifiers = .control
-            useControl = true
-        }
-        
-        hotkeyManager.updateHotkey(modifiers: modifiers, keyCode: selectedKey)
     }
 }
