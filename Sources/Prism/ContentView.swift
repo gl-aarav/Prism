@@ -717,7 +717,8 @@ class OllamaService {
 
                 let isVisionModel =
                     model.contains("qwen3-vl") || model.contains("gemma3") || model.contains("clip")
-                    || model.contains("llava")
+                    || model.contains("llava") || model.contains("deepseek-vl") || model.contains("janus")
+                    || model.contains("minicpm-v") || model.contains("deepseek-ocr") || model.contains("olmocr")
 
                 messages.append(
                     contentsOf: history.map { msg in
