@@ -3881,9 +3881,9 @@ struct SettingsView: View {
                                         }
 
                                     Text(theme.rawValue)
-                                    .font(.caption2)
-                                    .foregroundColor(appTheme == theme ? .secondary : .clear)
-                                    .fixedSize()
+                                        .font(.caption2)
+                                        .foregroundColor(appTheme == theme ? .secondary : .clear)
+                                        .fixedSize()
                                 }
                             }
                         }
