@@ -3339,9 +3339,11 @@ struct TableCellView: View {
             Text(MarkdownParser.shared.parse(text))
                 .font(.system(size: 14, weight: isHeader ? .semibold : .regular))
                 .foregroundColor(colorScheme == .dark ? .white : .black)
-                .textSelection(.enabled)
                 .multilineTextAlignment(.leading)
-                .frame(minWidth: 120, maxWidth: 500, alignment: .leading)  // Constrain text cells
+                .lineLimit(nil)
+                .frame(minWidth: 120, maxWidth: 500, alignment: .leading)  // Constrain text cells first
+                .fixedSize(horizontal: false, vertical: true)  // Then fix size to content
+                .textSelection(.enabled)
         }
     }
 }
@@ -3476,41 +3478,43 @@ struct MarkdownView: View, Equatable {
                             .frame(maxWidth: .infinity)
                     }
                 case .table(let headers, let rows):
+                    let columnWidth: CGFloat = max(200, 600 / CGFloat(max(headers.count, 1)))
                     ScrollView(.horizontal, showsIndicators: true) {
-                        Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
+                        VStack(alignment: .leading, spacing: 0) {
                             // Header
-                            GridRow {
+                            HStack(alignment: .top, spacing: 0) {
                                 ForEach(headers.indices, id: \.self) { i in
                                     TableCellView(text: headers[i], isHeader: true)
                                         .padding(.horizontal, 16)
-                                        .padding(.vertical, 12)
-                                        .padding(.vertical, 12)
-                                        .frame(maxHeight: .infinity, alignment: .leading)
-                                        .background(Color.primary.opacity(0.04))
-                                        .overlay(
-                                            Divider(), alignment: .bottom
-                                        )
+                                        .padding(.vertical, 10)
+                                        .frame(width: columnWidth, alignment: .leading)
                                 }
                             }
+                            .background(Color.primary.opacity(0.06))
+
+                            Divider()
 
                             // Rows
                             ForEach(rows.indices, id: \.self) { i in
-                                GridRow {
+                                HStack(alignment: .top, spacing: 0) {
                                     ForEach(0..<headers.count, id: \.self) { j in
                                         let content = j < rows[i].count ? rows[i][j] : ""
                                         TableCellView(text: content, isHeader: false)
                                             .padding(.horizontal, 16)
-                                            .padding(.vertical, 12)
-                                            .padding(.vertical, 12)
-                                            .frame(maxHeight: .infinity, alignment: .topLeading)
-                                            .background(
-                                                i % 2 == 0
-                                                    ? Color.clear : Color.primary.opacity(0.04))  // Alternating row color
+                                            .padding(.vertical, 10)
+                                            .frame(width: columnWidth, alignment: .topLeading)
                                     }
+                                }
+                                .background(
+                                    i % 2 == 0
+                                        ? Color.clear : Color.primary.opacity(0.03))
+
+                                if i < rows.count - 1 {
+                                    Divider().opacity(0.3)
                                 }
                             }
                         }
-                        .background(Color.primary.opacity(0.02))  // Very subtle background
+                        .background(Color.primary.opacity(0.02))
                         .cornerRadius(12)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
