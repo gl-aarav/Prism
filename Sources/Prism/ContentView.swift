@@ -3994,7 +3994,7 @@ struct SettingsView: View {
 
                 Text("Custom Models").font(.headline)
                     .padding(.top, 8)
-                
+
                 HStack {
                     TextField("Add model (e.g. llama3:70b)", text: $newCustomModelName)
                         .textFieldStyle(.roundedBorder)
