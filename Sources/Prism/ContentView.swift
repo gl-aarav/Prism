@@ -3880,9 +3880,7 @@ struct SettingsView: View {
                                             IconManager.shared.updateIcon(theme: theme)
                                         }
 
-                                    Text(
-                                        theme.rawValue == "Default" ? "Multicolor" : theme.rawValue
-                                    )
+                                    Text(theme.rawValue)
                                     .font(.caption2)
                                     .foregroundColor(appTheme == theme ? .secondary : .clear)
                                     .fixedSize()
