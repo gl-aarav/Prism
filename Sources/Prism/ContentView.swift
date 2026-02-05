@@ -3328,65 +3328,95 @@ struct CodeBlockView: View {
     let code: String
     let language: String
     @Environment(\.colorScheme) private var colorScheme
+    @State private var copied = false
+
+    private var isDark: Bool { colorScheme == .dark }
 
     private var headerBg: Color {
-        colorScheme == .dark
-            ? Color(nsColor: NSColor(white: 0.10, alpha: 1.0))
-            : Color(nsColor: NSColor(white: 0.82, alpha: 1.0))
+        isDark
+            ? Color(nsColor: NSColor(white: 0.12, alpha: 1.0))
+            : Color(nsColor: NSColor(white: 0.72, alpha: 1.0))
     }
 
     private var bodyBg: Color {
-        colorScheme == .dark
-            ? Color(nsColor: NSColor(white: 0.14, alpha: 1.0))
-            : Color(nsColor: NSColor(white: 0.88, alpha: 1.0))
+        isDark
+            ? Color(nsColor: NSColor(white: 0.08, alpha: 1.0))
+            : Color(nsColor: NSColor(white: 0.78, alpha: 1.0))
     }
 
     private var borderColor: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.12)
-            : Color.black.opacity(0.10)
+        isDark
+            ? Color.white.opacity(0.08)
+            : Color.black.opacity(0.12)
+    }
+
+    private var langColor: Color {
+        isDark
+            ? Color.white.opacity(0.45)
+            : Color.black.opacity(0.45)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            // Header bar
+            HStack(spacing: 8) {
                 if !language.isEmpty {
-                    Text(language)
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.gray)
+                    Text(language.lowercased())
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(langColor)
                 }
                 Spacer()
                 Button(action: {
                     let pasteboard = NSPasteboard.general
                     pasteboard.clearContents()
                     pasteboard.setString(code, forType: .string)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        copied = true
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            copied = false
+                        }
+                    }
                 }) {
-                    Image(systemName: "doc.on.doc")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    HStack(spacing: 4) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11, weight: .medium))
+                        Text(copied ? "Copied!" : "Copy")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(copied ? .green : langColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06))
+                    )
                 }
                 .buttonStyle(.plain)
                 .help("Copy Code")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
             .background(headerBg)
 
-            ScrollView(.horizontal, showsIndicators: true) {
+            // Code content
+            ScrollView(.horizontal, showsIndicators: false) {
                 Text(
                     SyntaxHighlighter.shared.highlight(
-                        code, language: language, isDark: colorScheme == .dark)
+                        code, language: language, isDark: isDark)
                 )
-                .font(.system(.body, design: .monospaced))
-                .padding(12)
+                .font(.system(size: 13, weight: .regular, design: .monospaced))
+                .lineSpacing(4)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
                 .textSelection(.enabled)
             }
         }
         .background(bodyBg)
-        .cornerRadius(8)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 10)
                 .stroke(borderColor, lineWidth: 1)
         )
     }
