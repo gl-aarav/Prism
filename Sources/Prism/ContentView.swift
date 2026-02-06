@@ -195,7 +195,8 @@ struct Message: Identifiable, Codable, Equatable {
                                 type: .text(currentText.trimmingCharacters(in: .newlines))))
                         currentText = ""
                     }
-                    codeLanguage = String(trimmedLine.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                    codeLanguage = String(trimmedLine.dropFirst(3)).trimmingCharacters(
+                        in: .whitespaces)
                     inCodeBlock = true
                 }
             } else if inCodeBlock {
@@ -1243,6 +1244,7 @@ struct ContentView: View {
     @State private var showSplash: Bool = !AppState.shared.hasShownSplash
     @State private var currentTask: Task<Void, Never>?
     @State private var showImageGallery: Bool = false
+    @State private var showModelComparison: Bool = false
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
 
@@ -1271,7 +1273,9 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             NavigationSplitView(columnVisibility: $columnVisibility) {
-                SidebarView(chatManager: chatManager, showImageGallery: $showImageGallery)
+                SidebarView(
+                    chatManager: chatManager, showImageGallery: $showImageGallery,
+                    showModelComparison: $showModelComparison)
             } detail: {
                 ZStack {
                     // Background Layer
@@ -1316,7 +1320,9 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                     // Content Layer
-                    if showImageGallery {
+                    if showModelComparison {
+                        ModelComparisonView()
+                    } else if showImageGallery {
                         ImageGalleryView(
                             chatManager: chatManager, showImageGallery: $showImageGallery)
                     } else if isWebViewProvider(selectedProvider) {
@@ -1850,6 +1856,7 @@ struct ContentView: View {
 struct SidebarView: View {
     @ObservedObject var chatManager: ChatManager
     @Binding var showImageGallery: Bool
+    @Binding var showModelComparison: Bool
     @Namespace private var animation
 
     @State private var searchText: String = ""
@@ -1878,6 +1885,7 @@ struct SidebarView: View {
             // New Chat
             SidebarItem(icon: "square.and.pencil", title: "New chat") {
                 showImageGallery = false
+                showModelComparison = false
                 chatManager.createNewSession()
             }
 
@@ -1909,6 +1917,7 @@ struct SidebarView: View {
                                 ForEach(filteredSessions) { session in
                                     Button(action: {
                                         showImageGallery = false
+                                        showModelComparison = false
                                         chatManager.currentSessionId = session.id
                                         isSearchVisible = false
                                     }) {
@@ -1940,6 +1949,21 @@ struct SidebarView: View {
             SidebarItem(icon: "photo", title: "Images", isSelected: showImageGallery) {
                 withAnimation {
                     showImageGallery = true
+                    showModelComparison = false
+                    chatManager.currentSessionId = nil
+                }
+            }
+
+            Divider()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+
+            // Model Comparison
+            SidebarItem(icon: "square.split.2x1", title: "Compare", isSelected: showModelComparison)
+            {
+                withAnimation {
+                    showModelComparison = true
+                    showImageGallery = false
                     chatManager.currentSessionId = nil
                 }
             }
@@ -1965,13 +1989,14 @@ struct SidebarView: View {
                 ) { session in
                     SidebarRow(
                         session: session,
-                        isSelected: !showImageGallery
+                        isSelected: !showImageGallery && !showModelComparison
                             && chatManager.currentSessionId == session.id,
                         isRenaming: renamingSessionId == session.id,
                         renameText: $renameText,
                         animation: animation,
                         onSelect: {
                             showImageGallery = false
+                            showModelComparison = false
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                 chatManager.currentSessionId = session.id
                             }
@@ -2434,14 +2459,36 @@ struct InputView: View {
     @StateObject private var pasteMonitor = PasteMonitor()
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
+    @State private var glassHover: Bool = false
     @Environment(\.colorScheme) private var colorScheme
+
+    // Liquid Glass palette
+    private var glassBackground: some ShapeStyle {
+        .ultraThinMaterial
+    }
+    private var innerGlowTop: Color {
+        colorScheme == .dark ? .white.opacity(0.18) : .white.opacity(0.7)
+    }
+    private var innerGlowBottom: Color {
+        colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.15)
+    }
+    private var spectralColors: [Color] {
+        [
+            Color(hue: 0.55, saturation: 0.4, brightness: 1.0).opacity(0.3),
+            Color(hue: 0.75, saturation: 0.35, brightness: 1.0).opacity(0.25),
+            Color(hue: 0.95, saturation: 0.3, brightness: 1.0).opacity(0.2),
+            Color(hue: 0.15, saturation: 0.35, brightness: 1.0).opacity(0.25),
+            Color(hue: 0.35, saturation: 0.4, brightness: 1.0).opacity(0.3),
+        ]
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             imagePreview
             inputBar
         }
-        .padding()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
             handlePaste(providers)
             return true
@@ -2464,7 +2511,6 @@ struct InputView: View {
                 self.selectedAttachments.append(contentsOf: attachments)
             }
         }
-        // If already focused on appear (rare but possible)
         if isFocused {
             pasteMonitor.start()
         }
@@ -2474,7 +2520,7 @@ struct InputView: View {
         Group {
             if !selectedAttachments.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 10) {
                         ForEach(selectedAttachments) { attachment in
                             AttachmentPreview(attachment: attachment) {
                                 if let index = selectedAttachments.firstIndex(where: {
@@ -2485,290 +2531,430 @@ struct InputView: View {
                             }
                         }
                     }
-                    .padding(8)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
                 }
-                .background(.ultraThinMaterial)
-                .cornerRadius(12)
-                .padding(.bottom, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                        )
+                )
+                .padding(.bottom, 6)
             }
         }
     }
 
     private var inputBar: some View {
-        HStack(spacing: 12) {
-            if isImageGen {
-                // Style Picker
-                Menu {
-                    Section("Apple Intelligence") {
-                        styleButton("Animation", value: "Animation")
-                        styleButton("Illustration", value: "Illustration")
-                        styleButton("Sketch", value: "Sketch")
+        VStack(spacing: 0) {
+            // Main input row
+            HStack(spacing: 10) {
+                // Left action button
+                if isImageGen {
+                    // Style Picker - Liquid Glass pill
+                    Menu {
+                        Section("Apple Intelligence") {
+                            styleButton("Animation", value: "Animation")
+                            styleButton("Illustration", value: "Illustration")
+                            styleButton("Sketch", value: "Sketch")
+                        }
+                        Divider()
+                        Section("ChatGPT") {
+                            styleButton("ChatGPT (Default)", value: "ChatGPT")
+                            styleButton("Oil Painting", value: "Oil Painting (ChatGPT)")
+                            styleButton("Watercolor", value: "Watercolor (ChatGPT)")
+                            styleButton("Vector", value: "Vector (ChatGPT)")
+                            styleButton("Anime", value: "Anime (ChatGPT)")
+                            styleButton("Print", value: "Print (ChatGPT)")
+                        }
+                    } label: {
+                        Image(systemName: "paintpalette.fill")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(
+                                imageStyle.isEmpty
+                                    ? AnyShapeStyle(Color.secondary)
+                                    : AnyShapeStyle(
+                                        LinearGradient(
+                                            colors: [.orange, .pink],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ))
+                            )
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04))
+                            )
                     }
-                    Divider()
-                    Section("ChatGPT") {
-                        styleButton("ChatGPT (Default)", value: "ChatGPT")
-                        styleButton("Oil Painting", value: "Oil Painting (ChatGPT)")
-                        styleButton("Watercolor", value: "Watercolor (ChatGPT)")
-                        styleButton("Vector", value: "Vector (ChatGPT)")
-                        styleButton("Anime", value: "Anime (ChatGPT)")
-                        styleButton("Print", value: "Print (ChatGPT)")
+                    .menuStyle(.borderlessButton)
+                    .help("Image Style")
+                } else {
+                    Button(action: onSelectAttachment) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.secondary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04))
+                            )
                     }
-                } label: {
-                    Image(systemName: "paintpalette")
-                        .font(.system(size: 16))
-                        .foregroundColor(imageStyle.isEmpty ? .secondary : .orange)
-                        .padding(6)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Circle())
+                    .buttonStyle(.plain)
                 }
-                .menuStyle(.borderlessButton)
-                .help("Image Style")
-            } else {
-                Button(action: onSelectAttachment) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
 
-            inputField
+                inputField
 
-            if isOllama {
-                Menu {
-                    Section("Favorites") {
-                        ForEach(ollamaManager.favoriteModels, id: \.self) { model in
-                            Button(action: { selectedOllamaModel = model }) {
-                                if selectedOllamaModel == model {
-                                    Label(model, systemImage: "checkmark")
-                                } else {
-                                    Text(model)
+                if isOllama {
+                    Menu {
+                        Section("Favorites") {
+                            ForEach(ollamaManager.favoriteModels, id: \.self) { model in
+                                Button(action: { selectedOllamaModel = model }) {
+                                    if selectedOllamaModel == model {
+                                        Label(model, systemImage: "checkmark")
+                                    } else {
+                                        Text(model)
+                                    }
                                 }
                             }
                         }
-                    }
-                    ForEach(ollamaManager.sortedManufacturers, id: \.self) { manufacturer in
-                        let models = ollamaManager.allModels
-                            .filter { !ollamaManager.isFavorite($0) }
-                            .filter { ollamaManager.getManufacturer(for: $0) == manufacturer }
+                        ForEach(ollamaManager.sortedManufacturers, id: \.self) { manufacturer in
+                            let models = ollamaManager.allModels
+                                .filter { !ollamaManager.isFavorite($0) }
+                                .filter { ollamaManager.getManufacturer(for: $0) == manufacturer }
 
-                        if !models.isEmpty {
-                            Section(manufacturer) {
-                                ForEach(models, id: \.self) { model in
-                                    Button(action: { selectedOllamaModel = model }) {
-                                        if selectedOllamaModel == model {
-                                            Label(model, systemImage: "checkmark")
-                                        } else {
-                                            Text(model)
+                            if !models.isEmpty {
+                                Section(manufacturer) {
+                                    ForEach(models, id: \.self) { model in
+                                        Button(action: { selectedOllamaModel = model }) {
+                                            if selectedOllamaModel == model {
+                                                Label(model, systemImage: "checkmark")
+                                            } else {
+                                                Text(model)
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    Divider()
+                        Divider()
 
-                    Menu("Manage Favorites") {
-                        ForEach(ollamaManager.allModels, id: \.self) { model in
-                            Button(action: { ollamaManager.toggleFavorite(model) }) {
-                                if ollamaManager.isFavorite(model) {
-                                    Label(model, systemImage: "star.fill")
-                                } else {
-                                    Label(model, systemImage: "star")
+                        Menu("Manage Favorites") {
+                            ForEach(ollamaManager.allModels, id: \.self) { model in
+                                Button(action: { ollamaManager.toggleFavorite(model) }) {
+                                    if ollamaManager.isFavorite(model) {
+                                        Label(model, systemImage: "star.fill")
+                                    } else {
+                                        Label(model, systemImage: "star")
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    Button(action: { showAddCustomOllamaModel = true }) {
-                        Label("Add Custom Model...", systemImage: "plus")
+                        Button(action: { showAddCustomOllamaModel = true }) {
+                            Label("Add Custom Model...", systemImage: "plus")
+                        }
+                    } label: {
+                        Image(systemName: "server.rack")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04))
+                            )
                     }
-                } label: {
-                    Image(systemName: "server.rack")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary)
-                        .padding(6)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Circle())
+                    .menuStyle(.borderlessButton)
+                    .help("Select Ollama Model")
+                    .alert("Add Custom Ollama Model", isPresented: $showAddCustomOllamaModel) {
+                        TextField("Model Name (e.g., llama3:70b)", text: $newCustomModelName)
+                        Button("Add") {
+                            ollamaManager.addCustomModel(newCustomModelName)
+                            selectedOllamaModel = newCustomModelName
+                            newCustomModelName = ""
+                        }
+                        Button("Cancel", role: .cancel) {
+                            newCustomModelName = ""
+                        }
+                    } message: {
+                        Text("Enter the name of the model as it appears in Ollama.")
+                    }
                 }
-                .menuStyle(.borderlessButton)
-                .help("Select Ollama Model")
-                .alert("Add Custom Ollama Model", isPresented: $showAddCustomOllamaModel) {
-                    TextField("Model Name (e.g., llama3:70b)", text: $newCustomModelName)
-                    Button("Add") {
-                        ollamaManager.addCustomModel(newCustomModelName)
-                        selectedOllamaModel = newCustomModelName
-                        newCustomModelName = ""
+
+                if isGemini {
+                    Menu {
+                        Section("Favorites") {
+                            ForEach(geminiManager.favoriteModels, id: \.self) { model in
+                                Button(action: { geminiModel = model }) {
+                                    if geminiModel == model {
+                                        Label(model, systemImage: "checkmark")
+                                    } else {
+                                        Text(model)
+                                    }
+                                }
+                            }
+                        }
+
+                        Section("All Models") {
+                            ForEach(
+                                geminiManager.availableModels.filter {
+                                    !geminiManager.isFavorite($0)
+                                },
+                                id: \.self
+                            ) { model in
+                                Button(action: { geminiModel = model }) {
+                                    if geminiModel == model {
+                                        Label(model, systemImage: "checkmark")
+                                    } else {
+                                        Text(model)
+                                    }
+                                }
+                            }
+                        }
+
+                        Divider()
+
+                        Menu("Manage Favorites") {
+                            ForEach(geminiManager.availableModels, id: \.self) { model in
+                                Button(action: { geminiManager.toggleFavorite(model) }) {
+                                    if geminiManager.isFavorite(model) {
+                                        Label(model, systemImage: "star.fill")
+                                    } else {
+                                        Label(model, systemImage: "star")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04))
+                            )
                     }
-                    Button("Cancel", role: .cancel) {
-                        newCustomModelName = ""
-                    }
-                } message: {
-                    Text("Enter the name of the model as it appears in Ollama.")
+                    .menuStyle(.borderlessButton)
+                    .help("Select Gemini Model")
                 }
-            }
 
-            if isGemini {
-                Menu {
-                    Section("Favorites") {
-                        ForEach(geminiManager.favoriteModels, id: \.self) { model in
-                            Button(action: { geminiModel = model }) {
-                                if geminiModel == model {
-                                    Label(model, systemImage: "checkmark")
+                if thinkingMode != .none {
+                    Menu {
+                        if thinkingMode == .binary {
+                            Button {
+                                thinkingLevel = "high"
+                            } label: {
+                                if thinkingLevel == "high" {
+                                    Label("Reasoning: On", systemImage: "checkmark")
                                 } else {
-                                    Text(model)
+                                    Text("Reasoning: On")
+                                }
+                            }
+                            Button {
+                                thinkingLevel = "low"
+                            } label: {
+                                if thinkingLevel != "high" {
+                                    Label("Reasoning: Off", systemImage: "checkmark")
+                                } else {
+                                    Text("Reasoning: Off")
+                                }
+                            }
+                        } else {
+                            Button {
+                                thinkingLevel = "low"
+                            } label: {
+                                if thinkingLevel == "low" {
+                                    Label("Low", systemImage: "checkmark")
+                                } else {
+                                    Text("Low")
+                                }
+                            }
+                            Button {
+                                thinkingLevel = "medium"
+                            } label: {
+                                if thinkingLevel == "medium" {
+                                    Label("Medium", systemImage: "checkmark")
+                                } else {
+                                    Text("Medium")
+                                }
+                            }
+                            Button {
+                                thinkingLevel = "high"
+                            } label: {
+                                if thinkingLevel == "high" {
+                                    Label("High", systemImage: "checkmark")
+                                } else {
+                                    Text("High")
                                 }
                             }
                         }
+                    } label: {
+                        Image(systemName: "brain")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(
+                                (thinkingLevel == "medium" && thinkingMode == .threeState)
+                                    || (thinkingLevel == "low" && thinkingMode == .binary)
+                                    ? .secondary : .primary
+                            )
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04))
+                            )
                     }
-
-                    Section("All Models") {
-                        ForEach(
-                            geminiManager.availableModels.filter { !geminiManager.isFavorite($0) },
-                            id: \.self
-                        ) { model in
-                            Button(action: { geminiModel = model }) {
-                                if geminiModel == model {
-                                    Label(model, systemImage: "checkmark")
-                                } else {
-                                    Text(model)
-                                }
-                            }
-                        }
-                    }
-
-                    Divider()
-
-                    Menu("Manage Favorites") {
-                        ForEach(geminiManager.availableModels, id: \.self) { model in
-                            Button(action: { geminiManager.toggleFavorite(model) }) {
-                                if geminiManager.isFavorite(model) {
-                                    Label(model, systemImage: "star.fill")
-                                } else {
-                                    Label(model, systemImage: "star")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 16))
-                        .foregroundColor(.secondary)
-                        .padding(6)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Circle())
+                    .menuStyle(.borderlessButton)
+                    .help("Reasoning Effort")
                 }
-                .menuStyle(.borderlessButton)
-                .help("Select Gemini Model")
-            }
 
-            if thinkingMode != .none {
-                Menu {
-                    if thinkingMode == .binary {
-                        Button {
-                            thinkingLevel = "high"
-                        } label: {
-                            if thinkingLevel == "high" {
-                                Label("Reasoning: On", systemImage: "checkmark")
-                            } else {
-                                Text("Reasoning: On")
-                            }
-                        }
-                        Button {
-                            thinkingLevel = "low"
-                        } label: {
-                            if thinkingLevel != "high" {
-                                Label("Reasoning: Off", systemImage: "checkmark")
-                            } else {
-                                Text("Reasoning: Off")
-                            }
-                        }
+                // Send/Stop Button — Liquid Glass orb
+                Button(action: {
+                    if isLoading {
+                        onStop()
                     } else {
-                        Button {
-                            thinkingLevel = "low"
-                        } label: {
-                            if thinkingLevel == "low" {
-                                Label("Low", systemImage: "checkmark")
-                            } else {
-                                Text("Low")
-                            }
-                        }
-                        Button {
-                            thinkingLevel = "medium"
-                        } label: {
-                            if thinkingLevel == "medium" {
-                                Label("Medium", systemImage: "checkmark")
-                            } else {
-                                Text("Medium")
-                            }
-                        }
-                        Button {
-                            thinkingLevel = "high"
-                        } label: {
-                            if thinkingLevel == "high" {
-                                Label("High", systemImage: "checkmark")
-                            } else {
-                                Text("High")
-                            }
-                        }
+                        onSend()
                     }
-                } label: {
-                    Image(systemName: "brain")
-                        .font(.system(size: 16))
-                        .foregroundColor(
-                            (thinkingLevel == "medium" && thinkingMode == .threeState)
-                                || (thinkingLevel == "low" && thinkingMode == .binary)
-                                ? .secondary : .primary
-                        )
-                        .padding(6)
-                        .background(Color.secondary.opacity(0.1))
-                        .clipShape(Circle())
-                }
-                .menuStyle(.borderlessButton)
-                .help("Reasoning Effort")
-            }
+                }) {
+                    ZStack {
+                        // Glass sphere
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: isLoading
+                                        ? [.red.opacity(0.8), .red.opacity(0.5)]
+                                        : (inputText.isEmpty && selectedAttachments.isEmpty)
+                                            ? [
+                                                Color.secondary.opacity(0.3),
+                                                Color.secondary.opacity(0.15),
+                                            ]
+                                            : [
+                                                Color.primary.opacity(0.85),
+                                                Color.primary.opacity(0.65),
+                                            ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                // Top specular highlight
+                                Ellipse()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.white.opacity(0.5), .white.opacity(0.0)],
+                                            startPoint: .top,
+                                            endPoint: .center
+                                        )
+                                    )
+                                    .frame(width: 22, height: 14)
+                                    .offset(y: -6)
+                            )
 
-            // Send/Stop Button
-            Button(action: {
-                if isLoading {
-                    onStop()
-                } else {
-                    onSend()
+                        Image(systemName: isLoading ? "stop.fill" : "arrow.up")
+                            .font(.system(size: isLoading ? 12 : 14, weight: .bold))
+                            .foregroundColor(
+                                isLoading
+                                    ? .white
+                                    : (colorScheme == .dark ? .black : .white)
+                            )
+                    }
                 }
-            }) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(Color.primary)
-                    .shadow(color: Color.black.opacity(0.2), radius: 4, x: 0, y: 2)
+                .buttonStyle(.plain)
+                .disabled((inputText.isEmpty && selectedAttachments.isEmpty) && !isLoading)
             }
-            .buttonStyle(.plain)
-            .disabled(
-                (inputText.isEmpty && selectedAttachments.isEmpty) && !isLoading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            // Liquid Glass container
+            .background(
+                ZStack {
+                    // Base glass layer
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .fill(.ultraThinMaterial)
+
+                    // Inner depth - subtle dark edge at bottom
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.06) : Color.white.opacity(0.4),
+                                    Color.clear,
+                                    colorScheme == .dark
+                                        ? Color.black.opacity(0.08) : Color.black.opacity(0.02),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                }
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay(
+                // Outer glass border with spectral edges
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: isFocused
+                                ? [
+                                    innerGlowTop,
+                                    Color(hue: 0.6, saturation: 0.3, brightness: 1.0).opacity(0.3),
+                                    innerGlowBottom,
+                                    Color(hue: 0.8, saturation: 0.3, brightness: 1.0).opacity(0.2),
+                                    innerGlowTop.opacity(0.5),
+                                ]
+                                : [innerGlowTop, innerGlowBottom],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: isFocused ? 1.2 : 0.8
+                    )
+                    .animation(.easeInOut(duration: 0.35), value: isFocused)
+            )
+            // Floating shadow system
+            .shadow(
+                color: colorScheme == .dark
+                    ? Color.black.opacity(isFocused ? 0.5 : 0.3)
+                    : Color.black.opacity(isFocused ? 0.12 : 0.06),
+                radius: isFocused ? 30 : 16,
+                x: 0,
+                y: isFocused ? 12 : 6
+            )
+            .shadow(
+                color: colorScheme == .dark
+                    ? Color.blue.opacity(isFocused ? 0.08 : 0.0)
+                    : Color.blue.opacity(isFocused ? 0.04 : 0.0),
+                radius: 40,
+                x: 0,
+                y: 0
+            )
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isFocused)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.white.opacity(0.04))
-                .background(.ultraThinMaterial)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [.white.opacity(0.28), .white.opacity(0.12)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
-        )
     }
 
     private var inputField: some View {
         ZStack(alignment: .leading) {
             if inputText.isEmpty && !isFocused {
                 Text(isImageGen ? "Describe image to generate..." : "Ask AI anything...")
-                    .font(.system(size: 16))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(.secondary.opacity(0.6))
                     .allowsHitTesting(false)
                     .padding(.leading, 4)
             }
@@ -2776,7 +2962,7 @@ struct InputView: View {
             TextField("", text: $inputText, axis: .vertical)
                 .focused($isFocused)
                 .textFieldStyle(.plain)
-                .font(.system(size: 16))
+                .font(.system(size: 15))
                 .foregroundColor(colorScheme == .dark ? .white : .black)
                 .lineLimit(1...10)
                 .onKeyPress(.return) {
@@ -3086,6 +3272,7 @@ struct MathBlockView: View {
             // Always visible to avoid jumping. Errors are suppressed in JS.
         }
         .padding(.vertical, 4)
+        .textSelection(.disabled)
     }
 }
 
@@ -3306,6 +3493,7 @@ struct TextBlockView: View {
     var body: some View {
         if containsInlineMath(text) {
             RichTextView(content: text, fontSize: 15, height: $webViewHeight)
+                .textSelection(.disabled)
                 .frame(height: webViewHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
@@ -3314,14 +3502,14 @@ struct TextBlockView: View {
                 Text(cached)
                     .font(.system(size: 15))
                     .foregroundColor(textColor)
-                    .textSelection(.enabled)
+
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(MarkdownParser.shared.parse(text))
                     .font(.system(size: 15))
                     .foregroundColor(textColor)
-                    .textSelection(.enabled)
+
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -3416,7 +3604,7 @@ struct CodeBlockView: View {
                 .lineSpacing(4)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .textSelection(.enabled)
+
             }
         }
         .background(bodyBg)
@@ -3438,6 +3626,7 @@ struct TableCellView: View {
     var body: some View {
         if containsInlineMath(text) {
             RichTextView(content: text, fontSize: 14, height: $webViewHeight)
+                .textSelection(.disabled)
                 .frame(height: min(webViewHeight, 300))
                 .frame(minWidth: 300, alignment: .leading)  // Min width for math cells
         } else {
@@ -3447,7 +3636,7 @@ struct TableCellView: View {
                 .multilineTextAlignment(.leading)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
+
         }
     }
 }
@@ -3492,7 +3681,7 @@ struct MarkdownView: View, Equatable {
                         )
                         .padding(.top, 8)
                         .foregroundColor(textColor)
-                        .textSelection(.enabled)
+
                         .fixedSize(horizontal: false, vertical: true)
                 case .divider:
                     Divider()
@@ -3529,7 +3718,7 @@ struct MarkdownView: View, Equatable {
                         renderRichText(text, cached: block.attributedText)
                             .font(.system(size: 15))
                             .foregroundColor(.secondary)
-                            .textSelection(.enabled)
+
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .fixedSize(horizontal: false, vertical: true)
@@ -3588,6 +3777,7 @@ struct MarkdownView: View, Equatable {
                 }
             }
         }
+        .textSelection(.enabled)
     }
 }
 
