@@ -561,7 +561,10 @@ struct ModelComparisonView: View {
                 } else {
                     // Has response - show copy/retry
                     HStack(spacing: 8) {
-                        Button(action: { synthesizedResponse = ""; synthesizedThinking = "" }) {
+                        Button(action: {
+                            synthesizedResponse = ""
+                            synthesizedThinking = ""
+                        }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.counterclockwise")
                                     .font(.system(size: 10))
@@ -731,7 +734,8 @@ struct ModelComparisonView: View {
 
         let userMsg = Message(content: synthesisPrompt, isUser: true)
         let history = [userMsg]
-        let synthThinking = effectiveThinkingLevel(provider: synthesizeProvider, model: synthesizeModel)
+        let synthThinking = effectiveThinkingLevel(
+            provider: synthesizeProvider, model: synthesizeModel)
 
         synthesizeTask = Task {
             do {
@@ -901,7 +905,8 @@ struct ModelComparisonView: View {
                             return
                         }
                         var fullContent = ""
-                        let geminiThinking = effectiveThinkingLevel(provider: provider, model: model)
+                        let geminiThinking = effectiveThinkingLevel(
+                            provider: provider, model: model)
                         for try await (chunk, _) in geminiService.sendMessageStream(
                             history: history, apiKey: geminiKey, model: model,
                             systemPrompt: systemPrompt, thinkingLevel: geminiThinking
@@ -925,7 +930,8 @@ struct ModelComparisonView: View {
                     case "Ollama":
                         var fullContent = ""
                         var fullThinking = ""
-                        let ollamaThinking = effectiveThinkingLevel(provider: provider, model: model)
+                        let ollamaThinking = effectiveThinkingLevel(
+                            provider: provider, model: model)
                         for try await (chunk, thinkChunk) in ollamaService.sendMessageStream(
                             history: history, endpoint: ollamaURL, model: model,
                             systemPrompt: systemPrompt, thinkingLevel: ollamaThinking
