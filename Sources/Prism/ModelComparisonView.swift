@@ -34,6 +34,14 @@ struct ModelComparisonView: View {
     @FocusState private var isInputFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
 
+    // Synthesize state
+    @State private var showSynthesizeSheet: Bool = false
+    @State private var synthesizedResponse: String = ""
+    @State private var isSynthesizing: Bool = false
+    @State private var synthesizeProvider: String = "Gemini API"
+    @State private var synthesizeModel: String = "gemini-2.5-flash"
+    @State private var synthesizeTask: Task<Void, Never>?
+
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
@@ -96,16 +104,22 @@ struct ModelComparisonView: View {
             comparisonInputBar
         }
         .background(Color.clear)
+        .sheet(isPresented: $showSynthesizeSheet) {
+            synthesizeSheet
+        }
         .onDisappear {
             // Cancel all running tasks to prevent freeze when switching views
             for (_, task) in currentTasks {
                 task.cancel()
             }
             currentTasks.removeAll()
+            synthesizeTask?.cancel()
+            synthesizeTask = nil
             for i in slots.indices {
                 slots[i].isLoading = false
             }
             isComparing = false
+            isSynthesizing = false
         }
     }
 
@@ -175,6 +189,44 @@ struct ModelComparisonView: View {
                     )
                 }
                 .buttonStyle(.plain)
+            }
+
+            // Synthesize button
+            if slots.filter({ !$0.response.isEmpty && !$0.isLoading }).count >= 2 {
+                Button(action: { showSynthesizeSheet = true }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Synthesize")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: appTheme.colors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                Capsule()
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: appTheme.colors.map { $0.opacity(0.4) },
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 0.8
+                                    )
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("Combine all responses into one using AI")
             }
 
             // Clear all
@@ -334,6 +386,340 @@ struct ModelComparisonView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    // MARK: - Synthesize Sheet
+
+    private var synthesizeSheet: some View {
+        VStack(spacing: 0) {
+            // Sheet header
+            HStack {
+                HStack(spacing: 8) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: appTheme.colors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Text("Synthesize Responses")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                }
+                Spacer()
+                Button(action: {
+                    synthesizeTask?.cancel()
+                    synthesizeTask = nil
+                    isSynthesizing = false
+                    showSynthesizeSheet = false
+                }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.secondary)
+                        .padding(8)
+                        .background(Circle().fill(Color.secondary.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 12)
+
+            Divider().opacity(0.3)
+
+            // Provider/Model picker
+            HStack(spacing: 16) {
+                Text("Synthesize with:")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
+
+                Menu {
+                    Button(action: {
+                        synthesizeProvider = "Apple Foundation"
+                        synthesizeModel = "Apple Foundation"
+                    }) {
+                        Label("Apple Foundation", systemImage: "apple.logo")
+                    }
+                    Divider()
+                    Menu("Gemini API") {
+                        ForEach(geminiManager.availableModels, id: \.self) { model in
+                            Button(action: {
+                                synthesizeProvider = "Gemini API"
+                                synthesizeModel = model
+                            }) {
+                                if synthesizeProvider == "Gemini API" && synthesizeModel == model {
+                                    Label(model, systemImage: "checkmark")
+                                } else {
+                                    Text(model)
+                                }
+                            }
+                        }
+                    }
+                    Menu("Ollama") {
+                        ForEach(ollamaManager.allModels, id: \.self) { model in
+                            Button(action: {
+                                synthesizeProvider = "Ollama"
+                                synthesizeModel = model
+                            }) {
+                                if synthesizeProvider == "Ollama" && synthesizeModel == model {
+                                    Label(model, systemImage: "checkmark")
+                                } else {
+                                    Text(model)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: synthesizeProviderIcon)
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("\(synthesizeProvider) — \(synthesizeModel)")
+                            .font(.system(size: 13, weight: .medium))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.secondary)
+                    }
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+                            )
+                    )
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+
+                Spacer()
+
+                if !isSynthesizing && synthesizedResponse.isEmpty {
+                    Button(action: startSynthesis) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Generate")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(colorScheme == .dark ? .black : .white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: appTheme.colors,
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                } else if isSynthesizing {
+                    Button(action: {
+                        synthesizeTask?.cancel()
+                        synthesizeTask = nil
+                        isSynthesizing = false
+                    }) {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .scaleEffect(0.7)
+                            Text("Stop")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule().fill(Color.red.opacity(0.1))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+
+            Divider().opacity(0.3)
+
+            // Response area
+            if synthesizedResponse.isEmpty && !isSynthesizing {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 36))
+                        .foregroundColor(.secondary.opacity(0.25))
+                    Text(
+                        "Select a model and tap Generate to combine\nall responses into one comprehensive answer"
+                    )
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary.opacity(0.5))
+                    .multilineTextAlignment(.center)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(synthesizedResponse)
+                            .font(.system(size: 14))
+                            .foregroundColor(.primary)
+                            .textSelection(.enabled)
+                            .lineSpacing(5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(20)
+                }
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: synthesizedResponse)
+
+                // Copy bar
+                if !synthesizedResponse.isEmpty && !isSynthesizing {
+                    Divider().opacity(0.3)
+                    HStack {
+                        Text("Synthesized by \(synthesizeProvider) — \(synthesizeModel)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button(action: {
+                            synthesizedResponse = ""
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 10))
+                                Text("Retry")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(Color.secondary.opacity(0.08)))
+                        }
+                        .buttonStyle(.plain)
+                        Button(action: {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(synthesizedResponse, forType: .string)
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 10))
+                                Text("Copy")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Capsule().fill(Color.secondary.opacity(0.08)))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                }
+            }
+        }
+        .frame(minWidth: 600, minHeight: 450)
+        .background(.ultraThinMaterial)
+        .onDisappear {
+            synthesizeTask?.cancel()
+            synthesizeTask = nil
+            isSynthesizing = false
+        }
+    }
+
+    private var synthesizeProviderIcon: String {
+        switch synthesizeProvider {
+        case "Apple Foundation": return "apple.logo"
+        case "Gemini API": return "sparkles"
+        case "Ollama": return "laptopcomputer"
+        default: return "cpu"
+        }
+    }
+
+    private func startSynthesis() {
+        let completedSlots = slots.filter { !$0.response.isEmpty && !$0.isLoading }
+        guard completedSlots.count >= 2 else { return }
+
+        synthesizedResponse = ""
+        isSynthesizing = true
+
+        // Build the synthesis prompt
+        var synthesisPrompt =
+            "You are an expert at synthesizing information. Below are responses from multiple AI models to the same prompt. Combine them into one comprehensive, well-structured response that takes the best parts of each. Do not mention the models by name or that there were multiple responses — just produce the best possible unified answer.\n\n"
+        synthesisPrompt += "Original prompt: \(prompt)\n\n"
+        for (i, slot) in completedSlots.enumerated() {
+            synthesisPrompt +=
+                "--- Response \(i + 1) (\(slot.provider) / \(slot.model)) ---\n\(slot.response)\n\n"
+        }
+
+        let userMsg = Message(content: synthesisPrompt, isUser: true)
+        let history = [userMsg]
+
+        synthesizeTask = Task {
+            do {
+                switch synthesizeProvider {
+                case "Gemini API":
+                    guard !geminiKey.isEmpty else {
+                        await MainActor.run {
+                            synthesizedResponse = "Error: No Gemini API key set."
+                            isSynthesizing = false
+                        }
+                        return
+                    }
+                    var full = ""
+                    for try await (chunk, _) in geminiService.sendMessageStream(
+                        history: history, apiKey: geminiKey, model: synthesizeModel,
+                        systemPrompt: "", thinkingLevel: "none"
+                    ) {
+                        full += chunk
+                        let content = full
+                        await MainActor.run { synthesizedResponse = content }
+                    }
+
+                case "Ollama":
+                    var full = ""
+                    for try await (chunk, _) in ollamaService.sendMessageStream(
+                        history: history, endpoint: ollamaURL, model: synthesizeModel,
+                        systemPrompt: "", thinkingLevel: "none"
+                    ) {
+                        full += chunk
+                        let content = full
+                        await MainActor.run { synthesizedResponse = content }
+                    }
+
+                case "Apple Foundation":
+                    var full = ""
+                    for try await chunk in appleFoundationService.sendMessageStream(
+                        history: history, systemPrompt: ""
+                    ) {
+                        full += chunk
+                        let content = full
+                        await MainActor.run { synthesizedResponse = content }
+                    }
+
+                default:
+                    await MainActor.run {
+                        synthesizedResponse = "Error: Provider not supported."
+                    }
+                }
+            } catch {
+                if !Task.isCancelled {
+                    await MainActor.run {
+                        if synthesizedResponse.isEmpty {
+                            synthesizedResponse = "Error: \(error.localizedDescription)"
+                        }
+                    }
+                }
+            }
+            await MainActor.run {
+                isSynthesizing = false
+            }
+        }
     }
 
     // MARK: - Actions
