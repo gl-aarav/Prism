@@ -702,7 +702,7 @@ class WebSearchService {
         self.session = URLSession(configuration: config)
     }
 
-    func search(query: String, apiKey: String, maxResults: Int = 5) async throws
+    func search(query: String, apiKey: String, maxResults: Int = 3) async throws
         -> [WebSearchResult]
     {
         guard let url = URL(string: "https://ollama.com/api/web_search") else {
@@ -732,12 +732,20 @@ class WebSearchService {
 
     func buildSearchContext(results: [WebSearchResult]) -> String {
         guard !results.isEmpty else { return "" }
+        let maxSnippetLength = 500
+        let maxTotalLength = 4000
         var context = "\n\n[Web Search Results]\n"
         for (i, result) in results.enumerated() {
-            context += "\(i + 1). \(result.title)\n   URL: \(result.url)\n   \(result.content)\n\n"
+            let snippet =
+                result.content.count > maxSnippetLength
+                ? String(result.content.prefix(maxSnippetLength)) + "…"
+                : result.content
+            let entry = "Result \(i + 1): \(result.title)\n   URL: \(result.url)\n   \(snippet)\n\n"
+            if context.count + entry.count > maxTotalLength { break }
+            context += entry
         }
         context +=
-            "[End of Web Search Results]\n\nUse the above web search results to help answer the user's question. Cite sources when relevant."
+            "[End of Web Search Results]\n\nUse the above web search results to inform your answer. If you reference a source, mention it naturally by name or URL in your text. NEVER use bracket citation syntax like 【1†L2-L5】 or [1†source] or any similar notation."
         return context
     }
 }
