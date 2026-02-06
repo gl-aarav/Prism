@@ -681,6 +681,67 @@ struct OllamaAPIError: LocalizedError {
     }
 }
 
+// MARK: - Web Search Service
+
+struct WebSearchResult: Codable {
+    let title: String
+    let url: String
+    let content: String
+}
+
+struct WebSearchResponse: Codable {
+    let results: [WebSearchResult]
+}
+
+class WebSearchService {
+    private let session: URLSession
+
+    init() {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 30
+        self.session = URLSession(configuration: config)
+    }
+
+    func search(query: String, apiKey: String, maxResults: Int = 5) async throws
+        -> [WebSearchResult]
+    {
+        guard let url = URL(string: "https://ollama.com/api/web_search") else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+
+        let body: [String: Any] = [
+            "query": query,
+            "max_results": maxResults,
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw OllamaAPIError(statusCode: statusCode, message: "Web search request failed")
+        }
+
+        let decoded = try JSONDecoder().decode(WebSearchResponse.self, from: data)
+        return decoded.results
+    }
+
+    func buildSearchContext(results: [WebSearchResult]) -> String {
+        guard !results.isEmpty else { return "" }
+        var context = "\n\n[Web Search Results]\n"
+        for (i, result) in results.enumerated() {
+            context += "\(i + 1). \(result.title)\n   URL: \(result.url)\n   \(result.content)\n\n"
+        }
+        context +=
+            "[End of Web Search Results]\n\nUse the above web search results to help answer the user's question. Cite sources when relevant."
+        return context
+    }
+}
+
 class OllamaService {
     private let session: URLSession
 
@@ -1244,6 +1305,8 @@ struct ContentView: View {
 
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome: Bool = false
+    @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
+    @AppStorage("WebSearchEnabled") private var webSearchEnabled: Bool = false
     @State private var showSplash: Bool = !AppState.shared.hasShownSplash
     @State private var currentTask: Task<Void, Never>?
     @State private var showImageGallery: Bool = false
@@ -1253,6 +1316,7 @@ struct ContentView: View {
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
+    private let webSearchService = WebSearchService()
     private let shortcutService = ShortcutService()
     private let appleFoundationService = AppleFoundationService()
 
@@ -1385,7 +1449,9 @@ struct ContentView: View {
                                         thinkingMode: thinkingMode,
                                         imageStyle: $imageCreationStyle,
                                         isOllama: selectedProvider.contains("Ollama"),
-                                        isGemini: selectedProvider == "Gemini API"
+                                        isGemini: selectedProvider == "Gemini API",
+                                        webSearchEnabled: $webSearchEnabled,
+                                        hasOllamaAPIKey: !ollamaAPIKey.isEmpty
                                     )
                                 }
                                 .onChange(of: chatManager.getCurrentMessages().count) { _, count in
@@ -1626,6 +1692,22 @@ struct ContentView: View {
         currentTask?.cancel()
 
         currentTask = Task {
+            // Web search augmentation
+            var effectiveSystemPrompt = systemPrompt
+            if webSearchEnabled && !ollamaAPIKey.isEmpty {
+                do {
+                    let searchResults = try await webSearchService.search(
+                        query: input, apiKey: ollamaAPIKey)
+                    let searchContext = webSearchService.buildSearchContext(results: searchResults)
+                    if !searchContext.isEmpty {
+                        effectiveSystemPrompt = systemPrompt + searchContext
+                    }
+                } catch {
+                    // Silently continue without search results on failure
+                    print("Web search failed: \\(error.localizedDescription)")
+                }
+            }
+
             if selectedProvider == "Image Creation" {
                 let aiMsgId = UUID()
                 var aiMsg = Message(content: "", isUser: false)
@@ -1679,7 +1761,7 @@ struct ContentView: View {
                         for try await (contentChunk, thinkingChunk)
                             in geminiService.sendMessageStream(
                                 history: currentHistory, apiKey: geminiKey, model: geminiModel,
-                                systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
+                                systemPrompt: effectiveSystemPrompt, thinkingLevel: thinkingLevel)
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {
@@ -1738,7 +1820,8 @@ struct ContentView: View {
                     var lastUpdateTime = Date()
 
                     for try await contentSnapshot in appleFoundationService.sendMessageStream(
-                        history: chatManager.getCurrentMessages(), systemPrompt: systemPrompt
+                        history: chatManager.getCurrentMessages(),
+                        systemPrompt: effectiveSystemPrompt
                     ) {
                         accumulatedContent += contentSnapshot
 
@@ -1786,7 +1869,7 @@ struct ContentView: View {
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: currentHistory, endpoint: ollamaURL, model: activeModel,
-                        systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
+                        systemPrompt: effectiveSystemPrompt, thinkingLevel: thinkingLevel)
                     {
                         fullContent += contentChunk
                         if let thinking = thinkingChunk {
@@ -2514,6 +2597,8 @@ struct InputView: View {
     @Binding var imageStyle: String
     var isOllama: Bool = false
     var isGemini: Bool = false
+    @Binding var webSearchEnabled: Bool
+    var hasOllamaAPIKey: Bool = false
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
@@ -2886,6 +2971,30 @@ struct InputView: View {
                     }
                     .menuStyle(.borderlessButton)
                     .help("Reasoning Effort")
+                }
+
+                // Web Search Toggle
+                if hasOllamaAPIKey {
+                    Button(action: {
+                        webSearchEnabled.toggle()
+                    }) {
+                        Image(systemName: webSearchEnabled ? "globe" : "globe")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(webSearchEnabled ? .blue : .secondary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        webSearchEnabled
+                                            ? Color.blue.opacity(colorScheme == .dark ? 0.2 : 0.1)
+                                            : (colorScheme == .dark
+                                                ? Color.white.opacity(0.08)
+                                                : Color.black.opacity(0.04))
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(webSearchEnabled ? "Web Search: On" : "Web Search: Off")
                 }
 
                 // Send/Stop Button — Liquid Glass orb
@@ -4151,6 +4260,7 @@ struct SettingsView: View {
     @AppStorage("QuickAIBackgroundOpacity") private var quickAIBackgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var quickAICommandBarVibrancy: Double = 0.55
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
+    @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
 
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
@@ -4312,6 +4422,12 @@ struct SettingsView: View {
             Section(header: Text("Ollama")) {
                 TextField("Endpoint URL", text: $ollamaURL)
                     .textFieldStyle(.roundedBorder)
+
+                SecureField("Ollama API Key (for web search)", text: $ollamaAPIKey)
+                    .textFieldStyle(.roundedBorder)
+                Text("Get a key at ollama.com/settings/keys — enables the web search button.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
 
                 Text("Custom Models").font(.headline)
                     .padding(.top, 8)
