@@ -1220,7 +1220,7 @@ struct ContentView: View {
     // Legacy single selection states removed/replaced
     @State private var imageCreationStyle: String = "Animation"
     @State private var isLoading: Bool = false
-    @State private var thinkingLevel: String = "medium"
+    @AppStorage("ThinkingLevel") private var thinkingLevel: String = "medium"
     @State private var showSidebar: Bool = false
     @State private var lastMessageCount: Int = 0
     @State private var lastSessionId: UUID?

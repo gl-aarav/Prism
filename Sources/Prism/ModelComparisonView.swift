@@ -34,9 +34,11 @@ struct ModelComparisonView: View {
     // Synthesize state
     @State private var showSynthesizePanel: Bool = false
     @State private var synthesizedResponse: String = ""
+    @State private var synthesizedThinking: String = ""
     @State private var isSynthesizing: Bool = false
     @State private var synthesizeProvider: String = "Gemini API"
     @State private var synthesizeModel: String = "gemini-2.5-flash"
+    @AppStorage("ThinkingLevel") private var thinkingLevel: String = "medium"
     @State private var synthesizeTask: Task<Void, Never>?
 
     private let geminiService = GeminiService()
@@ -559,7 +561,7 @@ struct ModelComparisonView: View {
                 } else {
                     // Has response - show copy/retry
                     HStack(spacing: 8) {
-                        Button(action: { synthesizedResponse = "" }) {
+                        Button(action: { synthesizedResponse = ""; synthesizedThinking = "" }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.counterclockwise")
                                     .font(.system(size: 10))
@@ -613,13 +615,34 @@ struct ModelComparisonView: View {
                 Divider().opacity(0.2).padding(.horizontal, 16)
 
                 ScrollView {
-                    Text(synthesizedResponse)
-                        .font(.system(size: 13))
-                        .foregroundColor(.primary)
-                        .textSelection(.enabled)
-                        .lineSpacing(4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !synthesizedThinking.isEmpty {
+                            DisclosureGroup {
+                                Text(synthesizedThinking)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                    .textSelection(.enabled)
+                                    .lineSpacing(3)
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "brain")
+                                        .font(.system(size: 11))
+                                    Text("Thinking")
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .foregroundColor(.purple)
+                            }
+                            .padding(.bottom, 4)
+                        }
+
+                        Text(synthesizedResponse)
+                            .font(.system(size: 13))
+                            .foregroundColor(.primary)
+                            .textSelection(.enabled)
+                            .lineSpacing(4)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
                 }
                 .frame(maxHeight: 350)
                 .animation(.spring(response: 0.4, dampingFraction: 0.8), value: synthesizedResponse)
@@ -671,11 +694,30 @@ struct ModelComparisonView: View {
         }
     }
 
+    /// Compute the effective thinking level for a given provider/model.
+    /// Gemini never gets thinking. Ollama gpt-oss gets the app-level thinkingLevel.
+    /// DeepSeek gets true only when "high". All others get "false".
+    private func effectiveThinkingLevel(provider: String, model: String) -> String {
+        if provider == "Gemini API" {
+            return "none"
+        } else if provider == "Ollama" {
+            let lower = model.lowercased()
+            if lower.contains("gpt-oss") {
+                return thinkingLevel  // low, medium, high from app setting
+            } else if lower.contains("deepseek") || lower.contains("r1") {
+                return thinkingLevel == "high" ? "true" : "false"
+            }
+            return "false"
+        }
+        return "none"
+    }
+
     private func startSynthesis() {
         let completedSlots = slots.filter { !$0.response.isEmpty && !$0.isLoading }
         guard completedSlots.count >= 2 else { return }
 
         synthesizedResponse = ""
+        synthesizedThinking = ""
         isSynthesizing = true
 
         // Build the synthesis prompt
@@ -689,6 +731,7 @@ struct ModelComparisonView: View {
 
         let userMsg = Message(content: synthesisPrompt, isUser: true)
         let history = [userMsg]
+        let synthThinking = effectiveThinkingLevel(provider: synthesizeProvider, model: synthesizeModel)
 
         synthesizeTask = Task {
             do {
@@ -704,7 +747,8 @@ struct ModelComparisonView: View {
                     var full = ""
                     for try await (chunk, _) in geminiService.sendMessageStream(
                         history: history, apiKey: geminiKey, model: synthesizeModel,
-                        systemPrompt: "", thinkingLevel: "none"
+                        systemPrompt: "",
+                        thinkingLevel: synthThinking
                     ) {
                         full += chunk
                         let content = full
@@ -713,13 +757,22 @@ struct ModelComparisonView: View {
 
                 case "Ollama":
                     var full = ""
-                    for try await (chunk, _) in ollamaService.sendMessageStream(
+                    var fullThinking = ""
+                    for try await (chunk, thinkChunk) in ollamaService.sendMessageStream(
                         history: history, endpoint: ollamaURL, model: synthesizeModel,
-                        systemPrompt: "", thinkingLevel: "none"
+                        systemPrompt: "",
+                        thinkingLevel: synthThinking
                     ) {
                         full += chunk
+                        if let t = thinkChunk { fullThinking += t }
                         let content = full
-                        await MainActor.run { synthesizedResponse = content }
+                        let thinking = fullThinking
+                        await MainActor.run {
+                            synthesizedResponse = content
+                            if !thinking.isEmpty {
+                                synthesizedThinking = thinking
+                            }
+                        }
                     }
 
                 case "Apple Foundation":
@@ -848,9 +901,10 @@ struct ModelComparisonView: View {
                             return
                         }
                         var fullContent = ""
+                        let geminiThinking = effectiveThinkingLevel(provider: provider, model: model)
                         for try await (chunk, _) in geminiService.sendMessageStream(
                             history: history, apiKey: geminiKey, model: model,
-                            systemPrompt: systemPrompt, thinkingLevel: "medium"
+                            systemPrompt: systemPrompt, thinkingLevel: geminiThinking
                         ) {
                             fullContent += chunk
                             let content = fullContent
@@ -871,9 +925,10 @@ struct ModelComparisonView: View {
                     case "Ollama":
                         var fullContent = ""
                         var fullThinking = ""
+                        let ollamaThinking = effectiveThinkingLevel(provider: provider, model: model)
                         for try await (chunk, thinkChunk) in ollamaService.sendMessageStream(
                             history: history, endpoint: ollamaURL, model: model,
-                            systemPrompt: systemPrompt, thinkingLevel: "medium"
+                            systemPrompt: systemPrompt, thinkingLevel: ollamaThinking
                         ) {
                             fullContent += chunk
                             if let t = thinkChunk { fullThinking += t }
