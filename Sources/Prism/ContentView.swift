@@ -1700,9 +1700,9 @@ struct ContentView: View {
         currentTask?.cancel()
 
         currentTask = Task {
-            // Web search augmentation
+            // Web search augmentation (Ollama only)
             var effectiveSystemPrompt = systemPrompt
-            if webSearchEnabled && !ollamaAPIKey.isEmpty {
+            if webSearchEnabled && !ollamaAPIKey.isEmpty && selectedProvider == "Ollama" {
                 do {
                     let searchResults = try await webSearchService.search(
                         query: input, apiKey: ollamaAPIKey)
@@ -1769,7 +1769,7 @@ struct ContentView: View {
                         for try await (contentChunk, thinkingChunk)
                             in geminiService.sendMessageStream(
                                 history: currentHistory, apiKey: geminiKey, model: geminiModel,
-                                systemPrompt: effectiveSystemPrompt, thinkingLevel: thinkingLevel)
+                                systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {
@@ -1829,7 +1829,7 @@ struct ContentView: View {
 
                     for try await contentSnapshot in appleFoundationService.sendMessageStream(
                         history: chatManager.getCurrentMessages(),
-                        systemPrompt: effectiveSystemPrompt
+                        systemPrompt: systemPrompt
                     ) {
                         accumulatedContent += contentSnapshot
 
@@ -2981,8 +2981,8 @@ struct InputView: View {
                     .help("Reasoning Effort")
                 }
 
-                // Web Search Toggle
-                if hasOllamaAPIKey {
+                // Web Search Toggle (Ollama only)
+                if hasOllamaAPIKey && isOllama {
                     Button(action: {
                         webSearchEnabled.toggle()
                     }) {
@@ -4730,6 +4730,8 @@ struct QuickChatView: View {
     @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
         "Generate Image ChatGPT"
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+    @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
+    @AppStorage("WebSearchEnabled") private var webSearchEnabled: Bool = false
 
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome: Bool = false
@@ -4743,6 +4745,7 @@ struct QuickChatView: View {
     private let ollamaService = OllamaService()
     private let shortcutService = ShortcutService()
     private let appleFoundationService = AppleFoundationService()
+    private let webSearchService = WebSearchService()
 
     var thinkingMode: ThinkingMode {
         if selectedProvider.contains("Ollama") {
@@ -5129,6 +5132,24 @@ struct QuickChatView: View {
                 .help("Reasoning Effort")
             }
 
+            // Web Search Toggle (Ollama only)
+            if !ollamaAPIKey.isEmpty && selectedProvider.contains("Ollama") {
+                Button(action: { webSearchEnabled.toggle() }) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 16))
+                        .foregroundColor(webSearchEnabled ? .blue : .secondary)
+                        .padding(6)
+                        .background(
+                            webSearchEnabled
+                                ? Color.blue.opacity(0.15)
+                                : Color.secondary.opacity(0.1)
+                        )
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(webSearchEnabled ? "Web Search: On" : "Web Search: Off")
+            }
+
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 28, weight: .bold))
@@ -5343,6 +5364,22 @@ struct QuickChatView: View {
                     self.streamThinkingBuffer[aiMsgId] = ""
                 }
 
+                // Web search augmentation (Ollama only)
+                var ollamaSystemPrompt = systemPrompt
+                if webSearchEnabled && !ollamaAPIKey.isEmpty {
+                    do {
+                        let searchResults = try await webSearchService.search(
+                            query: content, apiKey: ollamaAPIKey)
+                        let searchContext = webSearchService.buildSearchContext(
+                            results: searchResults)
+                        if !searchContext.isEmpty {
+                            ollamaSystemPrompt = systemPrompt + searchContext
+                        }
+                    } catch {
+                        print("Web search failed: \(error.localizedDescription)")
+                    }
+                }
+
                 do {
                     var fullContent = ""
                     var fullThinking = ""
@@ -5350,7 +5387,8 @@ struct QuickChatView: View {
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), endpoint: ollamaURL,
-                        model: activeModel, systemPrompt: systemPrompt, thinkingLevel: thinkingLevel
+                        model: activeModel, systemPrompt: ollamaSystemPrompt,
+                        thinkingLevel: thinkingLevel
                     ) {
                         fullContent += contentChunk
                         if let thinking = thinkingChunk {

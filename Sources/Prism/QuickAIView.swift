@@ -53,6 +53,9 @@ struct QuickAIView: View {
     private let ollamaService = OllamaService()
     private let shortcutService = ShortcutService()
     private let appleFoundationService = AppleFoundationService()
+    private let webSearchService = WebSearchService()
+    @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
+    @AppStorage("WebSearchEnabled") private var webSearchEnabled: Bool = false
     @State private var showOpacityPopover: Bool = false
 
     // Custom spring animation for ultra-smooth transitions
@@ -113,7 +116,7 @@ struct QuickAIView: View {
             if !chatManager.getCurrentMessages().isEmpty {
                 isExpanded = true
             }
-            
+
             recalcPanelSize()
         }
         .onChange(of: isExpanded) { _, expanded in
@@ -403,6 +406,22 @@ struct QuickAIView: View {
 
                 let activeModel = selectedOllamaModel
 
+                // Web search augmentation (Ollama only)
+                var ollamaSystemPrompt = systemPrompt
+                if webSearchEnabled && !ollamaAPIKey.isEmpty {
+                    do {
+                        let searchResults = try await webSearchService.search(
+                            query: content, apiKey: ollamaAPIKey)
+                        let searchContext = webSearchService.buildSearchContext(
+                            results: searchResults)
+                        if !searchContext.isEmpty {
+                            ollamaSystemPrompt = systemPrompt + searchContext
+                        }
+                    } catch {
+                        print("Web search failed: \(error.localizedDescription)")
+                    }
+                }
+
                 do {
                     var fullContent = ""
                     var fullThinking = ""
@@ -410,7 +429,8 @@ struct QuickAIView: View {
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), endpoint: ollamaURL,
-                        model: activeModel, systemPrompt: systemPrompt, thinkingLevel: thinkingLevel
+                        model: activeModel, systemPrompt: ollamaSystemPrompt,
+                        thinkingLevel: thinkingLevel
                     ) {
                         fullContent += contentChunk
                         if let thinking = thinkingChunk {
@@ -619,7 +639,8 @@ struct QuickAIMessageView: View, Equatable {
                         {
                             ThinkingIndicator()
                         } else if !activeContent.isEmpty || message.isStreaming {
-                            let displayContent = activeContent + (message.isStreaming && isCursorVisible ? " ▋" : "")
+                            let displayContent =
+                                activeContent + (message.isStreaming && isCursorVisible ? " ▋" : "")
                             MarkdownView(blocks: Message.parseMarkdown(displayContent))
                                 .fixedSize(horizontal: false, vertical: true)
                                 .id("streamingMarkdown")
@@ -651,7 +672,7 @@ struct QuickAIMessageView: View, Equatable {
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
                             .buttonStyle(.plain)
-                            
+
                             // Paste to App button (only for text content)
                             if message.image == nil && !message.content.isEmpty {
                                 Button(action: {
@@ -670,7 +691,7 @@ struct QuickAIMessageView: View, Equatable {
                                 .buttonStyle(.plain)
                                 .help("Paste this response into the previous app")
                             }
-                            
+
                             Spacer()
                         }
 
@@ -1418,6 +1439,24 @@ extension QuickAIView {
                     }
                     .menuStyle(.borderlessButton)
                     .help("Select Gemini Model")
+                }
+
+                // Web Search Toggle (Ollama only)
+                if !ollamaAPIKey.isEmpty && selectedProvider.contains("Ollama") {
+                    Button(action: { webSearchEnabled.toggle() }) {
+                        Image(systemName: "globe")
+                            .font(.system(size: 16))
+                            .foregroundColor(webSearchEnabled ? .blue : .secondary)
+                            .padding(6)
+                            .background(
+                                webSearchEnabled
+                                    ? Color.blue.opacity(0.15)
+                                    : Color.white.opacity(0.10)
+                            )
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(webSearchEnabled ? "Web Search: On" : "Web Search: Off")
                 }
 
                 Button(action: sendMessage) {
