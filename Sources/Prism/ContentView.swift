@@ -41,18 +41,21 @@ struct ChatSession: Identifiable, Codable, Equatable {
 enum AttachmentType {
     case image
     case pdf
+    case text
 }
 
 struct Attachment: Identifiable, Equatable {
     let id = UUID()
     let type: AttachmentType
     let data: Data
+    var fileName: String? = nil
 }
 
 struct MessageAttachment: Identifiable, Codable, Equatable {
     var id = UUID()
-    var type: String  // "image" or "pdf"
+    var type: String  // "image", "pdf", or "text"
     var data: Data
+    var fileName: String?
 }
 
 struct Message: Identifiable, Codable, Equatable {
@@ -1478,21 +1481,33 @@ struct ContentView: View {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.image, .pdf]
+        panel.allowedContentTypes = [
+            .image, .pdf,
+            .plainText, .sourceCode, .json, .xml, .html, .yaml,
+            .commaSeparatedText,
+            UTType(filenameExtension: "md") ?? .plainText,
+            UTType(filenameExtension: "log") ?? .plainText,
+            UTType(filenameExtension: "csv") ?? .plainText,
+            UTType(filenameExtension: "toml") ?? .plainText,
+            .rtf,
+        ]
         if panel.runModal() == .OK {
             for url in panel.urls {
-                if url.pathExtension.lowercased() == "pdf" {
+                let ext = url.pathExtension.lowercased()
+                if ext == "pdf" {
                     if let data = try? Data(contentsOf: url) {
                         selectedAttachments.append(Attachment(type: .pdf, data: data))
                     }
+                } else if ["png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic"].contains(ext)
+                {
+                    if let data = try? Data(contentsOf: url) {
+                        selectedAttachments.append(Attachment(type: .image, data: data))
+                    }
                 } else {
-                    let imageExtensions = [
-                        "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
-                    ]
-                    if imageExtensions.contains(url.pathExtension.lowercased()) {
-                        if let data = try? Data(contentsOf: url) {
-                            selectedAttachments.append(Attachment(type: .image, data: data))
-                        }
+                    // Text-based files: txt, md, json, xml, html, csv, yaml, log, swift, py, js, etc.
+                    if let data = try? Data(contentsOf: url) {
+                        selectedAttachments.append(
+                            Attachment(type: .text, data: data, fileName: url.lastPathComponent))
                     }
                 }
             }
@@ -1508,7 +1523,22 @@ struct ContentView: View {
 
         // Convert to MessageAttachment
         let msgAttachments = selectedAttachments.map {
-            MessageAttachment(type: $0.type == .image ? "image" : "pdf", data: $0.data)
+            let typeStr: String
+            switch $0.type {
+            case .image: typeStr = "image"
+            case .pdf: typeStr = "pdf"
+            case .text: typeStr = "text"
+            }
+            return MessageAttachment(type: typeStr, data: $0.data, fileName: $0.fileName)
+        }
+
+        // For text attachments, append file contents to the input text
+        var augmentedInput = inputText
+        for attachment in selectedAttachments where attachment.type == .text {
+            if let text = String(data: attachment.data, encoding: .utf8) {
+                let name = attachment.fileName ?? "file"
+                augmentedInput += "\n\n--- Contents of \(name) ---\n\(text)\n--- End of \(name) ---"
+            }
         }
 
         // Fallback for legacy services
@@ -1532,7 +1562,7 @@ struct ContentView: View {
         )
         chatManager.addMessage(userMsg)
 
-        let currentInput = inputText
+        let currentInput = augmentedInput
         let currentAttachments = selectedAttachments
 
         inputText = ""
@@ -1555,7 +1585,13 @@ struct ContentView: View {
             var attachments: [Attachment] = []
             if let msgAttachments = lastUserMsg.attachments {
                 attachments = msgAttachments.map {
-                    Attachment(type: $0.type == "image" ? .image : .pdf, data: $0.data)
+                    let attachType: AttachmentType
+                    switch $0.type {
+                    case "image": attachType = .image
+                    case "text": attachType = .text
+                    default: attachType = .pdf
+                    }
+                    return Attachment(type: attachType, data: $0.data, fileName: $0.fileName)
                 }
             } else {
                 if let img = lastUserMsg.image, let tiff = img.tiffRepresentation {
@@ -2347,6 +2383,22 @@ struct AttachmentPreview: View {
                     .frame(width: 60, height: 60)
                     .background(Color.secondary.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                case .text:
+                    VStack(spacing: 2) {
+                        Image(systemName: "doc.plaintext")
+                            .font(.system(size: 24))
+                            .foregroundColor(.blue)
+                        Text(
+                            attachment.fileName?.components(separatedBy: ".").last?.uppercased()
+                                .prefix(4).map(String.init).joined() ?? "TXT"
+                        )
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    }
+                    .frame(width: 60, height: 60)
+                    .background(Color.secondary.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
             .overlay(
@@ -2381,19 +2433,31 @@ class PasteMonitor: ObservableObject {
                 if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
                     !urls.isEmpty
                 {
+                    let imageExtensions = [
+                        "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
+                    ]
+                    let textExtensions = [
+                        "txt", "md", "json", "xml", "html", "htm", "csv", "yaml", "yml",
+                        "log", "toml", "ini", "cfg", "conf", "rtf",
+                        "swift", "py", "js", "ts", "jsx", "tsx", "java", "c", "cpp", "h",
+                        "cs", "go", "rs", "rb", "php", "sh", "bash", "zsh", "sql", "r",
+                        "kt", "scala", "lua", "pl", "m", "mm",
+                    ]
                     for url in urls {
-                        if url.pathExtension.lowercased() == "pdf" {
+                        let ext = url.pathExtension.lowercased()
+                        if ext == "pdf" {
                             if let data = try? Data(contentsOf: url) {
                                 newAttachments.append(Attachment(type: .pdf, data: data))
                             }
-                        } else {
-                            let imageExtensions = [
-                                "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
-                            ]
-                            if imageExtensions.contains(url.pathExtension.lowercased()) {
-                                if let data = try? Data(contentsOf: url) {
-                                    newAttachments.append(Attachment(type: .image, data: data))
-                                }
+                        } else if imageExtensions.contains(ext) {
+                            if let data = try? Data(contentsOf: url) {
+                                newAttachments.append(Attachment(type: .image, data: data))
+                            }
+                        } else if textExtensions.contains(ext) {
+                            if let data = try? Data(contentsOf: url) {
+                                newAttachments.append(
+                                    Attachment(
+                                        type: .text, data: data, fileName: url.lastPathComponent))
                             }
                         }
                     }

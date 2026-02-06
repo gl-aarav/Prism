@@ -24,10 +24,7 @@ struct ModelComparisonView: View {
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
 
-    @State private var slots: [ComparisonSlot] = [
-        ComparisonSlot(provider: "Gemini API", model: "gemini-2.5-flash"),
-        ComparisonSlot(provider: "Ollama", model: "llama3.3"),
-    ]
+    @State private var slots: [ComparisonSlot] = ModelComparisonView.loadSavedSlots()
     @State private var prompt: String = ""
     @State private var isComparing: Bool = false
     @State private var currentTasks: [UUID: Task<Void, Never>] = [:]
@@ -35,7 +32,7 @@ struct ModelComparisonView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     // Synthesize state
-    @State private var showSynthesizeSheet: Bool = false
+    @State private var showSynthesizePanel: Bool = false
     @State private var synthesizedResponse: String = ""
     @State private var isSynthesizing: Bool = false
     @State private var synthesizeProvider: String = "Gemini API"
@@ -45,6 +42,31 @@ struct ModelComparisonView: View {
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
+
+    // MARK: - Slot Persistence
+
+    private static func loadSavedSlots() -> [ComparisonSlot] {
+        if let savedData = UserDefaults.standard.array(forKey: "ComparisonSlots")
+            as? [[String: String]],
+            savedData.count >= 2
+        {
+            return savedData.map {
+                ComparisonSlot(
+                    provider: $0["provider"] ?? "Gemini API",
+                    model: $0["model"] ?? "gemini-2.5-flash"
+                )
+            }
+        }
+        return [
+            ComparisonSlot(provider: "Gemini API", model: "gemini-2.5-flash"),
+            ComparisonSlot(provider: "Ollama", model: "llama3.3"),
+        ]
+    }
+
+    private func saveSlots() {
+        let data = slots.map { ["provider": $0.provider, "model": $0.model] }
+        UserDefaults.standard.set(data, forKey: "ComparisonSlots")
+    }
 
     // Liquid Glass palette (matching main InputView)
     private var innerGlowTop: Color {
@@ -87,6 +109,7 @@ struct ModelComparisonView: View {
                                     if let idx = slots.firstIndex(where: { $0.id == slotId }) {
                                         slots[idx].provider = provider
                                         slots[idx].model = model
+                                        saveSlots()
                                     }
                                 },
                                 ollamaManager: ollamaManager,
@@ -96,6 +119,69 @@ struct ModelComparisonView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
+
+                    // Synthesize button
+                    if slots.filter({ !$0.response.isEmpty && !$0.isLoading }).count >= 2 {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                showSynthesizePanel.toggle()
+                                if !showSynthesizePanel {
+                                    synthesizeTask?.cancel()
+                                    synthesizeTask = nil
+                                    isSynthesizing = false
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "wand.and.stars")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text(
+                                    showSynthesizePanel
+                                        ? "Hide Synthesis" : "Synthesize All Responses"
+                                )
+                                .font(.system(size: 14, weight: .semibold))
+                            }
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: appTheme.colors,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: appTheme.colors.map { $0.opacity(0.4) },
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 0.8
+                                            )
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .help("Combine all responses into one using AI")
+                        .padding(.top, 8)
+                    }
+
+                    // Inline synthesis panel
+                    if showSynthesizePanel {
+                        synthesizeInlinePanel
+                            .transition(
+                                .asymmetric(
+                                    insertion: .opacity.combined(with: .move(edge: .top)).combined(
+                                        with: .scale(scale: 0.95, anchor: .top)),
+                                    removal: .opacity.combined(
+                                        with: .scale(scale: 0.95, anchor: .top))
+                                ))
+                    }
                 }
                 .padding(.bottom, 100)
             }
@@ -104,9 +190,6 @@ struct ModelComparisonView: View {
             comparisonInputBar
         }
         .background(Color.clear)
-        .sheet(isPresented: $showSynthesizeSheet) {
-            synthesizeSheet
-        }
         .onDisappear {
             // Cancel all running tasks to prevent freeze when switching views
             for (_, task) in currentTasks {
@@ -189,44 +272,6 @@ struct ModelComparisonView: View {
                     )
                 }
                 .buttonStyle(.plain)
-            }
-
-            // Synthesize button
-            if slots.filter({ !$0.response.isEmpty && !$0.isLoading }).count >= 2 {
-                Button(action: { showSynthesizeSheet = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "wand.and.stars")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Synthesize")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: appTheme.colors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                Capsule()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: appTheme.colors.map { $0.opacity(0.4) },
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 0.8
-                                    )
-                            )
-                    )
-                }
-                .buttonStyle(.plain)
-                .help("Combine all responses into one using AI")
             }
 
             // Clear all
@@ -388,51 +433,21 @@ struct ModelComparisonView: View {
         .padding(.vertical, 12)
     }
 
-    // MARK: - Synthesize Sheet
+    // MARK: - Inline Synthesis Panel
 
-    private var synthesizeSheet: some View {
-        VStack(spacing: 0) {
-            // Sheet header
-            HStack {
-                HStack(spacing: 8) {
-                    Image(systemName: "wand.and.stars")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: appTheme.colors,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+    private var synthesizeInlinePanel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Panel header with provider picker
+            HStack(spacing: 12) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: appTheme.colors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                    Text("Synthesize Responses")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                }
-                Spacer()
-                Button(action: {
-                    synthesizeTask?.cancel()
-                    synthesizeTask = nil
-                    isSynthesizing = false
-                    showSynthesizeSheet = false
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.secondary)
-                        .padding(8)
-                        .background(Circle().fill(Color.secondary.opacity(0.1)))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 12)
-
-            Divider().opacity(0.3)
-
-            // Provider/Model picker
-            HStack(spacing: 16) {
-                Text("Synthesize with:")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.secondary)
+                    )
 
                 Menu {
                     Button(action: {
@@ -473,16 +488,16 @@ struct ModelComparisonView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: synthesizeProviderIcon)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                         Text("\(synthesizeProvider) — \(synthesizeModel)")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                         Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 8, weight: .bold))
                             .foregroundColor(.secondary)
                     }
                     .foregroundColor(.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
                     .background(
                         Capsule()
                             .fill(.ultraThinMaterial)
@@ -499,15 +514,15 @@ struct ModelComparisonView: View {
 
                 if !isSynthesizing && synthesizedResponse.isEmpty {
                     Button(action: startSynthesis) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 5) {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                             Text("Generate")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 12, weight: .semibold))
                         }
                         .foregroundColor(colorScheme == .dark ? .black : .white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
                         .background(
                             Capsule()
                                 .fill(
@@ -526,69 +541,25 @@ struct ModelComparisonView: View {
                         synthesizeTask = nil
                         isSynthesizing = false
                     }) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 5) {
                             ProgressView()
                                 .controlSize(.small)
                                 .scaleEffect(0.7)
                             Text("Stop")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.system(size: 12, weight: .medium))
                         }
                         .foregroundColor(.red)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                         .background(
                             Capsule().fill(Color.red.opacity(0.1))
                         )
                     }
                     .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-
-            Divider().opacity(0.3)
-
-            // Response area
-            if synthesizedResponse.isEmpty && !isSynthesizing {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "wand.and.stars")
-                        .font(.system(size: 36))
-                        .foregroundColor(.secondary.opacity(0.25))
-                    Text(
-                        "Select a model and tap Generate to combine\nall responses into one comprehensive answer"
-                    )
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary.opacity(0.5))
-                    .multilineTextAlignment(.center)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(synthesizedResponse)
-                            .font(.system(size: 14))
-                            .foregroundColor(.primary)
-                            .textSelection(.enabled)
-                            .lineSpacing(5)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(20)
-                }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: synthesizedResponse)
-
-                // Copy bar
-                if !synthesizedResponse.isEmpty && !isSynthesizing {
-                    Divider().opacity(0.3)
-                    HStack {
-                        Text("Synthesized by \(synthesizeProvider) — \(synthesizeModel)")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Button(action: {
-                            synthesizedResponse = ""
-                        }) {
+                } else {
+                    // Has response - show copy/retry
+                    HStack(spacing: 8) {
+                        Button(action: { synthesizedResponse = "" }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.counterclockwise")
                                     .font(.system(size: 10))
@@ -618,18 +589,77 @@ struct ModelComparisonView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            // Response content
+            if synthesizedResponse.isEmpty && !isSynthesizing {
+                HStack {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: 28))
+                            .foregroundColor(.secondary.opacity(0.2))
+                        Text("Select a model and tap Generate")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary.opacity(0.4))
+                    }
+                    .padding(.vertical, 24)
+                    Spacer()
+                }
+            } else {
+                Divider().opacity(0.2).padding(.horizontal, 16)
+
+                ScrollView {
+                    Text(synthesizedResponse)
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+                        .textSelection(.enabled)
+                        .lineSpacing(4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                }
+                .frame(maxHeight: 350)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: synthesizedResponse)
+
+                if !synthesizedResponse.isEmpty && !isSynthesizing {
+                    HStack {
+                        Text("Synthesized by \(synthesizeProvider) — \(synthesizeModel)")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary.opacity(0.6))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
                 }
             }
         }
-        .frame(minWidth: 600, minHeight: 450)
-        .background(.ultraThinMaterial)
-        .onDisappear {
-            synthesizeTask?.cancel()
-            synthesizeTask = nil
-            isSynthesizing = false
-        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(
+                    colorScheme == .dark
+                        ? Color.white.opacity(0.04)
+                        : Color.white.opacity(0.6)
+                )
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: appTheme.colors.map { $0.opacity(0.3) },
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
+        )
+        .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
     }
 
     private var synthesizeProviderIcon: String {
@@ -737,6 +767,7 @@ struct ModelComparisonView: View {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
             slots.append(ComparisonSlot(provider: newDefault.0, model: newDefault.1))
         }
+        saveSlots()
     }
 
     private func removeSlot(at index: Int) {
@@ -747,6 +778,7 @@ struct ModelComparisonView: View {
         let _ = withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             slots.remove(at: index)
         }
+        saveSlots()
     }
 
     private func clearAll() {
