@@ -1,0 +1,521 @@
+import SwiftUI
+
+// MARK: - Slash Command Autocomplete Dropdown
+
+struct SlashCommandAutocomplete: View {
+    let matches: [SlashCommand]
+    let selectedIndex: Int
+    let onSelect: (SlashCommand) -> Void
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack(spacing: 6) {
+                Image(systemName: "command")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+                Text("Commands")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("↑↓ navigate")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.6))
+                Text("↵ select")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.6))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+                .padding(.horizontal, 8)
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(matches.enumerated()), id: \.element.id) { index, command in
+                            SlashCommandRow(
+                                command: command,
+                                isSelected: index == selectedIndex
+                            )
+                            .id(index)
+                            .onTapGesture {
+                                onSelect(command)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 4)
+                }
+                .frame(maxHeight: 240)
+                .onChange(of: selectedIndex) { _, newIndex in
+                    withAnimation(.easeInOut(duration: 0.1)) {
+                        proxy.scrollTo(newIndex, anchor: .center)
+                    }
+                }
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    colorScheme == .dark
+                        ? Color.white.opacity(0.12)
+                        : Color.black.opacity(0.08),
+                    lineWidth: 0.5
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+struct SlashCommandRow: View {
+    let command: SlashCommand
+    let isSelected: Bool
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 10) {
+            // Icon
+            Image(systemName: iconForCommand(command))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isSelected ? .white : commandColor(command))
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(
+                            isSelected
+                                ? commandColor(command)
+                                : commandColor(command).opacity(0.12)
+                        )
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(command.trigger)
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundColor(isSelected ? .white : .primary)
+
+                if !command.expansion.isEmpty {
+                    Text(command.expansion)
+                        .font(.system(size: 11))
+                        .foregroundColor(
+                            isSelected
+                                ? .white.opacity(0.7)
+                                : .secondary
+                        )
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            if command.isBuiltIn {
+                Text("built-in")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary.opacity(0.5))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(
+                                isSelected
+                                    ? Color.white.opacity(0.15)
+                                    : Color.secondary.opacity(0.08)
+                            )
+                    )
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    isSelected
+                        ? LinearGradient(
+                            colors: [Color.accentColor, Color.accentColor.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        : LinearGradient(
+                            colors: [Color.clear, Color.clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                )
+        )
+        .contentShape(Rectangle())
+    }
+
+    private func iconForCommand(_ command: SlashCommand) -> String {
+        switch command.trigger {
+        case "/summarize": return "doc.text"
+        case "/explain": return "lightbulb"
+        case "/translate": return "globe"
+        case "/fix": return "wand.and.stars"
+        case "/code": return "chevron.left.forwardslash.chevron.right"
+        case "/rewrite": return "pencil.line"
+        case "/bullets": return "list.bullet"
+        case "/eli5": return "face.smiling"
+        case "/pros-cons": return "plusminus"
+        case "/clear": return "trash"
+        case "/quit": return "power"
+        case "/new": return "plus.message"
+        default: return "command"
+        }
+    }
+
+    private func commandColor(_ command: SlashCommand) -> Color {
+        switch command.trigger {
+        case "/summarize": return .blue
+        case "/explain": return .yellow
+        case "/translate": return .green
+        case "/fix": return .purple
+        case "/code": return .orange
+        case "/rewrite": return .pink
+        case "/bullets": return .cyan
+        case "/eli5": return .mint
+        case "/pros-cons": return .indigo
+        case "/clear": return .red
+        case "/quit": return .red
+        case "/new": return .green
+        default: return .accentColor
+        }
+    }
+}
+
+// MARK: - Commands Management View (Settings Tab / Sidebar Panel)
+
+struct CommandsManagementView: View {
+    @ObservedObject var commandManager = SlashCommandManager.shared
+    @State private var newTrigger: String = ""
+    @State private var newExpansion: String = ""
+    @State private var editingCommand: SlashCommand? = nil
+    @State private var editTrigger: String = ""
+    @State private var editExpansion: String = ""
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Slash Commands")
+                        .font(.system(size: 22, weight: .bold))
+                    Text("Type / in the chat to use commands. Add your own shortcuts below.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+
+            Divider()
+                .padding(.horizontal, 16)
+
+            // Add new command section
+            VStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    // Trigger field
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Command")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        HStack(spacing: 4) {
+                            Text("/")
+                                .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.secondary)
+                            TextField("shortcut", text: $newTrigger)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 14, design: .monospaced))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.06)
+                                        : Color.black.opacity(0.04)
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    // Expansion field
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Expands to")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        TextField("What should it type...", text: $newExpansion)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 14))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.06)
+                                            : Color.black.opacity(0.04)
+                                    )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+                            )
+                    }
+                    .frame(maxWidth: .infinity)
+
+                    // Add button
+                    Button(action: addCommand) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: appTheme.colors,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(newTrigger.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .padding(.top, 18)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+
+            Divider()
+                .padding(.horizontal, 16)
+
+            // Command list
+            ScrollView {
+                VStack(spacing: 2) {
+                    // Custom commands first
+                    let custom = commandManager.commands.filter { !$0.isBuiltIn }
+                    if !custom.isEmpty {
+                        SectionHeader(title: "Custom Commands")
+                        ForEach(custom) { cmd in
+                            CommandListRow(
+                                command: cmd,
+                                isEditing: editingCommand?.id == cmd.id,
+                                editTrigger: $editTrigger,
+                                editExpansion: $editExpansion,
+                                onEdit: { startEditing(cmd) },
+                                onSave: { saveEdit(cmd) },
+                                onCancel: { cancelEdit() },
+                                onDelete: { commandManager.deleteCommand(id: cmd.id) }
+                            )
+                        }
+                    }
+
+                    // Built-in commands
+                    SectionHeader(title: "Built-in Commands")
+                    ForEach(commandManager.commands.filter { $0.isBuiltIn }) { cmd in
+                        CommandListRow(
+                            command: cmd,
+                            isEditing: editingCommand?.id == cmd.id,
+                            editTrigger: $editTrigger,
+                            editExpansion: $editExpansion,
+                            onEdit: { startEditing(cmd) },
+                            onSave: { saveEdit(cmd) },
+                            onCancel: { cancelEdit() },
+                            onDelete: nil  // can't delete built-ins
+                        )
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private func addCommand() {
+        let trigger = newTrigger.trimmingCharacters(in: .whitespaces)
+        guard !trigger.isEmpty else { return }
+        commandManager.addCommand(trigger: trigger, expansion: newExpansion)
+        newTrigger = ""
+        newExpansion = ""
+    }
+
+    private func startEditing(_ cmd: SlashCommand) {
+        editingCommand = cmd
+        editTrigger = cmd.trigger
+        editExpansion = cmd.expansion
+    }
+
+    private func saveEdit(_ cmd: SlashCommand) {
+        commandManager.updateCommand(id: cmd.id, trigger: editTrigger, expansion: editExpansion)
+        editingCommand = nil
+    }
+
+    private func cancelEdit() {
+        editingCommand = nil
+    }
+}
+
+struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+    }
+}
+
+struct CommandListRow: View {
+    let command: SlashCommand
+    let isEditing: Bool
+    @Binding var editTrigger: String
+    @Binding var editExpansion: String
+    let onEdit: () -> Void
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    let onDelete: (() -> Void)?
+    @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if isEditing {
+                // Editing mode - side by side fields
+                HStack(spacing: 8) {
+                    HStack(spacing: 2) {
+                        Text("/")
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.secondary)
+                        TextField("command", text: $editTrigger)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13, design: .monospaced))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.08)
+                                    : Color.black.opacity(0.04)
+                            )
+                    )
+                    .frame(maxWidth: 160)
+
+                    TextField("Expansion text...", text: $editExpansion)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.08)
+                                        : Color.black.opacity(0.04)
+                                )
+                        )
+
+                    Button(action: onSave) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                // Display mode
+                Text(command.trigger)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .frame(width: 120, alignment: .leading)
+
+                if SlashCommandManager.actionCommands.contains(command.trigger) {
+                    Text(actionDescription(command.trigger))
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .italic()
+                } else {
+                    Text(command.expansion)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                if isHovered {
+                    HStack(spacing: 6) {
+                        Button(action: onEdit) {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        if let onDelete = onDelete {
+                            Button(action: onDelete) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.red.opacity(0.7))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .transition(.opacity)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    isHovered
+                        ? (colorScheme == .dark
+                            ? Color.white.opacity(0.05)
+                            : Color.black.opacity(0.03))
+                        : Color.clear
+                )
+        )
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
+    }
+
+    private func actionDescription(_ trigger: String) -> String {
+        switch trigger {
+        case "/clear": return "Clears the current chat"
+        case "/quit": return "Quits Prism"
+        case "/new": return "Creates a new chat session"
+        default: return "Action command"
+        }
+    }
+}

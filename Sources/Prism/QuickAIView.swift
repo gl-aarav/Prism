@@ -21,6 +21,10 @@ struct QuickAIView: View {
     @State private var selectedStyle: String = "Animation"
     @FocusState private var isFocused: Bool
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject private var slashCommandManager = SlashCommandManager.shared
+    @State private var slashMatches: [SlashCommand] = []
+    @State private var slashSelectedIndex: Int = 0
+    @State private var showSlashAutocomplete: Bool = false
 
     // Settings
     @AppStorage("GeminiKey") private var geminiKey: String = ""
@@ -72,7 +76,7 @@ struct QuickAIView: View {
     }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 if isExpanded {
                     VStack(spacing: 12) {
@@ -107,6 +111,23 @@ struct QuickAIView: View {
                 }
 
                 inputSection
+            }
+
+            // Floating slash command autocomplete - overlays above input
+            if showSlashAutocomplete && !slashMatches.isEmpty {
+                VStack {
+                    Spacer()
+                    SlashCommandAutocomplete(
+                        matches: slashMatches,
+                        selectedIndex: slashSelectedIndex,
+                        onSelect: { command in
+                            applySlashCommand(command)
+                        }
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, isExpanded ? 72 : 62)
+                }
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .frame(width: 700)
@@ -211,7 +232,13 @@ struct QuickAIView: View {
         let extraHeightPerLine = lineHeight * 0.82
         // Increased base heights to accommodate shadows and prevent clipping
         let baseHeight: CGFloat = isExpanded ? 550 : 110
-        let targetHeight = baseHeight + CGFloat(max(0, lines - 1)) * extraHeightPerLine
+        var targetHeight = baseHeight + CGFloat(max(0, lines - 1)) * extraHeightPerLine
+
+        // Add extra height when slash command autocomplete is showing
+        if showSlashAutocomplete && !slashMatches.isEmpty {
+            let autocompleteHeight = min(CGFloat(slashMatches.count) * 44 + 40, 280)
+            targetHeight += autocompleteHeight
+        }
 
         onResize?(CGSize(width: baseWidth, height: targetHeight))
     }
@@ -226,6 +253,56 @@ struct QuickAIView: View {
         case "Image Creation": return "paintbrush"
         case "ChatGPT": return "message"
         default: return "cpu"
+        }
+    }
+
+    // MARK: - Slash Command Helpers
+
+    private func updateSlashAutocomplete(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("/") && !trimmed.contains(" ") {
+            let matches = slashCommandManager.matches(for: trimmed)
+            slashMatches = matches
+            slashSelectedIndex = 0
+            showSlashAutocomplete = !matches.isEmpty
+        } else {
+            showSlashAutocomplete = false
+            slashMatches = []
+        }
+        // Single deferred resize after all state is settled
+        DispatchQueue.main.async { [self] in
+            recalcPanelSize()
+        }
+    }
+
+    private func applySlashCommand(_ command: SlashCommand) {
+        showSlashAutocomplete = false
+        slashMatches = []
+
+        if slashCommandManager.isActionCommand(command.trigger) {
+            inputText = ""
+            switch command.trigger {
+            case "/clear":
+                chatManager.deleteCurrentSession()
+                chatManager.createNewSession()
+                withAnimation(collapseAnimation) {
+                    isExpanded = false
+                }
+            case "/quit":
+                NSApplication.shared.terminate(nil)
+            case "/new":
+                chatManager.createNewSession()
+                withAnimation(collapseAnimation) {
+                    isExpanded = false
+                }
+            default:
+                break
+            }
+        } else {
+            inputText = command.expansion + " "
+        }
+        DispatchQueue.main.async {
+            recalcPanelSize()
         }
     }
 
@@ -1129,17 +1206,52 @@ extension QuickAIView {
             }
 
             HStack(alignment: .center, spacing: 12) {
-                TextField("Request...", text: $inputText, axis: .vertical)
+                TextField("Request... (type / for commands)", text: $inputText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 16))
                     .foregroundColor(colorScheme == .dark ? .white : .black)
                     .lineLimit(1...6)
                     .multilineTextAlignment(.leading)
                     .focused($isFocused)
-                    .onChange(of: inputText) { _, _ in
-                        recalcPanelSize()
+                    .onChange(of: inputText) { _, newValue in
+                        updateSlashAutocomplete(newValue)
                     }
-                    .onSubmit { sendMessage() }
+                    .onKeyPress(.upArrow) {
+                        if showSlashAutocomplete && !slashMatches.isEmpty {
+                            slashSelectedIndex = max(0, slashSelectedIndex - 1)
+                            return .handled
+                        }
+                        return .ignored
+                    }
+                    .onKeyPress(.downArrow) {
+                        if showSlashAutocomplete && !slashMatches.isEmpty {
+                            slashSelectedIndex = min(slashMatches.count - 1, slashSelectedIndex + 1)
+                            return .handled
+                        }
+                        return .ignored
+                    }
+                    .onKeyPress(.tab) {
+                        if showSlashAutocomplete && !slashMatches.isEmpty {
+                            applySlashCommand(slashMatches[slashSelectedIndex])
+                            return .handled
+                        }
+                        return .ignored
+                    }
+                    .onKeyPress(.escape) {
+                        if showSlashAutocomplete {
+                            showSlashAutocomplete = false
+                            return .handled
+                        }
+                        return .ignored
+                    }
+                    .onKeyPress(.return) {
+                        if showSlashAutocomplete && !slashMatches.isEmpty {
+                            applySlashCommand(slashMatches[slashSelectedIndex])
+                            return .handled
+                        }
+                        sendMessage()
+                        return .handled
+                    }
                     .onPasteCommand(of: [.fileURL, .pdf]) { providers in
                         for provider in providers {
                             if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {

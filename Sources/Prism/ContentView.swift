@@ -1319,6 +1319,7 @@ struct ContentView: View {
     @State private var currentTask: Task<Void, Never>?
     @State private var showImageGallery: Bool = false
     @State private var showModelComparison: Bool = false
+    @State private var showCommands: Bool = false
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
 
@@ -1350,7 +1351,8 @@ struct ContentView: View {
             NavigationSplitView(columnVisibility: $columnVisibility) {
                 SidebarView(
                     chatManager: chatManager, showImageGallery: $showImageGallery,
-                    showModelComparison: $showModelComparison)
+                    showModelComparison: $showModelComparison,
+                    showCommands: $showCommands)
             } detail: {
                 ZStack {
                     // Background Layer
@@ -1395,7 +1397,9 @@ struct ContentView: View {
                     .ignoresSafeArea()
 
                     // Content Layer
-                    if showModelComparison {
+                    if showCommands {
+                        CommandsManagementView()
+                    } else if showModelComparison {
                         ModelComparisonView()
                     } else if showImageGallery {
                         ImageGalleryView(
@@ -1459,7 +1463,8 @@ struct ContentView: View {
                                         isOllama: selectedProvider.contains("Ollama"),
                                         isGemini: selectedProvider == "Gemini API",
                                         webSearchEnabled: $webSearchEnabled,
-                                        hasOllamaAPIKey: !ollamaAPIKey.isEmpty
+                                        hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
+                                        onSlashAction: handleSlashAction
                                     )
                                 }
                                 .onChange(of: chatManager.getCurrentMessages().count) { _, count in
@@ -1585,6 +1590,20 @@ struct ContentView: View {
                     }
                 }
             }
+        }
+    }
+
+    func handleSlashAction(_ trigger: String) {
+        switch trigger {
+        case "/clear":
+            chatManager.deleteCurrentSession()
+            chatManager.createNewSession()
+        case "/quit":
+            NSApplication.shared.terminate(nil)
+        case "/new":
+            chatManager.createNewSession()
+        default:
+            break
         }
     }
 
@@ -1984,6 +2003,7 @@ struct SidebarView: View {
     @ObservedObject var chatManager: ChatManager
     @Binding var showImageGallery: Bool
     @Binding var showModelComparison: Bool
+    @Binding var showCommands: Bool
     @Namespace private var animation
 
     @State private var searchText: String = ""
@@ -2013,6 +2033,7 @@ struct SidebarView: View {
             SidebarItem(icon: "square.and.pencil", title: "New chat") {
                 showImageGallery = false
                 showModelComparison = false
+                showCommands = false
                 chatManager.createNewSession()
             }
 
@@ -2045,6 +2066,7 @@ struct SidebarView: View {
                                     Button(action: {
                                         showImageGallery = false
                                         showModelComparison = false
+                                        showCommands = false
                                         chatManager.currentSessionId = session.id
                                         isSearchVisible = false
                                     }) {
@@ -2077,6 +2099,7 @@ struct SidebarView: View {
                 withAnimation {
                     showImageGallery = true
                     showModelComparison = false
+                    showCommands = false
                     chatManager.currentSessionId = nil
                 }
             }
@@ -2090,6 +2113,17 @@ struct SidebarView: View {
             {
                 withAnimation {
                     showModelComparison = true
+                    showImageGallery = false
+                    showCommands = false
+                    chatManager.currentSessionId = nil
+                }
+            }
+
+            // Commands
+            SidebarItem(icon: "command", title: "Commands", isSelected: showCommands) {
+                withAnimation {
+                    showCommands = true
+                    showModelComparison = false
                     showImageGallery = false
                     chatManager.currentSessionId = nil
                 }
@@ -2116,7 +2150,7 @@ struct SidebarView: View {
                 ) { session in
                     SidebarRow(
                         session: session,
-                        isSelected: !showImageGallery && !showModelComparison
+                        isSelected: !showImageGallery && !showModelComparison && !showCommands
                             && chatManager.currentSessionId == session.id,
                         isRenaming: renamingSessionId == session.id,
                         renameText: $renameText,
@@ -2124,6 +2158,7 @@ struct SidebarView: View {
                         onSelect: {
                             showImageGallery = false
                             showModelComparison = false
+                            showCommands = false
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                 chatManager.currentSessionId = session.id
                             }
@@ -2607,16 +2642,21 @@ struct InputView: View {
     var isGemini: Bool = false
     @Binding var webSearchEnabled: Bool
     var hasOllamaAPIKey: Bool = false
+    var onSlashAction: ((String) -> Void)? = nil  // callback for action commands (/clear, /quit, /new)
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
+    @ObservedObject private var slashCommandManager = SlashCommandManager.shared
 
     @FocusState private var isFocused: Bool
     @StateObject private var pasteMonitor = PasteMonitor()
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
     @State private var glassHover: Bool = false
+    @State private var slashMatches: [SlashCommand] = []
+    @State private var slashSelectedIndex: Int = 0
+    @State private var showSlashAutocomplete: Bool = false
     @Environment(\.colorScheme) private var colorScheme
 
     // Liquid Glass palette
@@ -2641,11 +2681,29 @@ struct InputView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Slash command autocomplete dropdown
+            if showSlashAutocomplete && !slashMatches.isEmpty {
+                SlashCommandAutocomplete(
+                    matches: slashMatches,
+                    selectedIndex: slashSelectedIndex,
+                    onSelect: { command in
+                        applySlashCommand(command)
+                    }
+                )
+                .padding(.horizontal, 4)
+                .padding(.bottom, 6)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .animation(.easeOut(duration: 0.15), value: showSlashAutocomplete)
+            }
+
             imagePreview
             inputBar
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .onChange(of: inputText) { _, newValue in
+            updateSlashAutocomplete(newValue)
+        }
         .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
             handlePaste(providers)
             return true
@@ -3133,11 +3191,15 @@ struct InputView: View {
     private var inputField: some View {
         ZStack(alignment: .leading) {
             if inputText.isEmpty && !isFocused {
-                Text(isImageGen ? "Describe image to generate..." : "Ask AI anything...")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(.secondary.opacity(0.6))
-                    .allowsHitTesting(false)
-                    .padding(.leading, 4)
+                Text(
+                    isImageGen
+                        ? "Describe image to generate..."
+                        : "Ask AI anything... (type / for commands)"
+                )
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(.secondary.opacity(0.6))
+                .allowsHitTesting(false)
+                .padding(.leading, 4)
             }
 
             TextField("", text: $inputText, axis: .vertical)
@@ -3146,7 +3208,39 @@ struct InputView: View {
                 .font(.system(size: 15))
                 .foregroundColor(colorScheme == .dark ? .white : .black)
                 .lineLimit(1...10)
+                .onKeyPress(.upArrow) {
+                    if showSlashAutocomplete && !slashMatches.isEmpty {
+                        slashSelectedIndex = max(0, slashSelectedIndex - 1)
+                        return .handled
+                    }
+                    return .ignored
+                }
+                .onKeyPress(.downArrow) {
+                    if showSlashAutocomplete && !slashMatches.isEmpty {
+                        slashSelectedIndex = min(slashMatches.count - 1, slashSelectedIndex + 1)
+                        return .handled
+                    }
+                    return .ignored
+                }
+                .onKeyPress(.tab) {
+                    if showSlashAutocomplete && !slashMatches.isEmpty {
+                        applySlashCommand(slashMatches[slashSelectedIndex])
+                        return .handled
+                    }
+                    return .ignored
+                }
+                .onKeyPress(.escape) {
+                    if showSlashAutocomplete {
+                        showSlashAutocomplete = false
+                        return .handled
+                    }
+                    return .ignored
+                }
                 .onKeyPress(.return) {
+                    if showSlashAutocomplete && !slashMatches.isEmpty {
+                        applySlashCommand(slashMatches[slashSelectedIndex])
+                        return .handled
+                    }
                     if NSEvent.modifierFlags.contains(.shift) {
                         return .ignored
                     } else {
@@ -3157,6 +3251,39 @@ struct InputView: View {
                 .onPasteCommand(of: [.image, .fileURL]) { providers in
                     handlePaste(providers)
                 }
+        }
+    }
+
+    // MARK: - Slash Command Helpers
+
+    private func updateSlashAutocomplete(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("/") && !trimmed.contains(" ") {
+            let matches = slashCommandManager.matches(for: trimmed)
+            withAnimation(.easeOut(duration: 0.12)) {
+                slashMatches = matches
+                slashSelectedIndex = 0
+                showSlashAutocomplete = !matches.isEmpty
+            }
+        } else {
+            if showSlashAutocomplete {
+                withAnimation(.easeOut(duration: 0.12)) {
+                    showSlashAutocomplete = false
+                    slashMatches = []
+                }
+            }
+        }
+    }
+
+    private func applySlashCommand(_ command: SlashCommand) {
+        showSlashAutocomplete = false
+        slashMatches = []
+
+        if slashCommandManager.isActionCommand(command.trigger) {
+            inputText = ""
+            onSlashAction?(command.trigger)
+        } else {
+            inputText = command.expansion + " "
         }
     }
 
@@ -4713,6 +4840,10 @@ struct QuickChatView: View {
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
     @Environment(\.colorScheme) private var colorScheme
+    @ObservedObject private var slashCommandManager = SlashCommandManager.shared
+    @State private var slashMatches: [SlashCommand] = []
+    @State private var slashSelectedIndex: Int = 0
+    @State private var showSlashAutocomplete: Bool = false
 
     // Settings (Read-only access to keys)
     @AppStorage("GeminiKey") private var geminiKey: String = ""
@@ -4792,7 +4923,26 @@ struct QuickChatView: View {
             VStack(spacing: 12) {
                 headerBar
                 messagesSection
-                inputBar
+
+                ZStack(alignment: .bottom) {
+                    VStack(spacing: 0) {
+                        // Slash command autocomplete
+                        if showSlashAutocomplete && !slashMatches.isEmpty {
+                            SlashCommandAutocomplete(
+                                matches: slashMatches,
+                                selectedIndex: slashSelectedIndex,
+                                onSelect: { command in
+                                    applyQuickChatSlashCommand(command)
+                                }
+                            )
+                            .padding(.bottom, 6)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                            .animation(.easeOut(duration: 0.15), value: showSlashAutocomplete)
+                        }
+
+                        inputBar
+                    }
+                }
             }
             .padding(12)
         }
@@ -4920,13 +5070,52 @@ struct QuickChatView: View {
     private var inputBar: some View {
         HStack(alignment: .center, spacing: 12) {
             TextField(
-                selectedProvider == "Image Creation" ? "Describe an image..." : "Ask anything...",
+                selectedProvider == "Image Creation"
+                    ? "Describe an image..." : "Ask anything... (type / for commands)",
                 text: $inputText, axis: .vertical
             )
             .textFieldStyle(.plain)
             .foregroundColor(colorScheme == .dark ? .white : .black)
             .lineLimit(1...6)
-            .onSubmit(sendMessage)
+            .onChange(of: inputText) { _, newValue in
+                updateQuickChatSlashAutocomplete(newValue)
+            }
+            .onKeyPress(.upArrow) {
+                if showSlashAutocomplete && !slashMatches.isEmpty {
+                    slashSelectedIndex = max(0, slashSelectedIndex - 1)
+                    return .handled
+                }
+                return .ignored
+            }
+            .onKeyPress(.downArrow) {
+                if showSlashAutocomplete && !slashMatches.isEmpty {
+                    slashSelectedIndex = min(slashMatches.count - 1, slashSelectedIndex + 1)
+                    return .handled
+                }
+                return .ignored
+            }
+            .onKeyPress(.tab) {
+                if showSlashAutocomplete && !slashMatches.isEmpty {
+                    applyQuickChatSlashCommand(slashMatches[slashSelectedIndex])
+                    return .handled
+                }
+                return .ignored
+            }
+            .onKeyPress(.escape) {
+                if showSlashAutocomplete {
+                    showSlashAutocomplete = false
+                    return .handled
+                }
+                return .ignored
+            }
+            .onKeyPress(.return) {
+                if showSlashAutocomplete && !slashMatches.isEmpty {
+                    applyQuickChatSlashCommand(slashMatches[slashSelectedIndex])
+                    return .handled
+                }
+                sendMessage()
+                return .handled
+            }
             .padding(.vertical, 10)
 
             if selectedProvider == "Image Creation" {
@@ -5228,6 +5417,49 @@ struct QuickChatView: View {
         case "Image Creation": return "paintbrush"  // Fixed icon name
         case "ChatGPT": return "message"
         default: return "cpu"
+        }
+    }
+
+    // MARK: - Slash Command Helpers
+
+    private func updateQuickChatSlashAutocomplete(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("/") && !trimmed.contains(" ") {
+            let matches = slashCommandManager.matches(for: trimmed)
+            withAnimation(.easeOut(duration: 0.12)) {
+                slashMatches = matches
+                slashSelectedIndex = 0
+                showSlashAutocomplete = !matches.isEmpty
+            }
+        } else {
+            if showSlashAutocomplete {
+                withAnimation(.easeOut(duration: 0.12)) {
+                    showSlashAutocomplete = false
+                    slashMatches = []
+                }
+            }
+        }
+    }
+
+    private func applyQuickChatSlashCommand(_ command: SlashCommand) {
+        showSlashAutocomplete = false
+        slashMatches = []
+
+        if slashCommandManager.isActionCommand(command.trigger) {
+            inputText = ""
+            switch command.trigger {
+            case "/clear":
+                chatManager.deleteCurrentSession()
+                chatManager.createNewSession()
+            case "/quit":
+                NSApplication.shared.terminate(nil)
+            case "/new":
+                chatManager.createNewSession()
+            default:
+                break
+            }
+        } else {
+            inputText = command.expansion + " "
         }
     }
 
