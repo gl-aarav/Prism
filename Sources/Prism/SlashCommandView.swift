@@ -153,6 +153,9 @@ struct SlashCommandRow: View {
     }
 
     private func iconForCommand(_ command: SlashCommand) -> String {
+        if let customIcon = command.icon, !customIcon.isEmpty {
+            return customIcon
+        }
         switch command.trigger {
         case "/summarize": return "doc.text"
         case "/explain": return "lightbulb"
@@ -195,9 +198,11 @@ struct CommandsManagementView: View {
     @ObservedObject var commandManager = SlashCommandManager.shared
     @State private var newTrigger: String = ""
     @State private var newExpansion: String = ""
+    @State private var newIcon: String = "command"
     @State private var editingCommand: SlashCommand? = nil
     @State private var editTrigger: String = ""
     @State private var editExpansion: String = ""
+    @State private var editIcon: String = "command"
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
@@ -224,6 +229,44 @@ struct CommandsManagementView: View {
             // Add new command section
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
+                    // Icon picker
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Icon")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Menu {
+                            ForEach(SlashCommand.availableIcons, id: \.symbol) { icon in
+                                Button(action: { newIcon = icon.symbol }) {
+                                    Label(icon.name, systemImage: icon.symbol)
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: newIcon)
+                                    .font(.system(size: 14))
+                                    .frame(width: 20)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.06)
+                                            : Color.black.opacity(0.04)
+                                    )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+                            )
+                        }
+                        .menuStyle(.borderlessButton)
+                    }
+
                     // Trigger field
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Command")
@@ -315,6 +358,7 @@ struct CommandsManagementView: View {
                                 isEditing: editingCommand?.id == cmd.id,
                                 editTrigger: $editTrigger,
                                 editExpansion: $editExpansion,
+                                editIcon: $editIcon,
                                 onEdit: { startEditing(cmd) },
                                 onSave: { saveEdit(cmd) },
                                 onCancel: { cancelEdit() },
@@ -331,6 +375,7 @@ struct CommandsManagementView: View {
                             isEditing: editingCommand?.id == cmd.id,
                             editTrigger: $editTrigger,
                             editExpansion: $editExpansion,
+                            editIcon: $editIcon,
                             onEdit: { startEditing(cmd) },
                             onSave: { saveEdit(cmd) },
                             onCancel: { cancelEdit() },
@@ -347,19 +392,22 @@ struct CommandsManagementView: View {
     private func addCommand() {
         let trigger = newTrigger.trimmingCharacters(in: .whitespaces)
         guard !trigger.isEmpty else { return }
-        commandManager.addCommand(trigger: trigger, expansion: newExpansion)
+        commandManager.addCommand(trigger: trigger, expansion: newExpansion, icon: newIcon)
         newTrigger = ""
         newExpansion = ""
+        newIcon = "command"
     }
 
     private func startEditing(_ cmd: SlashCommand) {
         editingCommand = cmd
         editTrigger = cmd.trigger
         editExpansion = cmd.expansion
+        editIcon = cmd.icon ?? "command"
     }
 
     private func saveEdit(_ cmd: SlashCommand) {
-        commandManager.updateCommand(id: cmd.id, trigger: editTrigger, expansion: editExpansion)
+        commandManager.updateCommand(
+            id: cmd.id, trigger: editTrigger, expansion: editExpansion, icon: editIcon)
         editingCommand = nil
     }
 
@@ -390,6 +438,7 @@ struct CommandListRow: View {
     let isEditing: Bool
     @Binding var editTrigger: String
     @Binding var editExpansion: String
+    @Binding var editIcon: String
     let onEdit: () -> Void
     let onSave: () -> Void
     let onCancel: () -> Void
@@ -400,8 +449,31 @@ struct CommandListRow: View {
     var body: some View {
         HStack(spacing: 12) {
             if isEditing {
-                // Editing mode - side by side fields
+                // Editing mode - icon picker + side by side fields
                 HStack(spacing: 8) {
+                    // Icon picker
+                    Menu {
+                        ForEach(SlashCommand.availableIcons, id: \.symbol) { icon in
+                            Button(action: { editIcon = icon.symbol }) {
+                                Label(icon.name, systemImage: icon.symbol)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: editIcon)
+                            .font(.system(size: 13))
+                            .frame(width: 28, height: 28)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04)
+                                    )
+                            )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .frame(width: 36)
+
                     HStack(spacing: 2) {
                         Text("/")
                             .font(.system(size: 13, weight: .semibold, design: .monospaced))
@@ -450,6 +522,15 @@ struct CommandListRow: View {
                 }
             } else {
                 // Display mode
+                Image(systemName: iconForCommand(command))
+                    .font(.system(size: 13))
+                    .foregroundColor(commandColor(command))
+                    .frame(width: 26, height: 26)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(commandColor(command).opacity(0.12))
+                    )
+
                 Text(command.trigger)
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .foregroundColor(.primary)
@@ -493,6 +574,7 @@ struct CommandListRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(
@@ -507,6 +589,45 @@ struct CommandListRow: View {
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
             }
+        }
+    }
+
+    private func iconForCommand(_ command: SlashCommand) -> String {
+        if let customIcon = command.icon, !customIcon.isEmpty {
+            return customIcon
+        }
+        switch command.trigger {
+        case "/summarize": return "doc.text"
+        case "/explain": return "lightbulb"
+        case "/translate": return "globe"
+        case "/fix": return "wand.and.stars"
+        case "/code": return "chevron.left.forwardslash.chevron.right"
+        case "/rewrite": return "pencil.line"
+        case "/bullets": return "list.bullet"
+        case "/eli5": return "face.smiling"
+        case "/pros-cons": return "plusminus"
+        case "/clear": return "trash"
+        case "/quit": return "power"
+        case "/new": return "plus.message"
+        default: return "command"
+        }
+    }
+
+    private func commandColor(_ command: SlashCommand) -> Color {
+        switch command.trigger {
+        case "/summarize": return .blue
+        case "/explain": return .yellow
+        case "/translate": return .green
+        case "/fix": return .purple
+        case "/code": return .orange
+        case "/rewrite": return .pink
+        case "/bullets": return .cyan
+        case "/eli5": return .mint
+        case "/pros-cons": return .indigo
+        case "/clear": return .red
+        case "/quit": return .red
+        case "/new": return .green
+        default: return .accentColor
         }
     }
 

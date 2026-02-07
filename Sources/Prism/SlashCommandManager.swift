@@ -8,11 +8,60 @@ struct SlashCommand: Identifiable, Codable, Equatable {
     var trigger: String  // e.g. "/summarize"
     var expansion: String  // what it expands to
     var isBuiltIn: Bool  // built-in commands can't be deleted
+    var icon: String?  // custom SF Symbol icon name; nil = use default
 
     /// Display name without the leading "/"
     var displayName: String {
         trigger.hasPrefix("/") ? String(trigger.dropFirst()) : trigger
     }
+
+    /// Available icons users can pick from
+    static let availableIcons: [(name: String, symbol: String)] = [
+        ("Command", "command"),
+        ("Terminal", "terminal"),
+        ("Text Bubble", "text.bubble"),
+        ("Star", "star"),
+        ("Heart", "heart"),
+        ("Bookmark", "bookmark"),
+        ("Flag", "flag"),
+        ("Tag", "tag"),
+        ("Bolt", "bolt"),
+        ("Gear", "gear"),
+        ("Globe", "globe"),
+        ("Lock", "lock"),
+        ("Key", "key"),
+        ("Link", "link"),
+        ("Document", "doc.text"),
+        ("Folder", "folder"),
+        ("Pencil", "pencil"),
+        ("Paintbrush", "paintbrush"),
+        ("Magic Wand", "wand.and.stars"),
+        ("Lightbulb", "lightbulb"),
+        ("Search", "magnifyingglass"),
+        ("Bell", "bell"),
+        ("Clock", "clock"),
+        ("Calendar", "calendar"),
+        ("Person", "person"),
+        ("Envelope", "envelope"),
+        ("Camera", "camera"),
+        ("Music", "music.note"),
+        ("Play", "play"),
+        ("Checkmark", "checkmark"),
+        ("Plus", "plus"),
+        ("Paperplane", "paperplane"),
+        ("Cloud", "cloud"),
+        ("Sparkles", "sparkles"),
+        ("Flame", "flame"),
+        ("Leaf", "leaf"),
+        ("CPU", "cpu"),
+        ("Shield", "shield"),
+        ("Eye", "eye"),
+        ("Hand", "hand.raised"),
+        ("Hammer", "hammer"),
+        ("Wrench", "wrench"),
+        ("House", "house"),
+        ("Code", "chevron.left.forwardslash.chevron.right"),
+    ]
 }
 
 // MARK: - Slash Command Manager
@@ -125,7 +174,7 @@ class SlashCommandManager: ObservableObject {
 
     // MARK: - CRUD
 
-    func addCommand(trigger: String, expansion: String) {
+    func addCommand(trigger: String, expansion: String, icon: String? = nil) {
         let normalized = trigger.hasPrefix("/") ? trigger : "/\(trigger)"
         guard !normalized.trimmingCharacters(in: .whitespaces).isEmpty else { return }
         // Don't allow duplicates
@@ -133,16 +182,17 @@ class SlashCommandManager: ObservableObject {
             return
         }
         let cmd = SlashCommand(
-            trigger: normalized.lowercased(), expansion: expansion, isBuiltIn: false)
+            trigger: normalized.lowercased(), expansion: expansion, isBuiltIn: false, icon: icon)
         commands.append(cmd)
         saveCommands()
     }
 
-    func updateCommand(id: UUID, trigger: String, expansion: String) {
+    func updateCommand(id: UUID, trigger: String, expansion: String, icon: String? = nil) {
         guard let index = commands.firstIndex(where: { $0.id == id }) else { return }
         let normalized = trigger.hasPrefix("/") ? trigger : "/\(trigger)"
         commands[index].trigger = normalized.lowercased()
         commands[index].expansion = expansion
+        commands[index].icon = icon
         saveCommands()
     }
 
