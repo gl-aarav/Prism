@@ -1641,6 +1641,9 @@ struct ContentView: View {
                 .zIndex(200)
             }
         }
+        .onAppear {
+            activeToolName = ""
+        }
     }
 
     func isWebViewProvider(_ provider: String) -> Bool {
