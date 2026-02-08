@@ -46,6 +46,10 @@ struct ModelComparisonView: View {
     @State private var compareWebSearchEnabled: Bool = false
     @State private var compareThinkingLevel: String = "medium"
 
+    // Synthesize options
+    @State private var synthesizeThinkingLevel: String = "medium"
+    @State private var synthesizeWebSearchEnabled: Bool = false
+
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
@@ -674,6 +678,66 @@ struct ModelComparisonView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
+            // Synthesize options bar (thinking + web search)
+            if synthesizeProvider == "Ollama" {
+                HStack(spacing: 10) {
+                    // Thinking level
+                    if synthesizeHasThinkingCapability {
+                        Menu {
+                            Button("Low") { synthesizeThinkingLevel = "low" }
+                            Button("Medium") { synthesizeThinkingLevel = "medium" }
+                            Button("High") { synthesizeThinkingLevel = "high" }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "brain")
+                                    .font(.system(size: 11, weight: .medium))
+                                Text("Thinking: \(synthesizeThinkingLevel.capitalized)")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(Color.secondary.opacity(0.08))
+                            )
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                    }
+
+                    // Web search toggle
+                    if !ollamaAPIKey.isEmpty {
+                        Button(action: { synthesizeWebSearchEnabled.toggle() }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "globe")
+                                    .font(.system(size: 11, weight: .medium))
+                                Text(
+                                    synthesizeWebSearchEnabled
+                                        ? "Web Search: On" : "Web Search: Off"
+                                )
+                                .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(synthesizeWebSearchEnabled ? .blue : .secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(
+                                        synthesizeWebSearchEnabled
+                                            ? Color.blue.opacity(0.1)
+                                            : Color.secondary.opacity(0.08))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+            }
+
             // Response content
             if synthesizedResponse.isEmpty && !isSynthesizing {
                 HStack {
@@ -783,18 +847,29 @@ struct ModelComparisonView: View {
         })
     }
 
+    /// Whether the synthesize model has thinking capability
+    private var synthesizeHasThinkingCapability: Bool {
+        guard synthesizeProvider == "Ollama" else { return false }
+        let lower = synthesizeModel.lowercased()
+        return lower.contains("deepseek") || lower.contains("gpt-oss") || lower.contains("r1")
+    }
+
     /// Compute the effective thinking level for a given provider/model.
     /// Gemini never gets thinking. Ollama gpt-oss gets the app-level thinkingLevel.
     /// DeepSeek gets true only when "high". All others get "false".
     private func effectiveThinkingLevel(provider: String, model: String) -> String {
+        return effectiveThinkingLevel(provider: provider, model: model, level: compareThinkingLevel)
+    }
+
+    private func effectiveThinkingLevel(provider: String, model: String, level: String) -> String {
         if provider == "Gemini API" {
             return "none"
         } else if provider == "Ollama" {
             let lower = model.lowercased()
             if lower.contains("gpt-oss") {
-                return compareThinkingLevel  // low, medium, high from compare setting
+                return level  // low, medium, high from setting
             } else if lower.contains("deepseek") || lower.contains("r1") {
-                return compareThinkingLevel == "high" ? "true" : "false"
+                return level == "high" ? "true" : "false"
             }
             return "false"
         }
@@ -821,10 +896,28 @@ struct ModelComparisonView: View {
         let userMsg = Message(content: synthesisPrompt, isUser: true)
         let history = [userMsg]
         let synthThinking = effectiveThinkingLevel(
-            provider: synthesizeProvider, model: synthesizeModel)
+            provider: synthesizeProvider, model: synthesizeModel, level: synthesizeThinkingLevel)
 
         synthesizeTask = Task {
             do {
+                // Web search augmentation for Ollama synthesis
+                var synthSystemPrompt = ""
+                if synthesizeProvider == "Ollama" && synthesizeWebSearchEnabled
+                    && !ollamaAPIKey.isEmpty
+                {
+                    do {
+                        let searchResults = try await webSearchService.search(
+                            query: prompt, apiKey: ollamaAPIKey)
+                        let searchContext = webSearchService.buildSearchContext(
+                            results: searchResults)
+                        if !searchContext.isEmpty {
+                            synthSystemPrompt = searchContext
+                        }
+                    } catch {
+                        print("Synthesize web search failed: \(error.localizedDescription)")
+                    }
+                }
+
                 switch synthesizeProvider {
                 case "Gemini API":
                     guard !geminiKey.isEmpty else {
@@ -851,7 +944,7 @@ struct ModelComparisonView: View {
                     var lastUpdateTime = Date()
                     for try await (chunk, thinkChunk) in ollamaService.sendMessageStream(
                         history: history, endpoint: ollamaURL, model: synthesizeModel,
-                        systemPrompt: "",
+                        systemPrompt: synthSystemPrompt,
                         thinkingLevel: synthThinking
                     ) {
                         full += chunk

@@ -15,6 +15,7 @@ struct QuizQuestion: Identifiable, Codable {
 struct QuizMeView: View {
     @AppStorage("GeminiKey") private var geminiKey: String = ""
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
+    @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
@@ -37,14 +38,10 @@ struct QuizMeView: View {
     @State private var isGenerating: Bool = false
     @State private var generationError: String? = nil
     @State private var generateTask: Task<Void, Never>?
-    @State private var showCustomQuestionSheet: Bool = false
-    @State private var customQuestion: String = ""
-    @State private var customOptionA: String = ""
-    @State private var customOptionB: String = ""
-    @State private var customOptionC: String = ""
-    @State private var customOptionD: String = ""
-    @State private var customCorrectAnswer: String = "A"
-    @State private var customExplanation: String = ""
+    @AppStorage("QuizDifficulty") private var difficulty: String = "medium"
+    @State private var isRegenerating: Bool = false
+    @State private var quizThinkingLevel: String = "medium"
+    @State private var quizWebSearchEnabled: Bool = false
     @FocusState private var isInputFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
 
@@ -55,6 +52,27 @@ struct QuizMeView: View {
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
+    private let webSearchService = WebSearchService()
+
+    private var quizHasThinkingCapability: Bool {
+        let lower = quizModel.lowercased()
+        return lower.contains("deepseek") || lower.contains("gpt-oss") || lower.contains("r1")
+    }
+
+    private func effectiveThinkingLevel(provider: String, model: String, level: String) -> String {
+        if provider == "Gemini API" {
+            return "none"
+        } else if provider == "Ollama" {
+            let lower = model.lowercased()
+            if lower.contains("gpt-oss") {
+                return level  // low, medium, high from setting
+            } else if lower.contains("deepseek") || lower.contains("r1") {
+                return level == "high" ? "true" : "false"
+            }
+            return "false"
+        }
+        return "none"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -78,9 +96,6 @@ struct QuizMeView: View {
             generateTask?.cancel()
             generateTask = nil
             isGenerating = false
-        }
-        .sheet(isPresented: $showCustomQuestionSheet) {
-            customQuestionSheet
         }
     }
 
@@ -161,16 +176,18 @@ struct QuizMeView: View {
                 .buttonStyle(.plain)
                 .help("New Quiz")
 
-                // Add custom question
-                Button(action: { showCustomQuestionSheet = true }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .padding(8)
-                        .background(Circle().fill(.ultraThinMaterial))
+                // Difficulty badge
+                HStack(spacing: 4) {
+                    Image(systemName: difficultyIcon)
+                        .font(.system(size: 10))
+                        .foregroundColor(difficultyColor)
+                    Text(difficulty.capitalized)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(difficultyColor)
                 }
-                .buttonStyle(.plain)
-                .help("Add Custom Question")
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(difficultyColor.opacity(0.1)))
             }
         }
         .padding(.horizontal, 20)
@@ -246,13 +263,29 @@ struct QuizMeView: View {
                     Text("Questions")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.secondary)
-                    Picker("", selection: $numberOfQuestions) {
-                        Text("3").tag(3)
-                        Text("5").tag(5)
-                        Text("10").tag(10)
+                    HStack(spacing: 12) {
+                        Stepper(value: $numberOfQuestions, in: 1...30) {
+                            Text("\(numberOfQuestions)")
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .frame(width: 30)
+                        }
+                        .frame(maxWidth: 140)
+                    }
+                }
+                .frame(maxWidth: 400)
+
+                // Difficulty
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Difficulty")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    Picker("", selection: $difficulty) {
+                        Text("Easy").tag("easy")
+                        Text("Medium").tag("medium")
+                        Text("Hard").tag("hard")
                     }
                     .pickerStyle(.segmented)
-                    .frame(maxWidth: 200)
+                    .frame(maxWidth: 240)
                 }
                 .frame(maxWidth: 400)
 
@@ -318,6 +351,82 @@ struct QuizMeView: View {
                 }
                 .frame(maxWidth: 400)
 
+                // Ollama options (thinking + web search)
+                if quizProvider == "Ollama" {
+                    HStack(spacing: 12) {
+                        if quizHasThinkingCapability {
+                            Menu {
+                                Button(action: { quizThinkingLevel = "low" }) {
+                                    HStack {
+                                        Text("Low")
+                                        if quizThinkingLevel == "low" {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                                Button(action: { quizThinkingLevel = "medium" }) {
+                                    HStack {
+                                        Text("Medium")
+                                        if quizThinkingLevel == "medium" {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                                Button(action: { quizThinkingLevel = "high" }) {
+                                    HStack {
+                                        Text("High")
+                                        if quizThinkingLevel == "high" {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "brain")
+                                        .font(.system(size: 11, weight: .medium))
+                                    Text("Thinking: \(quizThinkingLevel.capitalized)")
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.secondary.opacity(0.08))
+                                )
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                        }
+
+                        if !ollamaAPIKey.isEmpty {
+                            Button(action: { quizWebSearchEnabled.toggle() }) {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "globe")
+                                        .font(.system(size: 11, weight: .medium))
+                                    Text(
+                                        quizWebSearchEnabled ? "Web Search: On" : "Web Search: Off"
+                                    )
+                                    .font(.system(size: 11, weight: .medium))
+                                }
+                                .foregroundColor(quizWebSearchEnabled ? .blue : .secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule()
+                                        .fill(
+                                            quizWebSearchEnabled
+                                                ? Color.blue.opacity(0.1)
+                                                : Color.secondary.opacity(0.08))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                    }
+                    .frame(maxWidth: 400)
+                }
+
                 // Small model warning
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle")
@@ -340,7 +449,7 @@ struct QuizMeView: View {
                 }
 
                 // Start button
-                Button(action: startQuiz) {
+                Button(action: { startQuiz() }) {
                     HStack(spacing: 8) {
                         Image(systemName: "play.fill")
                             .font(.system(size: 14))
@@ -364,24 +473,6 @@ struct QuizMeView: View {
                 .buttonStyle(.plain)
                 .disabled(topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .opacity(topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
-
-                Text("or")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary.opacity(0.5))
-
-                Button(action: { showCustomQuestionSheet = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 13))
-                        Text("Create Custom Quiz")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.primary.opacity(0.7))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(.ultraThinMaterial))
-                }
-                .buttonStyle(.plain)
 
                 Spacer()
             }
@@ -597,6 +688,60 @@ struct QuizMeView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 4)
+
+                    // Difficulty adjustment
+                    if currentQuestionIndex < questions.count - 1 {
+                        HStack(spacing: 8) {
+                            Text("Adjust difficulty?")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary.opacity(0.6))
+
+                            if difficulty != "easy" {
+                                Button(action: {
+                                    changeDifficulty(to: difficulty == "hard" ? "medium" : "easy")
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.down")
+                                            .font(.system(size: 9, weight: .bold))
+                                        Text("Easier")
+                                            .font(.system(size: 11, weight: .medium))
+                                    }
+                                    .foregroundColor(.green)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Capsule().fill(Color.green.opacity(0.1)))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(isRegenerating)
+                            }
+
+                            if difficulty != "hard" {
+                                Button(action: {
+                                    changeDifficulty(to: difficulty == "easy" ? "medium" : "hard")
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.up")
+                                            .font(.system(size: 9, weight: .bold))
+                                        Text("Harder")
+                                            .font(.system(size: 11, weight: .medium))
+                                    }
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
+                                    .background(Capsule().fill(Color.red.opacity(0.1)))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(isRegenerating)
+                            }
+
+                            if isRegenerating {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .scaleEffect(0.7)
+                            }
+                        }
+                        .padding(.top, 2)
+                    }
                 }
 
                 Spacer().frame(height: 40)
@@ -708,6 +853,22 @@ struct QuizMeView: View {
         return "Keep learning! 📚"
     }
 
+    private var difficultyIcon: String {
+        switch difficulty {
+        case "easy": return "tortoise"
+        case "hard": return "flame"
+        default: return "gauge.medium"
+        }
+    }
+
+    private var difficultyColor: Color {
+        switch difficulty {
+        case "easy": return .green
+        case "hard": return .red
+        default: return .orange
+        }
+    }
+
     private var providerIcon: String {
         switch quizProvider {
         case "Apple Foundation": return "apple.logo"
@@ -799,206 +960,29 @@ struct QuizMeView: View {
         }
     }
 
-    private func addCustomQuestion() {
-        let correctIdx: Int
-        switch customCorrectAnswer {
-        case "A": correctIdx = 0
-        case "B": correctIdx = 1
-        case "C": correctIdx = 2
-        case "D": correctIdx = 3
-        default: correctIdx = 0
-        }
-        let newQ = QuizQuestion(
-            question: customQuestion.trimmingCharacters(in: .whitespacesAndNewlines),
-            options: [
-                customOptionA.trimmingCharacters(in: .whitespacesAndNewlines),
-                customOptionB.trimmingCharacters(in: .whitespacesAndNewlines),
-                customOptionC.trimmingCharacters(in: .whitespacesAndNewlines),
-                customOptionD.trimmingCharacters(in: .whitespacesAndNewlines),
-            ],
-            correctIndex: correctIdx,
-            explanation: customExplanation.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
+    private func changeDifficulty(to newDifficulty: String) {
+        difficulty = newDifficulty
+        let remainingCount = questions.count - currentQuestionIndex - 1
+        guard remainingCount > 0 else { return }
 
-        withAnimation {
-            questions.append(newQ)
-            if quizFinished {
-                quizFinished = false
-            }
-        }
-        saveQuestions()
-
-        // Clear form
-        customQuestion = ""
-        customOptionA = ""
-        customOptionB = ""
-        customOptionC = ""
-        customOptionD = ""
-        customCorrectAnswer = "A"
-        customExplanation = ""
-        showCustomQuestionSheet = false
-    }
-
-    // MARK: - Custom Question Sheet
-
-    private var customQuestionSheet: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("Add Custom Question")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                Spacer()
-                Button(action: { showCustomQuestionSheet = false }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Question")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                TextField("Enter your question...", text: $customQuestion)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .padding(10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(
-                                colorScheme == .dark
-                                    ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                    )
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Options")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                HStack(spacing: 6) {
-                    Text("A)").font(.system(size: 12, weight: .semibold)).foregroundColor(
-                        .secondary
-                    ).frame(width: 22)
-                    TextField("Option A", text: $customOptionA)
-                        .textFieldStyle(.plain).font(.system(size: 13)).padding(8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8).fill(
-                                colorScheme == .dark
-                                    ? Color.white.opacity(0.06) : Color.black.opacity(0.04)))
-                }
-                HStack(spacing: 6) {
-                    Text("B)").font(.system(size: 12, weight: .semibold)).foregroundColor(
-                        .secondary
-                    ).frame(width: 22)
-                    TextField("Option B", text: $customOptionB)
-                        .textFieldStyle(.plain).font(.system(size: 13)).padding(8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8).fill(
-                                colorScheme == .dark
-                                    ? Color.white.opacity(0.06) : Color.black.opacity(0.04)))
-                }
-                HStack(spacing: 6) {
-                    Text("C)").font(.system(size: 12, weight: .semibold)).foregroundColor(
-                        .secondary
-                    ).frame(width: 22)
-                    TextField("Option C", text: $customOptionC)
-                        .textFieldStyle(.plain).font(.system(size: 13)).padding(8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8).fill(
-                                colorScheme == .dark
-                                    ? Color.white.opacity(0.06) : Color.black.opacity(0.04)))
-                }
-                HStack(spacing: 6) {
-                    Text("D)").font(.system(size: 12, weight: .semibold)).foregroundColor(
-                        .secondary
-                    ).frame(width: 22)
-                    TextField("Option D", text: $customOptionD)
-                        .textFieldStyle(.plain).font(.system(size: 13)).padding(8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8).fill(
-                                colorScheme == .dark
-                                    ? Color.white.opacity(0.06) : Color.black.opacity(0.04)))
-                }
-            }
-
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Correct Answer")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
-                    Picker("", selection: $customCorrectAnswer) {
-                        Text("A").tag("A")
-                        Text("B").tag("B")
-                        Text("C").tag("C")
-                        Text("D").tag("D")
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 180)
-                }
-                Spacer()
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Explanation (optional)")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.secondary)
-                TextField("Why is this the correct answer?", text: $customExplanation)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .padding(10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(
-                                colorScheme == .dark
-                                    ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                    )
-            }
-
-            HStack {
-                Spacer()
-                Button(action: addCustomQuestion) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 13))
-                        Text("Add Question")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundColor(colorScheme == .dark ? .black : .white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: appTheme.colors,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(
-                    customQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || customOptionA.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || customOptionB.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || customOptionC.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || customOptionD.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }
-        .padding(20)
-        .frame(width: 440)
-    }
-
-    private func startQuiz() {
+        isRegenerating = true
         let trimmed = topic.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else {
+            isRegenerating = false
+            return
+        }
 
-        isGenerating = true
-        generationError = nil
+        let difficultyDesc: String
+        switch newDifficulty {
+        case "easy": difficultyDesc = "easy and straightforward"
+        case "hard": difficultyDesc = "challenging and advanced"
+        default: difficultyDesc = "moderate difficulty"
+        }
 
-        let prompt = """
-            Generate exactly \(numberOfQuestions) multiple choice quiz questions about: \(trimmed)
+        let regenPrompt = """
+            Generate exactly \(remainingCount) multiple choice quiz questions about: \(trimmed)
+
+            The questions should be \(difficultyDesc).
 
             Format your response EXACTLY as follows, with no extra text before or after:
 
@@ -1013,7 +997,116 @@ struct QuizMeView: View {
             Q: [next question]
             ...
 
-            Make the questions varied in difficulty. Ensure exactly 4 options per question.
+            Ensure exactly 4 options per question.
+            """
+
+        let userMsg = Message(content: regenPrompt, isUser: true)
+        let history = [userMsg]
+
+        generateTask?.cancel()
+        generateTask = Task {
+            do {
+                var fullContent = ""
+
+                switch quizProvider {
+                case "Gemini API":
+                    guard !geminiKey.isEmpty else {
+                        await MainActor.run { isRegenerating = false }
+                        return
+                    }
+                    for try await (chunk, _) in geminiService.sendMessageStream(
+                        history: history, apiKey: geminiKey, model: quizModel,
+                        systemPrompt: "", thinkingLevel: "none"
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "Ollama":
+                    let regenThinking = effectiveThinkingLevel(
+                        provider: quizProvider, model: quizModel, level: quizThinkingLevel)
+                    var regenSystemPrompt = ""
+                    if quizWebSearchEnabled && !ollamaAPIKey.isEmpty {
+                        do {
+                            let searchResults = try await webSearchService.search(
+                                query: topic, apiKey: ollamaAPIKey)
+                            let searchContext = webSearchService.buildSearchContext(
+                                results: searchResults)
+                            if !searchContext.isEmpty { regenSystemPrompt = searchContext }
+                        } catch {
+                            print("Quiz regen web search failed: \(error.localizedDescription)")
+                        }
+                    }
+                    for try await (chunk, _) in ollamaService.sendMessageStream(
+                        history: history, endpoint: ollamaURL, model: quizModel,
+                        systemPrompt: regenSystemPrompt, thinkingLevel: regenThinking
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "Apple Foundation":
+                    for try await chunk in appleFoundationService.sendMessageStream(
+                        history: history, systemPrompt: ""
+                    ) {
+                        fullContent += chunk
+                    }
+
+                default:
+                    await MainActor.run { isRegenerating = false }
+                    return
+                }
+
+                let parsed = parseQuizResponse(fullContent)
+                await MainActor.run {
+                    if !parsed.isEmpty {
+                        // Keep questions up to current+1, replace the rest
+                        let kept = Array(questions.prefix(currentQuestionIndex + 1))
+                        questions = kept + parsed
+                        saveQuestions()
+                    }
+                    isRegenerating = false
+                }
+            } catch {
+                if !Task.isCancelled {
+                    await MainActor.run { isRegenerating = false }
+                }
+            }
+        }
+    }
+
+    private func startQuiz(customDifficulty: String? = nil) {
+        let trimmed = topic.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        isGenerating = true
+        generationError = nil
+
+        let diff = customDifficulty ?? difficulty
+        let difficultyDesc: String
+        switch diff {
+        case "easy": difficultyDesc = "easy and straightforward"
+        case "hard": difficultyDesc = "challenging and advanced"
+        default: difficultyDesc = "moderate difficulty"
+        }
+
+        let prompt = """
+            Generate exactly \(numberOfQuestions) multiple choice quiz questions about: \(trimmed)
+
+            The questions should be \(difficultyDesc).
+
+            Format your response EXACTLY as follows, with no extra text before or after:
+
+            Q: [question text]
+            A) [option A]
+            B) [option B]
+            C) [option C]
+            D) [option D]
+            CORRECT: [A, B, C, or D]
+            EXPLANATION: [brief explanation]
+
+            Q: [next question]
+            ...
+
+            Ensure exactly 4 options per question.
             """
 
         let userMsg = Message(content: prompt, isUser: true)
@@ -1040,9 +1133,23 @@ struct QuizMeView: View {
                     }
 
                 case "Ollama":
+                    let quizThinking = effectiveThinkingLevel(
+                        provider: quizProvider, model: quizModel, level: quizThinkingLevel)
+                    var quizSystemPrompt = ""
+                    if quizWebSearchEnabled && !ollamaAPIKey.isEmpty {
+                        do {
+                            let searchResults = try await webSearchService.search(
+                                query: trimmed, apiKey: ollamaAPIKey)
+                            let searchContext = webSearchService.buildSearchContext(
+                                results: searchResults)
+                            if !searchContext.isEmpty { quizSystemPrompt = searchContext }
+                        } catch {
+                            print("Quiz web search failed: \(error.localizedDescription)")
+                        }
+                    }
                     for try await (chunk, _) in ollamaService.sendMessageStream(
                         history: history, endpoint: ollamaURL, model: quizModel,
-                        systemPrompt: "", thinkingLevel: "false"
+                        systemPrompt: quizSystemPrompt, thinkingLevel: quizThinking
                     ) {
                         fullContent += chunk
                     }
