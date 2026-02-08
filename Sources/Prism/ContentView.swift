@@ -957,22 +957,29 @@ class GeminiService {
 
     init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 120
-        config.timeoutIntervalForResource = 300
+        config.timeoutIntervalForRequest = 300
+        config.timeoutIntervalForResource = 600
         self.session = URLSession(configuration: config)
     }
 
     func sendMessageStream(
         history: [Message], apiKey: String, model: String, systemPrompt: String = "",
         thinkingLevel: String = "medium"
-    ) -> AsyncThrowingStream<(String, String?), Error> {
+    ) -> AsyncThrowingStream<(String, String?, Data?), Error> {
         return AsyncThrowingStream { continuation in
             Task {
                 let modelName = model.isEmpty ? "gemini-1.5-flash" : model
+                let isImageModel = modelName.lowercased().contains("image")
+                    || modelName.lowercased().contains("nano-banana")
+
+                let endpoint = isImageModel
+                    ? "generateContent"
+                    : "streamGenerateContent"
+                let urlSuffix = isImageModel ? "" : "&alt=sse"
                 guard
                     let url = URL(
                         string:
-                            "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):streamGenerateContent?key=\(apiKey)&alt=sse"
+                            "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):\(endpoint)?key=\(apiKey)\(urlSuffix)"
                     )
                 else {
                     continuation.finish(throwing: URLError(.badURL))
@@ -1031,47 +1038,118 @@ class GeminiService {
                     ]
                 }
 
+                // Enable image output for image-capable models
+                if isImageModel {
+                    body["generationConfig"] = [
+                        "responseModalities": ["TEXT", "IMAGE"]
+                    ]
+                }
+
                 do {
                     request.httpBody = try JSONSerialization.data(withJSONObject: body)
-                    let (result, response) = try await session.bytes(for: request)
 
-                    guard let httpResponse = response as? HTTPURLResponse else {
-                        continuation.finish(throwing: URLError(.badServerResponse))
-                        return
-                    }
+                    if isImageModel {
+                        // Non-streaming request for image models (base64 data is too large for SSE)
+                        let (responseData, response) = try await session.data(for: request)
 
-                    if httpResponse.statusCode != 200 {
-                        // Try to read error
-                        var errorText = ""
+                        guard let httpResponse = response as? HTTPURLResponse else {
+                            continuation.finish(throwing: URLError(.badServerResponse))
+                            return
+                        }
+
+                        if httpResponse.statusCode != 200 {
+                            let errorText =
+                                String(data: responseData, encoding: .utf8)
+                                ?? "HTTP \(httpResponse.statusCode)"
+                            continuation.finish(
+                                throwing: NSError(
+                                    domain: "GeminiError", code: httpResponse.statusCode,
+                                    userInfo: [NSLocalizedDescriptionKey: errorText]))
+                            return
+                        }
+
+                        guard
+                            let json = try? JSONSerialization.jsonObject(with: responseData)
+                                as? [String: Any],
+                            let candidates = json["candidates"] as? [[String: Any]],
+                            let content = candidates.first?["content"] as? [String: Any],
+                            let parts = content["parts"] as? [[String: Any]]
+                        else {
+                            continuation.finish()
+                            return
+                        }
+
+                        for part in parts {
+                            if part["thought"] as? Bool == true { continue }
+
+                            if let text = part["text"] as? String {
+                                continuation.yield((text, nil, nil))
+                            } else if let inlineData = (part["inlineData"] ?? part["inline_data"]) as? [String: Any],
+                                let mimeType = (inlineData["mimeType"] ?? inlineData["mime_type"]) as? String,
+                                mimeType.hasPrefix("image/"),
+                                let base64Str = inlineData["data"] as? String,
+                                let imageData = Data(base64Encoded: base64Str)
+                            {
+                                continuation.yield(("", nil, imageData))
+                            }
+                        }
+
+                        continuation.finish()
+                    } else {
+                        // Streaming request for text models
+                        let (result, response) = try await session.bytes(for: request)
+
+                        guard let httpResponse = response as? HTTPURLResponse else {
+                            continuation.finish(throwing: URLError(.badServerResponse))
+                            return
+                        }
+
+                        if httpResponse.statusCode != 200 {
+                            var errorText = ""
+                            for try await line in result.lines {
+                                errorText += line
+                            }
+                            continuation.finish(
+                                throwing: NSError(
+                                    domain: "GeminiError", code: httpResponse.statusCode,
+                                    userInfo: [NSLocalizedDescriptionKey: errorText]))
+                            return
+                        }
+
                         for try await line in result.lines {
-                            errorText += line
+                            if line.hasPrefix("data: ") {
+                                let jsonStr = String(line.dropFirst(6))
+                                if jsonStr == "[DONE]" { break }
+
+                                guard let data = jsonStr.data(using: .utf8),
+                                    let json = try? JSONSerialization.jsonObject(with: data)
+                                        as? [String: Any],
+                                    let candidates = json["candidates"] as? [[String: Any]],
+                                    let content = candidates.first?["content"]
+                                        as? [String: Any],
+                                    let parts = content["parts"] as? [[String: Any]]
+                                else { continue }
+
+                                for part in parts {
+                                    if part["thought"] as? Bool == true { continue }
+
+                                    if let text = part["text"] as? String {
+                                        continuation.yield((text, nil, nil))
+                                    } else if let inlineData = (part["inlineData"] ?? part["inline_data"])
+                                        as? [String: Any],
+                                        let mimeType = (inlineData["mimeType"] ?? inlineData["mime_type"]) as? String,
+                                        mimeType.hasPrefix("image/"),
+                                        let base64Str = inlineData["data"] as? String,
+                                        let imageData = Data(base64Encoded: base64Str)
+                                    {
+                                        continuation.yield(("", nil, imageData))
+                                    }
+                                }
+                            }
                         }
-                        continuation.finish(
-                            throwing: NSError(
-                                domain: "GeminiError", code: httpResponse.statusCode,
-                                userInfo: [NSLocalizedDescriptionKey: errorText]))
-                        return
+
+                        continuation.finish()
                     }
-
-                    for try await line in result.lines {
-                        if line.hasPrefix("data: ") {
-                            let jsonStr = String(line.dropFirst(6))
-                            if jsonStr == "[DONE]" { break }
-
-                            guard let data = jsonStr.data(using: .utf8),
-                                let json = try? JSONSerialization.jsonObject(with: data)
-                                    as? [String: Any],
-                                let candidates = json["candidates"] as? [[String: Any]],
-                                let content = candidates.first?["content"] as? [String: Any],
-                                let parts = content["parts"] as? [[String: Any]],
-                                let text = parts.first?["text"] as? String
-                            else { continue }
-
-                            continuation.yield((text, nil))
-                        }
-                    }
-
-                    continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }
@@ -1817,9 +1895,10 @@ struct ContentView: View {
                     do {
                         var fullContent = ""
                         var fullThinking = ""
+                        var receivedImage: NSImage? = nil
                         var lastUpdateTime = Date()
 
-                        for try await (contentChunk, thinkingChunk)
+                        for try await (contentChunk, thinkingChunk, imageData)
                             in geminiService.sendMessageStream(
                                 history: currentHistory, apiKey: geminiKey, model: geminiModel,
                                 systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
@@ -1828,23 +1907,31 @@ struct ContentView: View {
                             if let thinking = thinkingChunk {
                                 fullThinking += thinking
                             }
+                            if let imgData = imageData, let img = NSImage(data: imgData) {
+                                receivedImage = img
+                            }
 
                             if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
                                 let contentToUpdate = fullContent
                                 let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
+                                let imgToUpdate = receivedImage
 
                                 DispatchQueue.main.async {
                                     self.chatManager.updateMessage(
                                         id: aiMsgId, content: contentToUpdate,
-                                        thinkingContent: thinkingToUpdate, isStreaming: true)
+                                        thinkingContent: thinkingToUpdate,
+                                        image: imgToUpdate,
+                                        isStreaming: true)
                                 }
                                 lastUpdateTime = Date()
                             }
                         }
+                        let finalImage = receivedImage
                         DispatchQueue.main.async {
                             self.chatManager.updateMessage(
                                 id: aiMsgId, content: fullContent,
                                 thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
+                                image: finalImage,
                                 isStreaming: false)
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
@@ -3331,9 +3418,11 @@ struct InputView: View {
                             ForEach(geminiManager.favoriteModels, id: \.self) { model in
                                 Button(action: { geminiModel = model }) {
                                     if geminiModel == model {
-                                        Label(model, systemImage: "checkmark")
+                                        Label(
+                                            geminiManager.displayName(for: model),
+                                            systemImage: "checkmark")
                                     } else {
-                                        Text(model)
+                                        Text(geminiManager.displayName(for: model))
                                     }
                                 }
                             }
@@ -3348,9 +3437,11 @@ struct InputView: View {
                             ) { model in
                                 Button(action: { geminiModel = model }) {
                                     if geminiModel == model {
-                                        Label(model, systemImage: "checkmark")
+                                        Label(
+                                            geminiManager.displayName(for: model),
+                                            systemImage: "checkmark")
                                     } else {
-                                        Text(model)
+                                        Text(geminiManager.displayName(for: model))
                                     }
                                 }
                             }
@@ -3362,9 +3453,13 @@ struct InputView: View {
                             ForEach(geminiManager.availableModels, id: \.self) { model in
                                 Button(action: { geminiManager.toggleFavorite(model) }) {
                                     if geminiManager.isFavorite(model) {
-                                        Label(model, systemImage: "star.fill")
+                                        Label(
+                                            geminiManager.displayName(for: model),
+                                            systemImage: "star.fill")
                                     } else {
-                                        Label(model, systemImage: "star")
+                                        Label(
+                                            geminiManager.displayName(for: model),
+                                            systemImage: "star")
                                     }
                                 }
                             }
@@ -4951,7 +5046,7 @@ struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
                 Picker("Default Model", selection: $geminiModel) {
                     ForEach(geminiManager.availableModels, id: \.self) { model in
-                        Text(model).tag(model)
+                        Text(geminiManager.displayName(for: model)).tag(model)
                     }
                 }
             }

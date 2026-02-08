@@ -309,7 +309,7 @@ struct QuizMeView: View {
                                     quizProvider = "Gemini API"
                                     quizModel = model
                                 }) {
-                                    Text(model)
+                                    Text(geminiManager.displayName(for: model))
                                 }
                             }
                         }
@@ -1014,7 +1014,7 @@ struct QuizMeView: View {
                         await MainActor.run { isRegenerating = false }
                         return
                     }
-                    for try await (chunk, _) in geminiService.sendMessageStream(
+                    for try await (chunk, _, _) in geminiService.sendMessageStream(
                         history: history, apiKey: geminiKey, model: quizModel,
                         systemPrompt: "", thinkingLevel: "none"
                     ) {
@@ -1125,7 +1125,7 @@ struct QuizMeView: View {
                         }
                         return
                     }
-                    for try await (chunk, _) in geminiService.sendMessageStream(
+                    for try await (chunk, _, _) in geminiService.sendMessageStream(
                         history: history, apiKey: geminiKey, model: quizModel,
                         systemPrompt: "", thinkingLevel: "none"
                     ) {

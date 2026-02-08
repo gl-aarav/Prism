@@ -7,13 +7,80 @@ class GeminiModelManager: ObservableObject {
     @AppStorage("GeminiFavorites") private var favoritesJSON: String = "[]"
 
     @Published var availableModels: [String] = [
+        // Gemini 3
         "gemini-3-pro-preview",
         "gemini-3-flash-preview",
         "gemini-3-pro-image-preview",
+        // Gemini 2.5
         "gemini-2.5-pro",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
+        "gemini-2.5-flash-preview-tts",
+        "gemini-2.5-pro-preview-tts",
+        "gemini-2.5-flash-preview-09-2025",
+        "gemini-2.5-flash-lite-preview-09-2025",
+        "gemini-2.5-flash-image",
+        "gemini-2.5-computer-use-preview-10-2025",
+        // Gemini 2.0
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-001",
+        "gemini-2.0-flash-exp-image-generation",
+        "gemini-2.0-flash-lite-001",
+        "gemini-2.0-flash-lite",
+        "gemini-exp-1206",
+        // Gemma 3
+        "gemma-3-1b-it",
+        "gemma-3-4b-it",
+        "gemma-3-12b-it",
+        "gemma-3-27b-it",
+        "gemma-3n-e4b-it",
+        "gemma-3n-e2b-it",
+        // Aliases
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
+        "gemini-pro-latest",
+        // Other
+        "nano-banana-pro-preview",
+        "gemini-robotics-er-1.5-preview",
+        "deep-research-pro-preview-12-2025",
     ]
+
+    static let displayNames: [String: String] = [
+        "gemini-3-pro-preview": "Gemini 3 Pro Preview",
+        "gemini-3-flash-preview": "Gemini 3 Flash Preview",
+        "gemini-3-pro-image-preview": "Nano Banana Pro",
+        "gemini-2.5-pro": "Gemini 2.5 Pro",
+        "gemini-2.5-flash": "Gemini 2.5 Flash",
+        "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite",
+        "gemini-2.5-flash-preview-tts": "Gemini 2.5 Flash Preview TTS",
+        "gemini-2.5-pro-preview-tts": "Gemini 2.5 Pro Preview TTS",
+        "gemini-2.5-flash-preview-09-2025": "Gemini 2.5 Flash Preview Sep 2025",
+        "gemini-2.5-flash-lite-preview-09-2025": "Gemini 2.5 Flash-Lite Preview Sep 2025",
+        "gemini-2.5-flash-image": "Nano Banana",
+        "gemini-2.5-computer-use-preview-10-2025": "Gemini 2.5 Computer Use Preview 10-2025",
+        "gemini-2.0-flash": "Gemini 2.0 Flash",
+        "gemini-2.0-flash-001": "Gemini 2.0 Flash 001",
+        "gemini-2.0-flash-exp-image-generation": "Gemini 2.0 Flash (Image Generation) Experimental",
+        "gemini-2.0-flash-lite-001": "Gemini 2.0 Flash-Lite 001",
+        "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite",
+        "gemini-exp-1206": "Gemini Experimental 1206",
+        "gemma-3-1b-it": "Gemma 3 1B",
+        "gemma-3-4b-it": "Gemma 3 4B",
+        "gemma-3-12b-it": "Gemma 3 12B",
+        "gemma-3-27b-it": "Gemma 3 27B",
+        "gemma-3n-e4b-it": "Gemma 3n E4B",
+        "gemma-3n-e2b-it": "Gemma 3n E2B",
+        "gemini-flash-latest": "Gemini Flash Latest",
+        "gemini-flash-lite-latest": "Gemini Flash-Lite Latest",
+        "gemini-pro-latest": "Gemini Pro Latest",
+        "nano-banana-pro-preview": "Nano Banana Pro",
+        "gemini-robotics-er-1.5-preview": "Gemini Robotics-ER 1.5 Preview",
+        "deep-research-pro-preview-12-2025": "Deep Research Pro Preview (Dec-12-2025)",
+    ]
+
+    func displayName(for model: String) -> String {
+        GeminiModelManager.displayNames[model] ?? model
+    }
 
     var favoriteModels: [String] {
         get {

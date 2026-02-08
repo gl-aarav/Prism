@@ -418,7 +418,7 @@ struct QuickAIView: View {
                         var fullThinking = ""
                         var lastUpdateTime = Date()
 
-                        for try await (contentChunk, thinkingChunk)
+                        for try await (contentChunk, thinkingChunk, _)
                             in geminiService.sendMessageStream(
                                 history: chatManager.getCurrentMessages(), apiKey: geminiKey,
                                 model: geminiModel, systemPrompt: systemPrompt,

@@ -545,9 +545,11 @@ struct ModelComparisonView: View {
                                 synthesizeModel = model
                             }) {
                                 if synthesizeProvider == "Gemini API" && synthesizeModel == model {
-                                    Label(model, systemImage: "checkmark")
+                                    Label(
+                                        geminiManager.displayName(for: model),
+                                        systemImage: "checkmark")
                                 } else {
-                                    Text(model)
+                                    Text(geminiManager.displayName(for: model))
                                 }
                             }
                         }
@@ -928,7 +930,7 @@ struct ModelComparisonView: View {
                         return
                     }
                     var full = ""
-                    for try await (chunk, _) in geminiService.sendMessageStream(
+                    for try await (chunk, _, _) in geminiService.sendMessageStream(
                         history: history, apiKey: geminiKey, model: synthesizeModel,
                         systemPrompt: "",
                         thinkingLevel: synthThinking
@@ -1101,7 +1103,7 @@ struct ModelComparisonView: View {
                         var fullContent = ""
                         let geminiThinking = effectiveThinkingLevel(
                             provider: provider, model: model)
-                        for try await (chunk, _) in geminiService.sendMessageStream(
+                        for try await (chunk, _, _) in geminiService.sendMessageStream(
                             history: history, apiKey: geminiKey, model: model,
                             systemPrompt: systemPrompt, thinkingLevel: geminiThinking
                         ) {
@@ -1377,9 +1379,9 @@ struct ComparisonCard: View {
                 ForEach(geminiManager.availableModels, id: \.self) { model in
                     Button(action: { onChangeProvider("Gemini API", model) }) {
                         if slot.provider == "Gemini API" && slot.model == model {
-                            Label(model, systemImage: "checkmark")
+                            Label(geminiManager.displayName(for: model), systemImage: "checkmark")
                         } else {
-                            Text(model)
+                            Text(geminiManager.displayName(for: model))
                         }
                     }
                 }
