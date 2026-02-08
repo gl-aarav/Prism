@@ -41,9 +41,15 @@ struct ModelComparisonView: View {
     @AppStorage("ThinkingLevel") private var thinkingLevel: String = "medium"
     @State private var synthesizeTask: Task<Void, Never>?
 
+    // Ollama comparison options
+    @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
+    @State private var compareWebSearchEnabled: Bool = false
+    @State private var compareThinkingLevel: String = "medium"
+
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
+    private let webSearchService = WebSearchService()
 
     // MARK: - Slot Persistence
 
@@ -83,41 +89,31 @@ struct ModelComparisonView: View {
             // Header
             headerBar
 
-            // Model Slots
+            // Model Slots — stacked vertically for more space
             ScrollView {
                 VStack(spacing: 16) {
-                    // Model Cards Grid
-                    let columns =
-                        slots.count <= 2
-                        ? Array(repeating: GridItem(.flexible(), spacing: 16), count: slots.count)
-                        : Array(
-                            repeating: GridItem(.flexible(), spacing: 16),
-                            count: min(slots.count, 4))
-
-                    LazyVGrid(columns: columns, spacing: 16) {
-                        ForEach(Array(slots.enumerated()), id: \.element.id) { index, slot in
-                            let slotId = slot.id
-                            ComparisonCard(
-                                slot: slot,
-                                index: index,
-                                appTheme: appTheme,
-                                onRemove: slots.count > 2
-                                    ? {
-                                        if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                            removeSlot(at: idx)
-                                        }
-                                    } : nil,
-                                onChangeProvider: { provider, model in
+                    ForEach(Array(slots.enumerated()), id: \.element.id) { index, slot in
+                        let slotId = slot.id
+                        ComparisonCard(
+                            slot: slot,
+                            index: index,
+                            appTheme: appTheme,
+                            onRemove: slots.count > 2
+                                ? {
                                     if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                        slots[idx].provider = provider
-                                        slots[idx].model = model
-                                        saveSlots()
+                                        removeSlot(at: idx)
                                     }
-                                },
-                                ollamaManager: ollamaManager,
-                                geminiManager: geminiManager
-                            )
-                        }
+                                } : nil,
+                            onChangeProvider: { provider, model in
+                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                    slots[idx].provider = provider
+                                    slots[idx].model = model
+                                    saveSlots()
+                                }
+                            },
+                            ollamaManager: ollamaManager,
+                            geminiManager: geminiManager
+                        )
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
@@ -297,6 +293,85 @@ struct ModelComparisonView: View {
 
     private var comparisonInputBar: some View {
         VStack(spacing: 0) {
+            // Ollama options bar (thinking + web search)
+            if hasOllamaSlot {
+                HStack(spacing: 12) {
+                    // Thinking level for Ollama
+                    if hasThinkingCapableOllamaSlot {
+                        Menu {
+                            Button(action: { compareThinkingLevel = "low" }) {
+                                HStack {
+                                    Text("Low")
+                                    if compareThinkingLevel == "low" {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                            Button(action: { compareThinkingLevel = "medium" }) {
+                                HStack {
+                                    Text("Medium")
+                                    if compareThinkingLevel == "medium" {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                            Button(action: { compareThinkingLevel = "high" }) {
+                                HStack {
+                                    Text("High")
+                                    if compareThinkingLevel == "high" {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "brain")
+                                    .font(.system(size: 11, weight: .medium))
+                                Text("Thinking: \(compareThinkingLevel.capitalized)")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(Color.secondary.opacity(0.08))
+                            )
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                    }
+
+                    // Web search toggle
+                    if !ollamaAPIKey.isEmpty {
+                        Button(action: { compareWebSearchEnabled.toggle() }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "globe")
+                                    .font(.system(size: 11, weight: .medium))
+                                Text(compareWebSearchEnabled ? "Web Search: On" : "Web Search: Off")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .foregroundColor(compareWebSearchEnabled ? .blue : .secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(
+                                        compareWebSearchEnabled
+                                            ? Color.blue.opacity(0.1)
+                                            : Color.secondary.opacity(0.08))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 6)
+                .padding(.bottom, 4)
+            }
+
             HStack(spacing: 10) {
                 // Prompt field
                 ZStack(alignment: .leading) {
@@ -694,6 +769,20 @@ struct ModelComparisonView: View {
         }
     }
 
+    /// Whether any slot is an Ollama provider
+    private var hasOllamaSlot: Bool {
+        slots.contains(where: { $0.provider == "Ollama" })
+    }
+
+    /// Whether any Ollama slot has a thinking-capable model (deepseek, gpt-oss, r1)
+    private var hasThinkingCapableOllamaSlot: Bool {
+        slots.contains(where: { slot in
+            guard slot.provider == "Ollama" else { return false }
+            let lower = slot.model.lowercased()
+            return lower.contains("deepseek") || lower.contains("gpt-oss") || lower.contains("r1")
+        })
+    }
+
     /// Compute the effective thinking level for a given provider/model.
     /// Gemini never gets thinking. Ollama gpt-oss gets the app-level thinkingLevel.
     /// DeepSeek gets true only when "high". All others get "false".
@@ -703,9 +792,9 @@ struct ModelComparisonView: View {
         } else if provider == "Ollama" {
             let lower = model.lowercased()
             if lower.contains("gpt-oss") {
-                return thinkingLevel  // low, medium, high from app setting
+                return compareThinkingLevel  // low, medium, high from compare setting
             } else if lower.contains("deepseek") || lower.contains("r1") {
-                return thinkingLevel == "high" ? "true" : "false"
+                return compareThinkingLevel == "high" ? "true" : "false"
             }
             return "false"
         }
@@ -927,28 +1016,58 @@ struct ModelComparisonView: View {
                     case "Ollama":
                         var fullContent = ""
                         var fullThinking = ""
+                        var lastUpdateTime = Date()
                         let ollamaThinking = effectiveThinkingLevel(
                             provider: provider, model: model)
+
+                        // Web search augmentation for Ollama
+                        var ollamaSystemPrompt = systemPrompt
+                        if compareWebSearchEnabled && !ollamaAPIKey.isEmpty {
+                            do {
+                                let searchResults = try await webSearchService.search(
+                                    query: trimmed, apiKey: ollamaAPIKey)
+                                let searchContext = webSearchService.buildSearchContext(
+                                    results: searchResults)
+                                if !searchContext.isEmpty {
+                                    ollamaSystemPrompt = systemPrompt + searchContext
+                                }
+                            } catch {
+                                print("Compare web search failed: \(error.localizedDescription)")
+                            }
+                        }
+
                         for try await (chunk, thinkChunk) in ollamaService.sendMessageStream(
                             history: history, endpoint: ollamaURL, model: model,
-                            systemPrompt: systemPrompt, thinkingLevel: ollamaThinking
+                            systemPrompt: ollamaSystemPrompt, thinkingLevel: ollamaThinking
                         ) {
                             fullContent += chunk
                             if let t = thinkChunk { fullThinking += t }
-                            let content = fullContent
-                            let thinking = fullThinking
-                            await MainActor.run {
-                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    slots[idx].response = content
-                                    if !thinking.isEmpty {
-                                        slots[idx].thinkingContent = thinking
+
+                            // Throttle UI updates to avoid blocking the stream on every token
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                let content = fullContent
+                                let thinking = fullThinking
+                                await MainActor.run {
+                                    if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                        slots[idx].response = content
+                                        if !thinking.isEmpty {
+                                            slots[idx].thinkingContent = thinking
+                                        }
                                     }
                                 }
+                                lastUpdateTime = Date()
                             }
                         }
+                        // Flush final content
+                        let finalContent = fullContent
+                        let finalThinking = fullThinking
                         let elapsed = Date().timeIntervalSince(startTime)
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                slots[idx].response = finalContent
+                                if !finalThinking.isEmpty {
+                                    slots[idx].thinkingContent = finalThinking
+                                }
                                 slots[idx].isLoading = false
                                 slots[idx].elapsedTime = elapsed
                             }
