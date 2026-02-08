@@ -969,10 +969,12 @@ class GeminiService {
         return AsyncThrowingStream { continuation in
             Task {
                 let modelName = model.isEmpty ? "gemini-1.5-flash" : model
-                let isImageModel = modelName.lowercased().contains("image")
+                let isImageModel =
+                    modelName.lowercased().contains("image")
                     || modelName.lowercased().contains("nano-banana")
 
-                let endpoint = isImageModel
+                let endpoint =
+                    isImageModel
                     ? "generateContent"
                     : "streamGenerateContent"
                 let urlSuffix = isImageModel ? "" : "&alt=sse"
@@ -1084,8 +1086,10 @@ class GeminiService {
 
                             if let text = part["text"] as? String {
                                 continuation.yield((text, nil, nil))
-                            } else if let inlineData = (part["inlineData"] ?? part["inline_data"]) as? [String: Any],
-                                let mimeType = (inlineData["mimeType"] ?? inlineData["mime_type"]) as? String,
+                            } else if let inlineData = (part["inlineData"] ?? part["inline_data"])
+                                as? [String: Any],
+                                let mimeType = (inlineData["mimeType"] ?? inlineData["mime_type"])
+                                    as? String,
                                 mimeType.hasPrefix("image/"),
                                 let base64Str = inlineData["data"] as? String,
                                 let imageData = Data(base64Encoded: base64Str)
@@ -1135,9 +1139,12 @@ class GeminiService {
 
                                     if let text = part["text"] as? String {
                                         continuation.yield((text, nil, nil))
-                                    } else if let inlineData = (part["inlineData"] ?? part["inline_data"])
+                                    } else if let inlineData =
+                                        (part["inlineData"] ?? part["inline_data"])
                                         as? [String: Any],
-                                        let mimeType = (inlineData["mimeType"] ?? inlineData["mime_type"]) as? String,
+                                        let mimeType =
+                                            (inlineData["mimeType"] ?? inlineData["mime_type"])
+                                            as? String,
                                         mimeType.hasPrefix("image/"),
                                         let base64Str = inlineData["data"] as? String,
                                         let imageData = Data(base64Encoded: base64Str)
