@@ -571,6 +571,11 @@ class ChatManager: ObservableObject {
         createNewSession()
     }
 
+    func moveSessions(from source: IndexSet, to destination: Int) {
+        sessions.move(fromOffsets: source, toOffset: destination)
+        saveSessions()
+    }
+
     func addMessage(_ message: Message) {
         if sessions.isEmpty {
             createNewSession()
@@ -656,7 +661,7 @@ class ChatManager: ObservableObject {
         }
     }
 
-    private func saveSessions() {
+    func saveSessions() {
         if let data = try? JSONEncoder().encode(sessions) {
             try? data.write(to: savePath)
         }
@@ -2039,12 +2044,14 @@ struct SidebarView: View {
     @AppStorage("ShowCompare") private var showCompareTool: Bool = true
     @AppStorage("ShowCommands") private var showCommandsTool: Bool = true
     @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
+    @AppStorage("ToolOrder") private var toolOrderRaw: String = "compare,commands,quizme"
     @State private var showCustomizeTools: Bool = false
 
     @State private var searchText: String = ""
     @State private var isSearchVisible: Bool = false
     @State private var renamingSessionId: UUID?
     @State private var renameText: String = ""
+    @Environment(\.colorScheme) private var colorScheme
 
     // Service for summarization
     private let summarizer = AppleFoundationService()
@@ -2076,26 +2083,82 @@ struct SidebarView: View {
             // Search
             SidebarItem(icon: "magnifyingglass", title: "Search chats") {
                 isSearchVisible.toggle()
+                if isSearchVisible { searchText = "" }
             }
             .popover(isPresented: $isSearchVisible, arrowEdge: .leading) {
-                VStack(spacing: 12) {
-                    HStack {
+                VStack(spacing: 0) {
+                    // Search header
+                    HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.secondary)
                         TextField("Search chats...", text: $searchText)
                             .textFieldStyle(.plain)
+                            .font(.system(size: 14))
+                        if !searchText.isEmpty {
+                            Button(action: { searchText = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary.opacity(0.5))
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .padding(8)
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
 
-                    if filteredSessions.isEmpty {
-                        Text("No chats found")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding()
+                    Divider().opacity(0.3).padding(.horizontal, 12)
+
+                    if searchText.isEmpty {
+                        // Recent chats prompt
+                        VStack(spacing: 8) {
+                            Spacer()
+                            Image(systemName: "text.magnifyingglass")
+                                .font(.system(size: 28))
+                                .foregroundColor(.secondary.opacity(0.2))
+                            Text("Search by title or message content")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary.opacity(0.5))
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 120)
+                    } else if filteredSessions.isEmpty {
+                        VStack(spacing: 8) {
+                            Spacer()
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 24))
+                                .foregroundColor(.secondary.opacity(0.2))
+                            Text("No chats found for \"\(searchText)\"")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary.opacity(0.5))
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 120)
                     } else {
+                        // Results count
+                        HStack {
+                            Text(
+                                "\(filteredSessions.count) result\(filteredSessions.count == 1 ? "" : "s")"
+                            )
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary.opacity(0.6))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
+
                         ScrollView {
                             VStack(spacing: 4) {
                                 ForEach(filteredSessions) { session in
@@ -2107,28 +2170,56 @@ struct SidebarView: View {
                                         chatManager.currentSessionId = session.id
                                         isSearchVisible = false
                                     }) {
-                                        HStack {
-                                            Text(session.title)
+                                        HStack(spacing: 10) {
+                                            VStack(alignment: .leading, spacing: 3) {
+                                                Text(
+                                                    session.title.isEmpty
+                                                        ? "New Chat" : session.title
+                                                )
                                                 .lineLimit(1)
-                                                .font(.system(size: 13))
+                                                .font(.system(size: 13, weight: .medium))
+                                                .foregroundColor(.primary)
+                                                HStack(spacing: 6) {
+                                                    Text(session.date, style: .date)
+                                                        .font(.system(size: 10))
+                                                        .foregroundColor(.secondary.opacity(0.6))
+                                                    if !session.messages.isEmpty {
+                                                        Text("·")
+                                                            .foregroundColor(
+                                                                .secondary.opacity(0.4))
+                                                        Text("\(session.messages.count) messages")
+                                                            .font(.system(size: 10))
+                                                            .foregroundColor(
+                                                                .secondary.opacity(0.6))
+                                                    }
+                                                }
+                                            }
                                             Spacer()
-                                            Text(session.date, style: .date)
-                                                .font(.caption2)
-                                                .foregroundColor(.secondary)
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundColor(.secondary.opacity(0.3))
                                         }
-                                        .padding(8)
-                                        .background(Color.primary.opacity(0.05))
-                                        .cornerRadius(6)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .fill(
+                                                    colorScheme == .dark
+                                                        ? Color.white.opacity(0.04)
+                                                        : Color.black.opacity(0.02))
+                                        )
+                                        .contentShape(Rectangle())
                                     }
                                     .buttonStyle(.plain)
                                 }
                             }
+                            .padding(.horizontal, 12)
                         }
-                        .frame(maxHeight: 300)
+                        .frame(maxHeight: 320)
                     }
                 }
-                .padding()
-                .frame(width: 300)
+                .padding(.bottom, 12)
+                .frame(width: 340)
             }
 
             // Images
@@ -2160,43 +2251,41 @@ struct SidebarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
 
-            // Model Comparison
-            if showCompareTool {
-                SidebarItem(
-                    icon: "square.split.2x1", title: "Compare", isSelected: showModelComparison
-                ) {
-                    withAnimation {
-                        showModelComparison = true
-                        showImageGallery = false
-                        showCommands = false
-                        showQuizMe = false
-                        chatManager.currentSessionId = nil
+            // Model Comparison / Commands / Quiz Me — reorderable
+            ForEach(toolOrder, id: \.self) { toolId in
+                if toolId == "compare" && showCompareTool {
+                    SidebarItem(
+                        icon: "square.split.2x1", title: "Compare", isSelected: showModelComparison
+                    ) {
+                        withAnimation {
+                            showModelComparison = true
+                            showImageGallery = false
+                            showCommands = false
+                            showQuizMe = false
+                            chatManager.currentSessionId = nil
+                        }
                     }
-                }
-            }
-
-            // Commands
-            if showCommandsTool {
-                SidebarItem(icon: "command", title: "Commands", isSelected: showCommands) {
-                    withAnimation {
-                        showCommands = true
-                        showModelComparison = false
-                        showImageGallery = false
-                        showQuizMe = false
-                        chatManager.currentSessionId = nil
+                } else if toolId == "commands" && showCommandsTool {
+                    SidebarItem(icon: "command", title: "Commands", isSelected: showCommands) {
+                        withAnimation {
+                            showCommands = true
+                            showModelComparison = false
+                            showImageGallery = false
+                            showQuizMe = false
+                            chatManager.currentSessionId = nil
+                        }
                     }
-                }
-            }
-
-            // Quiz Me
-            if showQuizMeTool {
-                SidebarItem(icon: "questionmark.bubble", title: "Quiz Me", isSelected: showQuizMe) {
-                    withAnimation {
-                        showQuizMe = true
-                        showCommands = false
-                        showModelComparison = false
-                        showImageGallery = false
-                        chatManager.currentSessionId = nil
+                } else if toolId == "quizme" && showQuizMeTool {
+                    SidebarItem(
+                        icon: "questionmark.bubble", title: "Quiz Me", isSelected: showQuizMe
+                    ) {
+                        withAnimation {
+                            showQuizMe = true
+                            showCommands = false
+                            showModelComparison = false
+                            showImageGallery = false
+                            chatManager.currentSessionId = nil
+                        }
                     }
                 }
             }
@@ -2237,11 +2326,100 @@ struct SidebarView: View {
                     }
                     .toggleStyle(.switch)
                     .controlSize(.small)
+
+                    Divider()
+
+                    Text("Drag to reorder")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+
+                    ForEach(toolOrder, id: \.self) { toolId in
+                        HStack(spacing: 8) {
+                            Image(systemName: "line.3.horizontal")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            Image(systemName: toolIcon(for: toolId))
+                                .font(.system(size: 11))
+                                .frame(width: 16)
+                            Text(toolLabel(for: toolId))
+                                .font(.system(size: 12))
+                            Spacer()
+                            // Move up/down buttons
+                            if let idx = toolOrder.firstIndex(of: toolId), idx > 0 {
+                                Button(action: { moveToolUp(toolId) }) {
+                                    Image(systemName: "chevron.up")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            if let idx = toolOrder.firstIndex(of: toolId), idx < toolOrder.count - 1
+                            {
+                                Button(action: { moveToolDown(toolId) }) {
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(Color.secondary.opacity(0.06))
+                        )
+                    }
                 }
                 .padding(12)
-                .frame(width: 200)
+                .frame(width: 220)
             }
         }
+    }
+
+    // MARK: - Tool ordering helpers
+
+    private var toolOrder: [String] {
+        let raw = toolOrderRaw.split(separator: ",").map(String.init)
+        let allTools = ["compare", "commands", "quizme"]
+        // Ensure all tools are present (handle new tools added after first save)
+        var order = raw.filter { allTools.contains($0) }
+        for tool in allTools where !order.contains(tool) {
+            order.append(tool)
+        }
+        return order
+    }
+
+    private func toolIcon(for id: String) -> String {
+        switch id {
+        case "compare": return "square.split.2x1"
+        case "commands": return "command"
+        case "quizme": return "questionmark.bubble"
+        default: return "questionmark"
+        }
+    }
+
+    private func toolLabel(for id: String) -> String {
+        switch id {
+        case "compare": return "Compare"
+        case "commands": return "Commands"
+        case "quizme": return "Quiz Me"
+        default: return id
+        }
+    }
+
+    private func moveToolUp(_ toolId: String) {
+        var order = toolOrder
+        guard let idx = order.firstIndex(of: toolId), idx > 0 else { return }
+        order.swapAt(idx, idx - 1)
+        toolOrderRaw = order.joined(separator: ",")
+    }
+
+    private func moveToolDown(_ toolId: String) {
+        var order = toolOrder
+        guard let idx = order.firstIndex(of: toolId), idx < order.count - 1 else { return }
+        order.swapAt(idx, idx + 1)
+        toolOrderRaw = order.joined(separator: ",")
     }
 
     var sectionHeader: some View {
@@ -2253,14 +2431,17 @@ struct SidebarView: View {
             .padding(.bottom, 8)
     }
 
+    private var visibleSessions: [ChatSession] {
+        chatManager.sessions.filter {
+            !$0.messages.isEmpty || $0.id == chatManager.currentSessionId
+        }
+    }
+
     var chatList: some View {
         ScrollView {
             VStack(spacing: 2) {
-                ForEach(
-                    chatManager.sessions.filter {
-                        !$0.messages.isEmpty || $0.id == chatManager.currentSessionId
-                    }
-                ) { session in
+                ForEach(Array(visibleSessions.enumerated()), id: \.element.id) {
+                    listIndex, session in
                     SidebarRow(
                         session: session,
                         isSelected: !showImageGallery && !showModelComparison && !showCommands
@@ -2293,7 +2474,29 @@ struct SidebarView: View {
                         },
                         onSummarize: {
                             summarize(session: session)
-                        }
+                        },
+                        onMoveUp: listIndex > 0
+                            ? {
+                                if let realIdx = chatManager.sessions.firstIndex(where: {
+                                    $0.id == session.id
+                                }), realIdx > 0 {
+                                    withAnimation(.spring(response: 0.3)) {
+                                        chatManager.sessions.swapAt(realIdx, realIdx - 1)
+                                        chatManager.saveSessions()
+                                    }
+                                }
+                            } : nil,
+                        onMoveDown: listIndex < visibleSessions.count - 1
+                            ? {
+                                if let realIdx = chatManager.sessions.firstIndex(where: {
+                                    $0.id == session.id
+                                }), realIdx < chatManager.sessions.count - 1 {
+                                    withAnimation(.spring(response: 0.3)) {
+                                        chatManager.sessions.swapAt(realIdx, realIdx + 1)
+                                        chatManager.saveSessions()
+                                    }
+                                }
+                            } : nil
                     )
                 }
             }
@@ -2385,24 +2588,63 @@ struct SidebarRow: View {
     var onRename: () -> Void
     var onCommitRename: () -> Void
     var onSummarize: () -> Void
+    var onMoveUp: (() -> Void)?
+    var onMoveDown: (() -> Void)?
 
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @State private var offset: CGFloat = 0
+    @State private var isHoveringTrash: Bool = false
     @FocusState private var isFocused: Bool
+
+    private var deleteRevealProgress: CGFloat {
+        min(1, abs(offset) / 60)
+    }
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            // Delete Action Background
+            // Delete Action Background — polished reveal
             if offset < 0 {
-                Button(action: onDelete) {
-                    Image(systemName: "trash.fill")
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 20)
+                HStack(spacing: 0) {
+                    Spacer()
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            offset = 0
+                        }
+                        onDelete()
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: isHoveringTrash ? "trash.circle.fill" : "trash.fill")
+                                .font(.system(size: isHoveringTrash ? 22 : 17, weight: .medium))
+                                .foregroundColor(.white)
+                                .scaleEffect(isHoveringTrash ? 1.15 : 1.0)
+                                .animation(.spring(response: 0.25), value: isHoveringTrash)
+                            if deleteRevealProgress > 0.8 {
+                                Text("Delete")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                            }
+                        }
+                        .frame(width: 60)
                         .frame(maxHeight: .infinity)
-                        .background(Color.red)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.red.opacity(0.85), Color.red],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { hovering in
+                        isHoveringTrash = hovering
+                    }
+                    .opacity(Double(deleteRevealProgress))
+                    .scaleEffect(x: deleteRevealProgress, y: 1, anchor: .trailing)
                 }
-                .padding(.trailing, 0)
             }
 
             // Content
@@ -2496,6 +2738,21 @@ struct SidebarRow: View {
                 }
                 Button("Rename with Apple Intelligence") {
                     onSummarize()
+                }
+                Divider()
+                if let moveUp = onMoveUp {
+                    Button {
+                        moveUp()
+                    } label: {
+                        Label("Move Up", systemImage: "arrow.up")
+                    }
+                }
+                if let moveDown = onMoveDown {
+                    Button {
+                        moveDown()
+                    } label: {
+                        Label("Move Down", systemImage: "arrow.down")
+                    }
                 }
                 Divider()
                 Button("Delete", role: .destructive) {

@@ -25,7 +25,7 @@ struct ModelComparisonView: View {
     @ObservedObject private var geminiManager = GeminiModelManager.shared
 
     @State private var slots: [ComparisonSlot] = ModelComparisonView.loadSavedSlots()
-    @State private var prompt: String = ""
+    @AppStorage("ComparePrompt") private var prompt: String = ""
     @State private var isComparing: Bool = false
     @State private var currentTasks: [UUID: Task<Void, Never>] = [:]
     @FocusState private var isInputFocused: Bool
@@ -848,6 +848,7 @@ struct ModelComparisonView: View {
                 case "Ollama":
                     var full = ""
                     var fullThinking = ""
+                    var lastUpdateTime = Date()
                     for try await (chunk, thinkChunk) in ollamaService.sendMessageStream(
                         history: history, endpoint: ollamaURL, model: synthesizeModel,
                         systemPrompt: "",
@@ -855,13 +856,27 @@ struct ModelComparisonView: View {
                     ) {
                         full += chunk
                         if let t = thinkChunk { fullThinking += t }
-                        let content = full
-                        let thinking = fullThinking
-                        await MainActor.run {
-                            synthesizedResponse = content
-                            if !thinking.isEmpty {
-                                synthesizedThinking = thinking
+
+                        // Throttle UI updates to avoid blocking the stream
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let content = full
+                            let thinking = fullThinking
+                            await MainActor.run {
+                                synthesizedResponse = content
+                                if !thinking.isEmpty {
+                                    synthesizedThinking = thinking
+                                }
                             }
+                            lastUpdateTime = Date()
+                        }
+                    }
+                    // Flush final content
+                    let finalSynthContent = full
+                    let finalSynthThinking = fullThinking
+                    await MainActor.run {
+                        synthesizedResponse = finalSynthContent
+                        if !finalSynthThinking.isEmpty {
+                            synthesizedThinking = finalSynthThinking
                         }
                     }
 
