@@ -1320,6 +1320,8 @@ struct ContentView: View {
     @State private var showImageGallery: Bool = false
     @State private var showModelComparison: Bool = false
     @State private var showCommands: Bool = false
+    @State private var showQuizMe: Bool = false
+    @AppStorage("ActiveToolName") private var activeToolName: String = ""
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
 
@@ -1352,7 +1354,8 @@ struct ContentView: View {
                 SidebarView(
                     chatManager: chatManager, showImageGallery: $showImageGallery,
                     showModelComparison: $showModelComparison,
-                    showCommands: $showCommands)
+                    showCommands: $showCommands,
+                    showQuizMe: $showQuizMe)
             } detail: {
                 ZStack {
                     // Background Layer
@@ -1401,6 +1404,8 @@ struct ContentView: View {
                         CommandsManagementView()
                     } else if showModelComparison {
                         ModelComparisonView()
+                    } else if showQuizMe {
+                        QuizMeView()
                     } else if showImageGallery {
                         ImageGalleryView(
                             chatManager: chatManager, showImageGallery: $showImageGallery)
@@ -1495,6 +1500,18 @@ struct ContentView: View {
             .frame(minWidth: 800, minHeight: 500)
             .disabled(showSplash)  // Disable main content when splash is showing to prevent focus ring bleed-through
             .toolbar(showSplash ? .hidden : .visible, for: .windowToolbar)
+            .onChange(of: showModelComparison) { _, val in
+                updateActiveToolName()
+            }
+            .onChange(of: showCommands) { _, val in
+                updateActiveToolName()
+            }
+            .onChange(of: showQuizMe) { _, val in
+                updateActiveToolName()
+            }
+            .onChange(of: showImageGallery) { _, val in
+                updateActiveToolName()
+            }
 
             if !hasSeenWelcome {
                 WelcomeView {
@@ -1519,6 +1536,18 @@ struct ContentView: View {
 
     func isWebViewProvider(_ provider: String) -> Bool {
         return ["Gemini Web", "ChatGPT Web", "Perplexity Web", "Grok Web"].contains(provider)
+    }
+
+    private func updateActiveToolName() {
+        if showModelComparison {
+            activeToolName = "Compare"
+        } else if showCommands {
+            activeToolName = "Commands"
+        } else if showQuizMe {
+            activeToolName = "Quiz Me"
+        } else {
+            activeToolName = ""
+        }
     }
 
     func getWebURL(for provider: String) -> URL? {
@@ -2004,7 +2033,13 @@ struct SidebarView: View {
     @Binding var showImageGallery: Bool
     @Binding var showModelComparison: Bool
     @Binding var showCommands: Bool
+    @Binding var showQuizMe: Bool
     @Namespace private var animation
+
+    @AppStorage("ShowCompare") private var showCompareTool: Bool = true
+    @AppStorage("ShowCommands") private var showCommandsTool: Bool = true
+    @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
+    @State private var showCustomizeTools: Bool = false
 
     @State private var searchText: String = ""
     @State private var isSearchVisible: Bool = false
@@ -2034,6 +2069,7 @@ struct SidebarView: View {
                 showImageGallery = false
                 showModelComparison = false
                 showCommands = false
+                showQuizMe = false
                 chatManager.createNewSession()
             }
 
@@ -2067,6 +2103,7 @@ struct SidebarView: View {
                                         showImageGallery = false
                                         showModelComparison = false
                                         showCommands = false
+                                        showQuizMe = false
                                         chatManager.currentSessionId = session.id
                                         isSearchVisible = false
                                     }) {
@@ -2100,33 +2137,108 @@ struct SidebarView: View {
                     showImageGallery = true
                     showModelComparison = false
                     showCommands = false
+                    showQuizMe = false
                     chatManager.currentSessionId = nil
                 }
             }
 
-            Divider()
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
+            // ── Tools ──────────────
+            HStack(spacing: 6) {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 1)
+                    .frame(maxWidth: 12)
+                Text("Tools")
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .textCase(.uppercase)
+                    .tracking(1.2)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(height: 1)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
 
             // Model Comparison
-            SidebarItem(icon: "square.split.2x1", title: "Compare", isSelected: showModelComparison)
-            {
-                withAnimation {
-                    showModelComparison = true
-                    showImageGallery = false
-                    showCommands = false
-                    chatManager.currentSessionId = nil
+            if showCompareTool {
+                SidebarItem(icon: "square.split.2x1", title: "Compare", isSelected: showModelComparison)
+                {
+                    withAnimation {
+                        showModelComparison = true
+                        showImageGallery = false
+                        showCommands = false
+                        showQuizMe = false
+                        chatManager.currentSessionId = nil
+                    }
                 }
             }
 
             // Commands
-            SidebarItem(icon: "command", title: "Commands", isSelected: showCommands) {
-                withAnimation {
-                    showCommands = true
-                    showModelComparison = false
-                    showImageGallery = false
-                    chatManager.currentSessionId = nil
+            if showCommandsTool {
+                SidebarItem(icon: "command", title: "Commands", isSelected: showCommands) {
+                    withAnimation {
+                        showCommands = true
+                        showModelComparison = false
+                        showImageGallery = false
+                        showQuizMe = false
+                        chatManager.currentSessionId = nil
+                    }
                 }
+            }
+
+            // Quiz Me
+            if showQuizMeTool {
+                SidebarItem(icon: "questionmark.bubble", title: "Quiz Me", isSelected: showQuizMe) {
+                    withAnimation {
+                        showQuizMe = true
+                        showCommands = false
+                        showModelComparison = false
+                        showImageGallery = false
+                        chatManager.currentSessionId = nil
+                    }
+                }
+            }
+
+            // Customize Tools button
+            Button(action: { showCustomizeTools.toggle() }) {
+                HStack(spacing: 5) {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 10, weight: .medium))
+                    Text("Customize")
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(.secondary.opacity(0.5))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showCustomizeTools, arrowEdge: .trailing) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Visible Tools")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.primary)
+                    Toggle(isOn: $showCompareTool) {
+                        Label("Compare", systemImage: "square.split.2x1")
+                            .font(.system(size: 12))
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    Toggle(isOn: $showCommandsTool) {
+                        Label("Commands", systemImage: "command")
+                            .font(.system(size: 12))
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    Toggle(isOn: $showQuizMeTool) {
+                        Label("Quiz Me", systemImage: "questionmark.bubble")
+                            .font(.system(size: 12))
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                }
+                .padding(12)
+                .frame(width: 200)
             }
         }
     }
@@ -2150,7 +2262,7 @@ struct SidebarView: View {
                 ) { session in
                     SidebarRow(
                         session: session,
-                        isSelected: !showImageGallery && !showModelComparison && !showCommands
+                        isSelected: !showImageGallery && !showModelComparison && !showCommands && !showQuizMe
                             && chatManager.currentSessionId == session.id,
                         isRenaming: renamingSessionId == session.id,
                         renameText: $renameText,
@@ -2159,6 +2271,7 @@ struct SidebarView: View {
                             showImageGallery = false
                             showModelComparison = false
                             showCommands = false
+                            showQuizMe = false
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                 chatManager.currentSessionId = session.id
                             }

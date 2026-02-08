@@ -638,11 +638,8 @@ struct ModelComparisonView: View {
                             .padding(.bottom, 4)
                         }
 
-                        Text(synthesizedResponse)
-                            .font(.system(size: 13))
-                            .foregroundColor(.primary)
-                            .textSelection(.enabled)
-                            .lineSpacing(4)
+                        MarkdownView(blocks: Message.parseMarkdown(synthesizedResponse))
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
@@ -1270,45 +1267,58 @@ struct ComparisonCard: View {
                         .padding(.bottom, 4)
                     }
 
-                    Text(slot.response)
-                        .font(.system(size: 13))
-                        .foregroundColor(.primary)
-                        .textSelection(.enabled)
-                        .lineSpacing(4)
+                    MarkdownView(blocks: Message.parseMarkdown(slot.response))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(14)
             }
             .frame(minHeight: 120, maxHeight: 400)
 
-            // Copy button
-            HStack {
-                Spacer()
-                Button(action: {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(slot.response, forType: .string)
-                    showCopied = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        showCopied = false
-                    }
-                }) {
+            // Copy button + small model warning
+            VStack(spacing: 6) {
+                // Small model disclaimer
+                if slot.provider == "Ollama" {
                     HStack(spacing: 4) {
-                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 9))
+                            .foregroundColor(.orange.opacity(0.7))
+                        Text("Results may be less accurate with small models")
                             .font(.system(size: 10))
-                        Text(showCopied ? "Copied" : "Copy")
-                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary.opacity(0.6))
                     }
-                    .foregroundColor(showCopied ? .green : .secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule().fill(
-                            showCopied ? Color.green.opacity(0.1) : Color.secondary.opacity(0.08))
-                    )
-                    .animation(.easeInOut(duration: 0.2), value: showCopied)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14)
                 }
-                .buttonStyle(.plain)
+
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(slot.response, forType: .string)
+                        showCopied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            showCopied = false
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 10))
+                            Text(showCopied ? "Copied" : "Copy")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(showCopied ? .green : .secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule().fill(
+                                showCopied ? Color.green.opacity(0.1) : Color.secondary.opacity(0.08))
+                        )
+                        .animation(.easeInOut(duration: 0.2), value: showCopied)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 14)
             }
-            .padding(.horizontal, 14)
             .padding(.bottom, 10)
         }
     }

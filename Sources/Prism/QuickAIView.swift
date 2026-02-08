@@ -61,6 +61,7 @@ struct QuickAIView: View {
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
     @AppStorage("WebSearchEnabled") private var webSearchEnabled: Bool = false
     @State private var showOpacityPopover: Bool = false
+    @AppStorage("ActiveToolName") private var activeToolName: String = ""
 
     // Custom spring animation for ultra-smooth transitions
     private var expandAnimation: Animation {
@@ -80,6 +81,46 @@ struct QuickAIView: View {
             VStack(spacing: 0) {
                 if isExpanded {
                     VStack(spacing: 12) {
+                        // Tool access banner
+                        if !activeToolName.isEmpty {
+                            HStack(spacing: 8) {
+                                Image(systemName: "wrench.and.screwdriver")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.orange)
+                                Text("Currently viewing **\(activeToolName)** tool")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Button(action: {
+                                    chatManager.createNewSession()
+                                    withAnimation(collapseAnimation) {
+                                        isExpanded = false
+                                    }
+                                }) {
+                                    Text("New Chat")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundColor(.primary.opacity(0.8))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 4)
+                                        .background(
+                                            Capsule()
+                                                .fill(Color.secondary.opacity(0.12))
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .fill(Color.orange.opacity(0.06))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(Color.orange.opacity(0.15), lineWidth: 0.5)
+                                    )
+                            )
+                        }
+
                         headerSection
                         messagesSection
                     }
