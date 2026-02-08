@@ -5291,15 +5291,23 @@ struct Triangle: Shape {
 struct ImageGalleryView: View {
     @ObservedObject var chatManager: ChatManager
     @Binding var showImageGallery: Bool
+    @ObservedObject private var imageGenStore = ImageGenerationStore.shared
     @State private var selectedImageForPreview: NSImage? = nil
 
     var images: [(UUID, UUID, NSImage, String)] {
         var result: [(UUID, UUID, NSImage, String)] = []
+        // Chat images
         for session in chatManager.sessions {
             for message in session.messages {
                 if let image = message.image {
                     result.append((session.id, message.id, image, message.content))
                 }
+            }
+        }
+        // Generated images from Image Generation tool
+        for item in imageGenStore.items {
+            if let img = imageGenStore.image(for: item.id) {
+                result.append((item.id, item.id, img, item.prompt))
             }
         }
         return result
@@ -5332,9 +5340,11 @@ struct ImageGalleryView: View {
                             }
                         }
                         .contextMenu {
-                            Button("Go to chat") {
-                                showImageGallery = false
-                                chatManager.currentSessionId = item.0
+                            if chatManager.sessions.contains(where: { $0.id == item.0 }) {
+                                Button("Go to chat") {
+                                    showImageGallery = false
+                                    chatManager.currentSessionId = item.0
+                                }
                             }
                             Button("Copy") {
                                 let pasteboard = NSPasteboard.general
