@@ -1311,7 +1311,8 @@ struct ComparisonCard: View {
                         .padding(.vertical, 5)
                         .background(
                             Capsule().fill(
-                                showCopied ? Color.green.opacity(0.1) : Color.secondary.opacity(0.08))
+                                showCopied
+                                    ? Color.green.opacity(0.1) : Color.secondary.opacity(0.08))
                         )
                         .animation(.easeInOut(duration: 0.2), value: showCopied)
                     }

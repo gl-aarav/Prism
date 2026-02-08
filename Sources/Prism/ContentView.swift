@@ -2162,8 +2162,9 @@ struct SidebarView: View {
 
             // Model Comparison
             if showCompareTool {
-                SidebarItem(icon: "square.split.2x1", title: "Compare", isSelected: showModelComparison)
-                {
+                SidebarItem(
+                    icon: "square.split.2x1", title: "Compare", isSelected: showModelComparison
+                ) {
                     withAnimation {
                         showModelComparison = true
                         showImageGallery = false
@@ -2262,7 +2263,8 @@ struct SidebarView: View {
                 ) { session in
                     SidebarRow(
                         session: session,
-                        isSelected: !showImageGallery && !showModelComparison && !showCommands && !showQuizMe
+                        isSelected: !showImageGallery && !showModelComparison && !showCommands
+                            && !showQuizMe
                             && chatManager.currentSessionId == session.id,
                         isRenaming: renamingSessionId == session.id,
                         renameText: $renameText,
