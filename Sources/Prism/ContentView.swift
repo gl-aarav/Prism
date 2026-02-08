@@ -2046,6 +2046,7 @@ struct SidebarView: View {
     @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
     @AppStorage("ToolOrder") private var toolOrderRaw: String = "compare,commands,quizme"
     @State private var showCustomizeTools: Bool = false
+    @State private var draggedTool: String? = nil
 
     @State private var searchText: String = ""
     @State private var isSearchVisible: Bool = false
@@ -2369,6 +2370,19 @@ struct SidebarView: View {
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
                                 .fill(Color.secondary.opacity(0.06))
                         )
+                        .opacity(draggedTool == toolId ? 0.4 : 1.0)
+                        .onDrag {
+                            draggedTool = toolId
+                            return NSItemProvider(object: toolId as NSString)
+                        }
+                        .onDrop(
+                            of: [.text],
+                            delegate: ToolDropDelegate(
+                                item: toolId,
+                                draggedItem: $draggedTool,
+                                toolOrderRaw: $toolOrderRaw,
+                                toolOrder: toolOrder
+                            ))
                     }
                 }
                 .padding(12)
@@ -2420,6 +2434,38 @@ struct SidebarView: View {
         guard let idx = order.firstIndex(of: toolId), idx < order.count - 1 else { return }
         order.swapAt(idx, idx + 1)
         toolOrderRaw = order.joined(separator: ",")
+    }
+
+    // MARK: - Tool Drag & Drop
+
+    struct ToolDropDelegate: DropDelegate {
+        let item: String
+        @Binding var draggedItem: String?
+        @Binding var toolOrderRaw: String
+        let toolOrder: [String]
+
+        func performDrop(info: DropInfo) -> Bool {
+            draggedItem = nil
+            return true
+        }
+
+        func dropEntered(info: DropInfo) {
+            guard let dragged = draggedItem, dragged != item else { return }
+            var order = toolOrder
+            guard let fromIndex = order.firstIndex(of: dragged),
+                let toIndex = order.firstIndex(of: item)
+            else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                order.move(
+                    fromOffsets: IndexSet(integer: fromIndex),
+                    toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+                toolOrderRaw = order.joined(separator: ",")
+            }
+        }
+
+        func dropUpdated(info: DropInfo) -> DropProposal? {
+            return DropProposal(operation: .move)
+        }
     }
 
     var sectionHeader: some View {
