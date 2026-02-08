@@ -121,6 +121,10 @@ struct ImageGenerationView: View {
     @State private var showResetConfirmation: Bool = false
     @State private var loadingItemId: UUID? = nil
     @State private var imageCache: [UUID: NSImage] = [:]
+    @State private var selectedPreviewImage: NSImage? = nil
+    @State private var previewVisible: Bool = false
+    @State private var previewSourceRect: CGRect = .zero
+    @State private var imageFrames: [UUID: CGRect] = [:]
     @FocusState private var isInputFocused: Bool
 
     private let shortcutService = ShortcutService()
@@ -148,21 +152,37 @@ struct ImageGenerationView: View {
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            header
-                .background(.ultraThinMaterial)
-
-            // Content area — no background, parent provides it
+        ZStack {
             VStack(spacing: 0) {
-                if store.items.isEmpty && !isGenerating {
-                    emptyState
-                } else {
-                    messagesView
-                }
+                header
 
-                inputBar
+                // Content area
+                VStack(spacing: 0) {
+                    if store.items.isEmpty && !isGenerating {
+                        emptyState
+                    } else {
+                        messagesView
+                    }
+
+                    inputBar
+                }
             }
+            .blur(radius: previewVisible ? 20 : 0)
+            .animation(.spring(response: 0.45, dampingFraction: 0.88), value: previewVisible)
+            .allowsHitTesting(!previewVisible)
+
+            // Full-screen image preview overlay
+            if previewVisible, let image = selectedPreviewImage {
+                ImagePreviewOverlay(image: image, sourceRect: previewSourceRect) {
+                    previewVisible = false
+                    selectedPreviewImage = nil
+                }
+                .zIndex(100)
+            }
+        }
+        .coordinateSpace(name: "imageGenContainer")
+        .onPreferenceChange(ImageFramePreferenceKey.self) { frames in
+            imageFrames.merge(frames) { _, new in new }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .alert("Clear All Images", isPresented: $showResetConfirmation) {
@@ -343,6 +363,22 @@ struct ImageGenerationView: View {
                                                     cornerRadius: 12, style: .continuous)
                                             )
                                             .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                                            .background(
+                                                GeometryReader { imgGeo in
+                                                    Color.clear.preference(
+                                                        key: ImageFramePreferenceKey.self,
+                                                        value: [
+                                                            item.id: imgGeo.frame(
+                                                                in: .named("imageGenContainer"))
+                                                        ]
+                                                    )
+                                                }
+                                            )
+                                            .onTapGesture {
+                                                previewSourceRect = imageFrames[item.id] ?? .zero
+                                                selectedPreviewImage = img
+                                                previewVisible = true
+                                            }
                                             .contextMenu {
                                                 Button("Copy Image") {
                                                     let pb = NSPasteboard.general
@@ -597,5 +633,156 @@ struct ImageGenerationView: View {
         {
             try? png.write(to: fileURL)
         }
+    }
+}
+
+// MARK: - Shared Modern Image Preview Overlay (Hero Zoom)
+
+struct ImagePreviewOverlay: View {
+    let image: NSImage
+    let sourceRect: CGRect
+    let onDismiss: () -> Void
+
+    @State private var expanded = false
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+    @State private var dragOffset: CGSize = .zero
+    @State private var dismissing = false
+
+    private var imageAspect: CGFloat {
+        guard image.size.height > 0 else { return 1 }
+        return image.size.width / image.size.height
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let containerSize = geo.size
+            // Target: centered, fitting within container with padding
+            let maxW = containerSize.width - 80
+            let maxH = containerSize.height - 120
+            let targetW = min(maxW, maxH * imageAspect)
+            let targetH = targetW / imageAspect
+            let targetRect = CGRect(
+                x: (containerSize.width - targetW) / 2,
+                y: (containerSize.height - targetH) / 2,
+                width: targetW,
+                height: targetH
+            )
+
+            let currentRect = expanded ? targetRect : sourceRect
+
+            ZStack {
+                // Backdrop blur + dim
+                Color.black.opacity(expanded ? 0.35 : 0)
+                    .background(expanded ? .ultraThinMaterial : .bar)
+                    .opacity(expanded ? 1 : 0)
+                    .ignoresSafeArea()
+                    .onTapGesture { dismiss() }
+
+                // Close button
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(action: dismiss) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .frame(width: 28, height: 28)
+                                .background(
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                        .overlay(Circle().fill(Color.white.opacity(0.15)))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(expanded ? 1 : 0)
+                        .padding(16)
+                    }
+                    Spacer()
+                }
+                .zIndex(10)
+
+                // Image
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: currentRect.width, height: currentRect.height)
+                    .clipShape(
+                        RoundedRectangle(cornerRadius: expanded ? 10 : 12, style: .continuous)
+                    )
+                    .shadow(
+                        color: .black.opacity(expanded ? 0.35 : 0.1), radius: expanded ? 30 : 8,
+                        y: expanded ? 15 : 4
+                    )
+                    .scaleEffect(scale)
+                    .offset(x: dragOffset.width, y: dragOffset.height)
+                    .position(
+                        x: currentRect.midX + (expanded ? 0 : 0),
+                        y: currentRect.midY
+                    )
+                    .gesture(
+                        MagnifyGesture()
+                            .onChanged { value in
+                                scale = lastScale * value.magnification
+                            }
+                            .onEnded { _ in
+                                lastScale = scale
+                                if scale < 1.0 {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                        scale = 1.0
+                                        lastScale = 1.0
+                                    }
+                                }
+                            }
+                    )
+                    .simultaneousGesture(
+                        DragGesture()
+                            .onChanged { value in
+                                dragOffset = value.translation
+                            }
+                            .onEnded { value in
+                                let magnitude = sqrt(
+                                    pow(value.translation.width, 2)
+                                        + pow(value.translation.height, 2))
+                                if magnitude > 100 {
+                                    dismiss()
+                                } else {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                        dragOffset = .zero
+                                    }
+                                }
+                            }
+                    )
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.88)) {
+                expanded = true
+            }
+        }
+        .onExitCommand { dismiss() }
+    }
+
+    private func dismiss() {
+        guard !dismissing else { return }
+        dismissing = true
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+            expanded = false
+            scale = 1.0
+            lastScale = 1.0
+            dragOffset = .zero
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
+            onDismiss()
+        }
+    }
+}
+
+// MARK: - Preference Key for tracking image frames
+
+struct ImageFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
     }
 }

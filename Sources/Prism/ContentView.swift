@@ -1411,6 +1411,9 @@ struct ContentView: View {
     @AppStorage("ActiveToolName") private var activeToolName: String = ""
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
+    @State private var chatPreviewImage: NSImage? = nil
+    @State private var chatPreviewVisible: Bool = false
+    @State private var chatPreviewSourceRect: CGRect = .zero
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
@@ -1535,7 +1538,12 @@ struct ContentView: View {
                                                     onRegenerate: (!message.isUser && !isLoading
                                                         && isLast)
                                                         ? { regenerateResponse(for: message.id) }
-                                                        : nil
+                                                        : nil,
+                                                    onImageTap: { img, rect in
+                                                        chatPreviewImage = img
+                                                        chatPreviewSourceRect = rect
+                                                        chatPreviewVisible = true
+                                                    }
                                                 )
                                                 .equatable()
                                             }
@@ -1583,7 +1591,17 @@ struct ContentView: View {
                             }
                         }
                     }
+
+                    // Chat image preview overlay
+                    if chatPreviewVisible, let img = chatPreviewImage {
+                        ImagePreviewOverlay(image: img, sourceRect: chatPreviewSourceRect) {
+                            chatPreviewVisible = false
+                            chatPreviewImage = nil
+                        }
+                        .zIndex(200)
+                    }
                 }
+                .coordinateSpace(name: "detailContainer")
             }
             .frame(minWidth: 800, minHeight: 500)
             .disabled(showSplash)  // Disable main content when splash is showing to prevent focus ring bleed-through
@@ -4606,10 +4624,10 @@ struct MessageView: View, Equatable {
     var liveContent: String? = nil
     var liveThinking: String? = nil
     var onRegenerate: (() -> Void)?
+    var onImageTap: ((NSImage, CGRect) -> Void)?
     var maxBubbleWidth: CGFloat = 500
 
     @State private var isCopied = false
-    @State private var showImagePreview = false
     @State private var isCursorVisible = true
     @State private var isThinkingExpanded = false
     @Environment(\.colorScheme) private var colorScheme
@@ -4627,9 +4645,25 @@ struct MessageView: View, Equatable {
                 VStack(alignment: .trailing) {
                     if let image = message.image {
                         ThumbnailView(image: image, maxWidth: 200, maxHeight: 300)
-                            .onTapGesture {
-                                showImagePreview = true
-                            }
+                            .background(
+                                GeometryReader { g in
+                                    Color.clear.preference(
+                                        key: ImageFramePreferenceKey.self,
+                                        value: [message.id: g.frame(in: .named("detailContainer"))]
+                                    )
+                                }
+                            )
+                            .onPreferenceChange(ImageFramePreferenceKey.self) { _ in }
+                            .overlay(
+                                GeometryReader { g in
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            onImageTap?(
+                                                image, g.frame(in: .named("detailContainer")))
+                                        }
+                                }
+                            )
                     }
                     if message.pdfData != nil {
                         HStack(spacing: 8) {
@@ -4686,9 +4720,26 @@ struct MessageView: View, Equatable {
                         if let image = message.image {
                             ThumbnailView(image: image, maxWidth: 300, maxHeight: 300)
                                 .padding(.bottom, 4)
-                                .onTapGesture {
-                                    showImagePreview = true
-                                }
+                                .background(
+                                    GeometryReader { g in
+                                        Color.clear.preference(
+                                            key: ImageFramePreferenceKey.self,
+                                            value: [
+                                                message.id: g.frame(in: .named("detailContainer"))
+                                            ]
+                                        )
+                                    }
+                                )
+                                .overlay(
+                                    GeometryReader { g in
+                                        Color.clear
+                                            .contentShape(Rectangle())
+                                            .onTapGesture {
+                                                onImageTap?(
+                                                    image, g.frame(in: .named("detailContainer")))
+                                            }
+                                    }
+                                )
                         }
                         let activeContent = liveContent ?? message.content
 
@@ -4757,11 +4808,6 @@ struct MessageView: View, Equatable {
             }
         }
         .padding(.vertical, 4)
-        .sheet(isPresented: $showImagePreview) {
-            if let image = message.image {
-                ImagePreviewView(image: image)
-            }
-        }
         .onReceive(cursorTimer) { _ in
             if message.isStreaming {
                 isCursorVisible.toggle()
@@ -4792,36 +4838,6 @@ struct MessageView: View, Equatable {
                 }
             }
         }
-    }
-}
-
-struct ImagePreviewView: View {
-    let image: NSImage
-    @Environment(\.dismiss) var dismiss
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .padding()
-
-            VStack {
-                HStack {
-                    Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title)
-                            .foregroundColor(.white)
-                            .padding()
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-            }
-        }
-        .frame(minWidth: 600, minHeight: 400)
     }
 }
 
@@ -5293,6 +5309,9 @@ struct ImageGalleryView: View {
     @Binding var showImageGallery: Bool
     @ObservedObject private var imageGenStore = ImageGenerationStore.shared
     @State private var selectedImageForPreview: NSImage? = nil
+    @State private var previewVisible: Bool = false
+    @State private var previewSourceRect: CGRect = .zero
+    @State private var imageFrames: [UUID: CGRect] = [:]
 
     var images: [(UUID, UUID, NSImage, String)] {
         var result: [(UUID, UUID, NSImage, String)] = []
@@ -5334,10 +5353,18 @@ struct ImageGalleryView: View {
                         .aspectRatio(1, contentMode: .fit)
                         .background(Color.white.opacity(0.05))
                         .cornerRadius(16)
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedImageForPreview = item.2
+                        .background(
+                            GeometryReader { imgGeo in
+                                Color.clear.preference(
+                                    key: ImageFramePreferenceKey.self,
+                                    value: [item.1: imgGeo.frame(in: .named("galleryContainer"))]
+                                )
                             }
+                        )
+                        .onTapGesture {
+                            previewSourceRect = imageFrames[item.1] ?? .zero
+                            selectedImageForPreview = item.2
+                            previewVisible = true
                         }
                         .contextMenu {
                             if chatManager.sessions.contains(where: { $0.id == item.0 }) {
@@ -5371,33 +5398,21 @@ struct ImageGalleryView: View {
                 .frame(maxWidth: .infinity)
             }
             .navigationTitle("Images")
-            .blur(radius: selectedImageForPreview != nil ? 15 : 0)
+            .blur(radius: previewVisible ? 20 : 0)
+            .animation(.spring(response: 0.45, dampingFraction: 0.88), value: previewVisible)
+            .allowsHitTesting(!previewVisible)
 
-            if let image = selectedImageForPreview {
-                ZStack {
-                    Color.black.opacity(0.6)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedImageForPreview = nil
-                            }
-                        }
-
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(40)
-                        .shadow(radius: 20)
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedImageForPreview = nil
-                            }
-                        }
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            if previewVisible, let image = selectedImageForPreview {
+                ImagePreviewOverlay(image: image, sourceRect: previewSourceRect) {
+                    previewVisible = false
+                    selectedImageForPreview = nil
                 }
                 .zIndex(100)
             }
+        }
+        .coordinateSpace(name: "galleryContainer")
+        .onPreferenceChange(ImageFramePreferenceKey.self) { frames in
+            imageFrames.merge(frames) { _, new in new }
         }
     }
 }
