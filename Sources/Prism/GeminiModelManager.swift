@@ -40,7 +40,6 @@ class GeminiModelManager: ObservableObject {
         "gemini-flash-lite-latest",
         "gemini-pro-latest",
         // Other
-        "nano-banana-pro-preview",
         "gemini-robotics-er-1.5-preview",
         "deep-research-pro-preview-12-2025",
     ]
@@ -73,7 +72,6 @@ class GeminiModelManager: ObservableObject {
         "gemini-flash-latest": "Gemini Flash Latest",
         "gemini-flash-lite-latest": "Gemini Flash-Lite Latest",
         "gemini-pro-latest": "Gemini Pro Latest",
-        "nano-banana-pro-preview": "Nano Banana Pro",
         "gemini-robotics-er-1.5-preview": "Gemini Robotics-ER 1.5 Preview",
         "deep-research-pro-preview-12-2025": "Deep Research Pro Preview (Dec-12-2025)",
     ]

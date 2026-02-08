@@ -1377,7 +1377,6 @@ struct ContentView: View {
     @State private var inputText: String = ""
     @State private var selectedAttachments: [Attachment] = []
     // Legacy single selection states removed/replaced
-    @State private var imageCreationStyle: String = "Animation"
     @State private var isLoading: Bool = false
     @AppStorage("ThinkingLevel") private var thinkingLevel: String = "medium"
     @State private var showSidebar: Bool = false
@@ -1395,9 +1394,6 @@ struct ContentView: View {
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
-    @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
-    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
-        "Generate Image ChatGPT"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
@@ -1411,6 +1407,7 @@ struct ContentView: View {
     @State private var showModelComparison: Bool = false
     @State private var showCommands: Bool = false
     @State private var showQuizMe: Bool = false
+    @State private var showImageGen: Bool = false
     @AppStorage("ActiveToolName") private var activeToolName: String = ""
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
@@ -1445,7 +1442,8 @@ struct ContentView: View {
                     chatManager: chatManager, showImageGallery: $showImageGallery,
                     showModelComparison: $showModelComparison,
                     showCommands: $showCommands,
-                    showQuizMe: $showQuizMe)
+                    showQuizMe: $showQuizMe,
+                    showImageGen: $showImageGen)
             } detail: {
                 ZStack {
                     // Background Layer
@@ -1496,6 +1494,8 @@ struct ContentView: View {
                         ModelComparisonView()
                     } else if showQuizMe {
                         QuizMeView()
+                    } else if showImageGen {
+                        ImageGenerationView()
                     } else if showImageGallery {
                         ImageGalleryView(
                             chatManager: chatManager, showImageGallery: $showImageGallery)
@@ -1552,9 +1552,7 @@ struct ContentView: View {
                                         onSend: sendMessage,
                                         onStop: stopGeneration,
                                         onSelectAttachment: selectAttachment,
-                                        isImageGen: selectedProvider == "Image Creation",
                                         thinkingMode: thinkingMode,
-                                        imageStyle: $imageCreationStyle,
                                         isOllama: selectedProvider.contains("Ollama"),
                                         isGemini: selectedProvider == "Gemini API",
                                         webSearchEnabled: $webSearchEnabled,
@@ -1599,6 +1597,9 @@ struct ContentView: View {
             .onChange(of: showQuizMe) { _, val in
                 updateActiveToolName()
             }
+            .onChange(of: showImageGen) { _, val in
+                updateActiveToolName()
+            }
             .onChange(of: showImageGallery) { _, val in
                 updateActiveToolName()
             }
@@ -1635,6 +1636,8 @@ struct ContentView: View {
             activeToolName = "Commands"
         } else if showQuizMe {
             activeToolName = "Quiz Me"
+        } else if showImageGen {
+            activeToolName = "Image Gen"
         } else {
             activeToolName = ""
         }
@@ -1827,14 +1830,6 @@ struct ContentView: View {
     func performSend(input: String, attachments: [Attachment]) {
         isLoading = true
         let currentHistory = chatManager.getCurrentMessages()
-        let style = imageCreationStyle
-
-        // Helper for Image Creation legacy support
-        var firstImage: NSImage?
-        if let imgAtt = attachments.first(where: { $0.type == .image }) {
-            firstImage = NSImage(data: imgAtt.data)
-        }
-
         currentTask?.cancel()
 
         currentTask = Task {
@@ -1854,40 +1849,7 @@ struct ContentView: View {
                 }
             }
 
-            if selectedProvider == "Image Creation" {
-                let aiMsgId = UUID()
-                var aiMsg = Message(content: "", isUser: false)
-                aiMsg.isGeneratingImage = true
-                aiMsg.id = aiMsgId
-
-                DispatchQueue.main.async {
-                    self.chatManager.addMessage(aiMsg)
-                }
-
-                do {
-                    // Only plain "ChatGPT" (no styles) uses the specialized ChatGPT shortcut
-                    let targetShortcut =
-                        (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
-
-                    let result = try await shortcutService.runShortcut(
-                        name: targetShortcut, input: input, style: style, image: firstImage)
-                    DispatchQueue.main.async {
-                        self.chatManager.updateMessage(
-                            id: aiMsgId, content: result.0, image: result.1,
-                            isGeneratingImage: false)
-                        self.chatManager.finalizeMessageUpdate()
-                        self.isLoading = false
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
-                            isGeneratingImage: false)
-                        self.chatManager.finalizeMessageUpdate()
-                        self.isLoading = false
-                    }
-                }
-            } else if selectedProvider == "Gemini API" {
+            if selectedProvider == "Gemini API" {
                 if !geminiKey.isEmpty {
                     let aiMsgId = UUID()
                     // Store model name
@@ -2100,7 +2062,7 @@ struct ContentView: View {
 
                 do {
                     let result = try await shortcutService.runShortcut(
-                        name: shortcutName, input: transcript, image: firstImage)
+                        name: shortcutName, input: transcript, image: nil)
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId,
@@ -2133,12 +2095,14 @@ struct SidebarView: View {
     @Binding var showModelComparison: Bool
     @Binding var showCommands: Bool
     @Binding var showQuizMe: Bool
+    @Binding var showImageGen: Bool
     @Namespace private var animation
 
     @AppStorage("ShowCompare") private var showCompareTool: Bool = true
     @AppStorage("ShowCommands") private var showCommandsTool: Bool = true
     @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
-    @AppStorage("ToolOrder") private var toolOrderRaw: String = "compare,commands,quizme"
+    @AppStorage("ShowImageGen") private var showImageGenTool: Bool = true
+    @AppStorage("ToolOrder") private var toolOrderRaw: String = "compare,commands,quizme,imagegen"
     @State private var showCustomizeTools: Bool = false
     @State private var draggedTool: String? = nil
 
@@ -2172,6 +2136,7 @@ struct SidebarView: View {
                 showModelComparison = false
                 showCommands = false
                 showQuizMe = false
+                showImageGen = false
                 chatManager.createNewSession()
             }
 
@@ -2262,6 +2227,7 @@ struct SidebarView: View {
                                         showModelComparison = false
                                         showCommands = false
                                         showQuizMe = false
+                                        showImageGen = false
                                         chatManager.currentSessionId = session.id
                                         isSearchVisible = false
                                     }) {
@@ -2324,6 +2290,7 @@ struct SidebarView: View {
                     showModelComparison = false
                     showCommands = false
                     showQuizMe = false
+                    showImageGen = false
                     chatManager.currentSessionId = nil
                 }
             }
@@ -2357,6 +2324,7 @@ struct SidebarView: View {
                             showImageGallery = false
                             showCommands = false
                             showQuizMe = false
+                            showImageGen = false
                             chatManager.currentSessionId = nil
                         }
                     }
@@ -2367,6 +2335,7 @@ struct SidebarView: View {
                             showModelComparison = false
                             showImageGallery = false
                             showQuizMe = false
+                            showImageGen = false
                             chatManager.currentSessionId = nil
                         }
                     }
@@ -2376,6 +2345,20 @@ struct SidebarView: View {
                     ) {
                         withAnimation {
                             showQuizMe = true
+                            showCommands = false
+                            showModelComparison = false
+                            showImageGallery = false
+                            showImageGen = false
+                            chatManager.currentSessionId = nil
+                        }
+                    }
+                } else if toolId == "imagegen" && showImageGenTool {
+                    SidebarItem(
+                        icon: "paintbrush", title: "Image Gen", isSelected: showImageGen
+                    ) {
+                        withAnimation {
+                            showImageGen = true
+                            showQuizMe = false
                             showCommands = false
                             showModelComparison = false
                             showImageGallery = false
@@ -2417,6 +2400,12 @@ struct SidebarView: View {
                     .controlSize(.small)
                     Toggle(isOn: $showQuizMeTool) {
                         Label("Quiz Me", systemImage: "questionmark.bubble")
+                            .font(.system(size: 12))
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    Toggle(isOn: $showImageGenTool) {
+                        Label("Image Gen", systemImage: "paintbrush")
                             .font(.system(size: 12))
                     }
                     .toggleStyle(.switch)
@@ -2489,7 +2478,7 @@ struct SidebarView: View {
 
     private var toolOrder: [String] {
         let raw = toolOrderRaw.split(separator: ",").map(String.init)
-        let allTools = ["compare", "commands", "quizme"]
+        let allTools = ["compare", "commands", "quizme", "imagegen"]
         // Ensure all tools are present (handle new tools added after first save)
         var order = raw.filter { allTools.contains($0) }
         for tool in allTools where !order.contains(tool) {
@@ -2503,6 +2492,7 @@ struct SidebarView: View {
         case "compare": return "square.split.2x1"
         case "commands": return "command"
         case "quizme": return "questionmark.bubble"
+        case "imagegen": return "paintbrush"
         default: return "questionmark"
         }
     }
@@ -2512,6 +2502,7 @@ struct SidebarView: View {
         case "compare": return "Compare"
         case "commands": return "Commands"
         case "quizme": return "Quiz Me"
+        case "imagegen": return "Image Gen"
         default: return id
         }
     }
@@ -2595,6 +2586,7 @@ struct SidebarView: View {
                             showModelComparison = false
                             showCommands = false
                             showQuizMe = false
+                            showImageGen = false
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                 chatManager.currentSessionId = session.id
                             }
@@ -2934,11 +2926,7 @@ struct HeaderView: View {
                         Label("ChatGPT", systemImage: getProviderIcon("ChatGPT"))
                     }
                 }
-                Section("Tools") {
-                    Button(action: { selectedProvider = "Image Creation" }) {
-                        Label("Image Creation", systemImage: getProviderIcon("Image Creation"))
-                    }
-                }
+
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: getProviderIcon(selectedProvider))
@@ -2986,7 +2974,6 @@ struct HeaderView: View {
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
         case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
-        case "Image Creation": return "paintbrush"
         case "ChatGPT": return "message"
         default: return "cpu"
         }
@@ -3147,9 +3134,7 @@ struct InputView: View {
     var onSend: () -> Void
     var onStop: () -> Void
     var onSelectAttachment: () -> Void
-    var isImageGen: Bool
     var thinkingMode: ThinkingMode
-    @Binding var imageStyle: String
     var isOllama: Bool = false
     var isGemini: Bool = false
     @Binding var webSearchEnabled: Bool
@@ -3279,63 +3264,20 @@ struct InputView: View {
             // Main input row
             HStack(spacing: 10) {
                 // Left action button
-                if isImageGen {
-                    // Style Picker - Liquid Glass pill
-                    Menu {
-                        Section("Apple Intelligence") {
-                            styleButton("Animation", value: "Animation")
-                            styleButton("Illustration", value: "Illustration")
-                            styleButton("Sketch", value: "Sketch")
-                        }
-                        Divider()
-                        Section("ChatGPT") {
-                            styleButton("ChatGPT (Default)", value: "ChatGPT")
-                            styleButton("Oil Painting", value: "Oil Painting (ChatGPT)")
-                            styleButton("Watercolor", value: "Watercolor (ChatGPT)")
-                            styleButton("Vector", value: "Vector (ChatGPT)")
-                            styleButton("Anime", value: "Anime (ChatGPT)")
-                            styleButton("Print", value: "Print (ChatGPT)")
-                        }
-                    } label: {
-                        Image(systemName: "paintpalette.fill")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(
-                                imageStyle.isEmpty
-                                    ? AnyShapeStyle(Color.secondary)
-                                    : AnyShapeStyle(
-                                        LinearGradient(
-                                            colors: [.orange, .pink],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ))
-                            )
-                            .frame(width: 34, height: 34)
-                            .background(
-                                Circle()
-                                    .fill(
-                                        colorScheme == .dark
-                                            ? Color.white.opacity(0.08)
-                                            : Color.black.opacity(0.04))
-                            )
-                    }
-                    .menuStyle(.borderlessButton)
-                    .help("Image Style")
-                } else {
-                    Button(action: onSelectAttachment) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.secondary)
-                            .frame(width: 34, height: 34)
-                            .background(
-                                Circle()
-                                    .fill(
-                                        colorScheme == .dark
-                                            ? Color.white.opacity(0.08)
-                                            : Color.black.opacity(0.04))
-                            )
-                    }
-                    .buttonStyle(.plain)
+                Button(action: onSelectAttachment) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 34, height: 34)
+                        .background(
+                            Circle()
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.08)
+                                        : Color.black.opacity(0.04))
+                        )
                 }
+                .buttonStyle(.plain)
 
                 inputField
 
@@ -3708,9 +3650,7 @@ struct InputView: View {
         ZStack(alignment: .leading) {
             if inputText.isEmpty && !isFocused {
                 Text(
-                    isImageGen
-                        ? "Describe image to generate..."
-                        : "Ask AI anything... (type / for commands)"
+                    "Ask AI anything... (type / for commands)"
                 )
                 .font(.system(size: 15, weight: .regular))
                 .foregroundColor(.secondary.opacity(0.6))
@@ -3858,16 +3798,6 @@ struct InputView: View {
         }
     }
 
-    @ViewBuilder
-    private func styleButton(_ title: String, value: String) -> some View {
-        Button(action: { imageStyle = value }) {
-            if imageStyle == value {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
-    }
 }
 
 struct ThumbnailView: View {
@@ -4815,7 +4745,8 @@ struct MessageView: View, Equatable {
                     .padding(.top, 4)
 
                     if let model = message.model {
-                        Text("Model used: \(model). Information could be inaccurate.")
+                        let displayModel = GeminiModelManager.displayNames[model] ?? model
+                        Text("Model used: \(displayModel). Information could be inaccurate.")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary.opacity(0.8))
                             .padding(.top, 2)

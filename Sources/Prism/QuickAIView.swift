@@ -18,7 +18,6 @@ struct QuickAIView: View {
     @State private var backgroundScale: CGFloat = 0.92
     @State private var backgroundBlur: CGFloat = 0
     @State private var selectedPDF: Data? = nil
-    @State private var selectedStyle: String = "Animation"
     @FocusState private var isFocused: Bool
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject private var slashCommandManager = SlashCommandManager.shared
@@ -36,9 +35,6 @@ struct QuickAIView: View {
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
-    @AppStorage("ShortcutImageGen") private var shortcutImageGen: String = "Generate Image"
-    @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
-        "Generate Image ChatGPT"
     @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
@@ -291,7 +287,6 @@ struct QuickAIView: View {
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
-        case "Image Creation": return "paintbrush"
         case "ChatGPT": return "message"
         default: return "cpu"
         }
@@ -358,7 +353,6 @@ struct QuickAIView: View {
 
         let content = inputText
         let pdfData = selectedPDF
-        let style = selectedStyle
         inputText = ""
         selectedPDF = nil
         recalcPanelSize()
@@ -368,41 +362,7 @@ struct QuickAIView: View {
         isLoading = true
 
         chatManager.currentTask = Task {
-            if selectedProvider == "Image Creation" {
-                let aiMsgId = UUID()
-                var aiMsg = Message(content: "", isUser: false)
-                aiMsg.isGeneratingImage = true
-                aiMsg.id = aiMsgId
-
-                DispatchQueue.main.async {
-                    self.chatManager.addMessage(aiMsg)
-                }
-
-                do {
-                    // Only plain "ChatGPT" (no styles) uses the specialized ChatGPT shortcut
-                    let targetShortcut =
-                        (style == "ChatGPT") ? shortcutImageGenChatGPT : shortcutImageGen
-
-                    let result = try await shortcutService.runShortcut(
-                        name: targetShortcut, input: content, style: style, image: nil)
-
-                    DispatchQueue.main.async {
-                        self.chatManager.updateMessage(
-                            id: aiMsgId, content: result.0, image: result.1,
-                            isGeneratingImage: false)
-                        self.chatManager.finalizeMessageUpdate()
-                        self.isLoading = false
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
-                            isGeneratingImage: false)
-                        self.chatManager.finalizeMessageUpdate()
-                        self.isLoading = false
-                    }
-                }
-            } else if selectedProvider == "Gemini API" {
+            if selectedProvider == "Gemini API" {
                 if !geminiKey.isEmpty {
                     let aiMsgId = UUID()
                     var aiMsg = Message(content: "", model: geminiModel, isUser: false)
@@ -631,17 +591,6 @@ struct QuickAIView: View {
 
 extension QuickAIView {
     @ViewBuilder
-    func styleButton(_ title: String, value: String) -> some View {
-        Button(action: { selectedStyle = value }) {
-            if selectedStyle == value {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
-    }
-
-    @ViewBuilder
     func thinkingOption(title: String, value: String) -> some View {
         Button(action: { thinkingLevel = value }) {
             HStack {
@@ -815,7 +764,8 @@ struct QuickAIMessageView: View, Equatable {
 
                         // Model disclaimer
                         if let model = message.model {
-                            Text("Model used: \(model). Information could be inaccurate.")
+                            let displayModel = GeminiModelManager.displayNames[model] ?? model
+                            Text("Model used: \(displayModel). Information could be inaccurate.")
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary.opacity(0.8))
                                 .padding(.top, 2)
@@ -1097,13 +1047,6 @@ extension QuickAIView {
                         Label("ChatGPT", systemImage: getProviderIcon("ChatGPT"))
                     }
                 }
-                Section("Tools") {
-                    Button(action: { selectedProvider = "Image Creation" }) {
-                        Label(
-                            "Image Creation",
-                            systemImage: getProviderIcon("Image Creation"))
-                    }
-                }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: getProviderIcon(selectedProvider))
@@ -1336,91 +1279,6 @@ extension QuickAIView {
                                 }
                             }
                         }
-                }
-
-                // Image Creation Tools
-                if selectedProvider == "Image Creation" {
-                    // Style Picker
-                    Menu {
-                        Section("Apple Intelligence") {
-                            Button(action: { selectedStyle = "Animation" }) {
-                                if selectedStyle == "Animation" {
-                                    Label("Animation", systemImage: "checkmark")
-                                } else {
-                                    Text("Animation")
-                                }
-                            }
-                            Button(action: { selectedStyle = "Illustration" }) {
-                                if selectedStyle == "Illustration" {
-                                    Label("Illustration", systemImage: "checkmark")
-                                } else {
-                                    Text("Illustration")
-                                }
-                            }
-                            Button(action: { selectedStyle = "Sketch" }) {
-                                if selectedStyle == "Sketch" {
-                                    Label("Sketch", systemImage: "checkmark")
-                                } else {
-                                    Text("Sketch")
-                                }
-                            }
-                        }
-                        Divider()
-                        Section("ChatGPT") {
-                            Button(action: { selectedStyle = "ChatGPT" }) {
-                                if selectedStyle == "ChatGPT" {
-                                    Label("ChatGPT (Default)", systemImage: "checkmark")
-                                } else {
-                                    Text("ChatGPT (Default)")
-                                }
-                            }
-                            Button(action: { selectedStyle = "Oil Painting (ChatGPT)" }) {
-                                if selectedStyle == "Oil Painting (ChatGPT)" {
-                                    Label("Oil Painting", systemImage: "checkmark")
-                                } else {
-                                    Text("Oil Painting")
-                                }
-                            }
-                            Button(action: { selectedStyle = "Watercolor (ChatGPT)" }) {
-                                if selectedStyle == "Watercolor (ChatGPT)" {
-                                    Label("Watercolor", systemImage: "checkmark")
-                                } else {
-                                    Text("Watercolor")
-                                }
-                            }
-                            Button(action: { selectedStyle = "Vector (ChatGPT)" }) {
-                                if selectedStyle == "Vector (ChatGPT)" {
-                                    Label("Vector", systemImage: "checkmark")
-                                } else {
-                                    Text("Vector")
-                                }
-                            }
-                            Button(action: { selectedStyle = "Anime (ChatGPT)" }) {
-                                if selectedStyle == "Anime (ChatGPT)" {
-                                    Label("Anime", systemImage: "checkmark")
-                                } else {
-                                    Text("Anime")
-                                }
-                            }
-                            Button(action: { selectedStyle = "Print (ChatGPT)" }) {
-                                if selectedStyle == "Print (ChatGPT)" {
-                                    Label("Print", systemImage: "checkmark")
-                                } else {
-                                    Text("Print")
-                                }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "paintpalette")
-                            .font(.system(size: 16))
-                            .foregroundColor(.black)
-                            .padding(6)
-                            .background(Color.white.opacity(0.10))
-                            .clipShape(Circle())
-                    }
-                    .menuStyle(.borderlessButton)
-                    .tint(.black)
-                    .help("Image Style")
                 }
 
                 // Thinking Level Selector
