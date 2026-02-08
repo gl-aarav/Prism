@@ -44,8 +44,6 @@ class AppState: ObservableObject {
     private init() {}
 }
 
-
-
 class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
     private var statusItem: NSStatusItem?
@@ -55,7 +53,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         AppDelegate.shared = self
         UserDefaults.standard.register(defaults: [
             "ShowMenuBar": true,
-            "EnableQuickAI": true
+            "EnableQuickAI": true,
         ])
     }
 
@@ -105,7 +103,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard statusItem == nil else { return }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "triangle.fill", accessibilityDescription: "Prism")
+            button.image = NSImage(
+                systemSymbolName: "triangle.inset.filled", accessibilityDescription: "Prism")
             button.image?.isTemplate = true
             button.action = #selector(statusItemClicked)
             button.target = self
