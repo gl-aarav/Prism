@@ -688,7 +688,7 @@ struct QuickAIMessageView: View, Equatable {
                                     Text("Reasoning Process")
                                         .font(.caption)
                                 }
-                                .foregroundColor(.secondary)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
                             }
                             .padding(.bottom, 4)
                         }
@@ -1066,16 +1066,13 @@ extension QuickAIView {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: getProviderIcon(selectedProvider))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.blue, .green], startPoint: .topLeading,
-                                endPoint: .bottomTrailing))
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                     Text(selectedProvider)
                         .font(.headline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                     Image(systemName: "chevron.down")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -1107,7 +1104,7 @@ extension QuickAIView {
                 }
             }) {
                 Image(systemName: "square.and.pencil")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
@@ -1206,79 +1203,69 @@ extension QuickAIView {
             }
 
             HStack(alignment: .center, spacing: 12) {
-                TextField("Request... (type / for commands)", text: $inputText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 16))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .lineLimit(1...6)
-                    .multilineTextAlignment(.leading)
-                    .focused($isFocused)
-                    .onChange(of: inputText) { _, newValue in
-                        updateSlashAutocomplete(newValue)
+                ZStack(alignment: .leading) {
+                    if inputText.isEmpty {
+                        Text("Request... (type / for commands)")
+                            .font(.system(size: 16))
+                            .foregroundColor(.black.opacity(0.4))
+                            .allowsHitTesting(false)
                     }
-                    .onKeyPress(.upArrow) {
-                        if showSlashAutocomplete && !slashMatches.isEmpty {
-                            slashSelectedIndex = max(0, slashSelectedIndex - 1)
+                    TextField("", text: $inputText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 16))
+                        .foregroundColor(.black)
+                        .lineLimit(1...6)
+                        .multilineTextAlignment(.leading)
+                        .focused($isFocused)
+                        .onChange(of: inputText) { _, newValue in
+                            updateSlashAutocomplete(newValue)
+                        }
+                        .onKeyPress(.upArrow) {
+                            if showSlashAutocomplete && !slashMatches.isEmpty {
+                                slashSelectedIndex = max(0, slashSelectedIndex - 1)
+                                return .handled
+                            }
+                            return .ignored
+                        }
+                        .onKeyPress(.downArrow) {
+                            if showSlashAutocomplete && !slashMatches.isEmpty {
+                                slashSelectedIndex = min(
+                                    slashMatches.count - 1, slashSelectedIndex + 1)
+                                return .handled
+                            }
+                            return .ignored
+                        }
+                        .onKeyPress(.tab) {
+                            if showSlashAutocomplete && !slashMatches.isEmpty {
+                                applySlashCommand(slashMatches[slashSelectedIndex])
+                                return .handled
+                            }
+                            return .ignored
+                        }
+                        .onKeyPress(.escape) {
+                            if showSlashAutocomplete {
+                                showSlashAutocomplete = false
+                                return .handled
+                            }
+                            return .ignored
+                        }
+                        .onKeyPress(.return) {
+                            if showSlashAutocomplete && !slashMatches.isEmpty {
+                                applySlashCommand(slashMatches[slashSelectedIndex])
+                                return .handled
+                            }
+                            sendMessage()
                             return .handled
                         }
-                        return .ignored
-                    }
-                    .onKeyPress(.downArrow) {
-                        if showSlashAutocomplete && !slashMatches.isEmpty {
-                            slashSelectedIndex = min(slashMatches.count - 1, slashSelectedIndex + 1)
-                            return .handled
-                        }
-                        return .ignored
-                    }
-                    .onKeyPress(.tab) {
-                        if showSlashAutocomplete && !slashMatches.isEmpty {
-                            applySlashCommand(slashMatches[slashSelectedIndex])
-                            return .handled
-                        }
-                        return .ignored
-                    }
-                    .onKeyPress(.escape) {
-                        if showSlashAutocomplete {
-                            showSlashAutocomplete = false
-                            return .handled
-                        }
-                        return .ignored
-                    }
-                    .onKeyPress(.return) {
-                        if showSlashAutocomplete && !slashMatches.isEmpty {
-                            applySlashCommand(slashMatches[slashSelectedIndex])
-                            return .handled
-                        }
-                        sendMessage()
-                        return .handled
-                    }
-                    .onPasteCommand(of: [.fileURL, .pdf]) { providers in
-                        for provider in providers {
-                            if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
-                                provider.loadItem(
-                                    forTypeIdentifier: "com.adobe.pdf", options: nil
-                                ) { urlData, _ in
-                                    if let urlData = urlData as? Data,
-                                        let url = URL(
-                                            dataRepresentation: urlData, relativeTo: nil),
-                                        let data = try? Data(contentsOf: url)
-                                    {
-                                        DispatchQueue.main.async {
-                                            self.selectedPDF = data
-                                        }
-                                    }
-                                }
-                            } else if provider.hasItemConformingToTypeIdentifier(
-                                "public.file-url")
-                            {
-                                provider.loadItem(
-                                    forTypeIdentifier: "public.file-url", options: nil
-                                ) { urlData, _ in
-                                    if let urlData = urlData as? Data,
-                                        let url = URL(
-                                            dataRepresentation: urlData, relativeTo: nil)
-                                    {
-                                        if url.pathExtension.lowercased() == "pdf",
+                        .onPasteCommand(of: [.fileURL, .pdf]) { providers in
+                            for provider in providers {
+                                if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
+                                    provider.loadItem(
+                                        forTypeIdentifier: "com.adobe.pdf", options: nil
+                                    ) { urlData, _ in
+                                        if let urlData = urlData as? Data,
+                                            let url = URL(
+                                                dataRepresentation: urlData, relativeTo: nil),
                                             let data = try? Data(contentsOf: url)
                                         {
                                             DispatchQueue.main.async {
@@ -1286,10 +1273,29 @@ extension QuickAIView {
                                             }
                                         }
                                     }
+                                } else if provider.hasItemConformingToTypeIdentifier(
+                                    "public.file-url")
+                                {
+                                    provider.loadItem(
+                                        forTypeIdentifier: "public.file-url", options: nil
+                                    ) { urlData, _ in
+                                        if let urlData = urlData as? Data,
+                                            let url = URL(
+                                                dataRepresentation: urlData, relativeTo: nil)
+                                        {
+                                            if url.pathExtension.lowercased() == "pdf",
+                                                let data = try? Data(contentsOf: url)
+                                            {
+                                                DispatchQueue.main.async {
+                                                    self.selectedPDF = data
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
+                }
 
                 // Image Creation Tools
                 if selectedProvider == "Image Creation" {
@@ -1366,12 +1372,13 @@ extension QuickAIView {
                     } label: {
                         Image(systemName: "paintpalette")
                             .font(.system(size: 16))
-                            .foregroundColor(selectedStyle.isEmpty ? .secondary : .orange)
+                            .foregroundColor(.black)
                             .padding(6)
                             .background(Color.white.opacity(0.10))
                             .clipShape(Circle())
                     }
                     .menuStyle(.borderlessButton)
+                    .tint(.black)
                     .help("Image Style")
                 }
 
@@ -1430,12 +1437,13 @@ extension QuickAIView {
                     } label: {
                         Image(systemName: "server.rack")
                             .font(.system(size: 16))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.black)
                             .padding(6)
                             .background(Color.white.opacity(0.10))
                             .clipShape(Circle())
                     }
                     .menuStyle(.borderlessButton)
+                    .tint(.black)
                     .help("Select Ollama Model")
                     .alert("Add Custom Ollama Model", isPresented: $showAddCustomOllamaModel) {
                         TextField("Model Name (e.g., llama3:70b)", text: $newCustomModelName)
@@ -1486,16 +1494,13 @@ extension QuickAIView {
                         } label: {
                             Image(systemName: "brain")
                                 .font(.system(size: 16))
-                                .foregroundColor(
-                                    (thinkingLevel == "medium" && mode == .threeState)
-                                        || (thinkingLevel == "low" && mode == .binary)
-                                        ? .secondary : .green
-                                )
+                                .foregroundColor(.black)
                                 .padding(6)
                                 .background(Color.white.opacity(0.10))
                                 .clipShape(Circle())
                         }
                         .menuStyle(.borderlessButton)
+                        .tint(.black)
                         .help("Reasoning Effort")
                     }
                 } else if selectedProvider == "Gemini API" {
@@ -1544,12 +1549,13 @@ extension QuickAIView {
                     } label: {
                         Image(systemName: "sparkles")
                             .font(.system(size: 16))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.black)
                             .padding(6)
                             .background(Color.white.opacity(0.10))
                             .clipShape(Circle())
                     }
                     .menuStyle(.borderlessButton)
+                    .tint(.black)
                     .help("Select Gemini Model")
                 }
 
@@ -1558,7 +1564,7 @@ extension QuickAIView {
                     Button(action: { webSearchEnabled.toggle() }) {
                         Image(systemName: "globe")
                             .font(.system(size: 16))
-                            .foregroundColor(webSearchEnabled ? .blue : .secondary)
+                            .foregroundColor(.black)
                             .padding(6)
                             .background(
                                 webSearchEnabled
@@ -1574,11 +1580,8 @@ extension QuickAIView {
                 Button(action: sendMessage) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 28))
-                        .symbolRenderingMode(.palette)
-                        .foregroundStyle(
-                            sendButtonStyle(darkened: true),
-                            Color.black.opacity(colorScheme == .dark ? 0.35 : 0.28)
-                        )
+                        .symbolRenderingMode(.monochrome)
+                        .foregroundColor(.black)
                 }
                 .buttonStyle(.plain)
                 .disabled(inputText.isEmpty || isLoading)

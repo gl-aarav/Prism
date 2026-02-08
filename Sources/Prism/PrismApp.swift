@@ -3,7 +3,6 @@ import SwiftUI
 @main
 struct PrismApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @AppStorage("ShowMenuBar") private var showMenuBar = true
 
     var body: some Scene {
         WindowGroup {
@@ -35,13 +34,6 @@ struct PrismApp: App {
                 .environmentObject(ChatManager.shared)
                 .frame(minWidth: 500, minHeight: 400)
         }
-
-        MenuBarExtra(isInserted: $showMenuBar) {
-            QuickChatView()
-        } label: {
-            PrismMenuBarIcon()
-        }
-        .menuBarExtraStyle(.window)
     }
 }
 
@@ -52,40 +44,11 @@ class AppState: ObservableObject {
     private init() {}
 }
 
-struct PrismMenuBarIcon: View {
-    @State private var isAnimating = false
-    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
-    var body: some View {
-        HStack(spacing: 0) {
-            Image(systemName: "triangle")
-                .font(.system(size: 14))
-                .foregroundColor(appTheme.colors.first)
-                .opacity(0.8)
-                .overlay(
-                    Image(systemName: "triangle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: appTheme.colors,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .opacity(isAnimating ? 0.6 : 0.0)
-                        .blur(radius: 2)
-                )
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
-                isAnimating = true
-            }
-        }
-    }
-}
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
+    private var statusItem: NSStatusItem?
 
     override init() {
         super.init()
@@ -116,6 +79,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         QuickAIManager.shared.setup()
 
+        // Setup menu bar status item
+        setupStatusItem()
+
         HotKeyManager.shared.onTrigger = {
             if UserDefaults.standard.bool(forKey: "EnableQuickAI") {
                 QuickAIManager.shared.toggle()
@@ -126,6 +92,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         IconManager.shared.updateIcon()
 
         print("Prism has launched!")
+    }
+
+    private func setupStatusItem() {
+        // Check ShowMenuBar preference and create status item if enabled
+        if UserDefaults.standard.bool(forKey: "ShowMenuBar") {
+            createStatusItem()
+        }
+    }
+
+    private func createStatusItem() {
+        guard statusItem == nil else { return }
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem?.button {
+            button.image = NSImage(systemSymbolName: "triangle.fill", accessibilityDescription: "Prism")
+            button.image?.isTemplate = true
+            button.action = #selector(statusItemClicked)
+            button.target = self
+        }
+    }
+
+    private func removeStatusItem() {
+        if let item = statusItem {
+            NSStatusBar.system.removeStatusItem(item)
+            statusItem = nil
+        }
+    }
+
+    @objc private func statusItemClicked() {
+        QuickAIManager.shared.toggle()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
