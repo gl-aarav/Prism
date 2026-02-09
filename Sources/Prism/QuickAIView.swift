@@ -993,6 +993,8 @@ struct GeneratingImagePlaceholder: View {
                         y: -40 + 25 * sin(orbPhase1 * .pi * 2 * 1.3)
                     )
                     .blur(radius: 30)
+                    .animation(
+                        .linear(duration: 4.0).repeatForever(autoreverses: false), value: orbPhase1)
 
                 // Orb 2 - bottom-right drift
                 Circle()
@@ -1013,6 +1015,8 @@ struct GeneratingImagePlaceholder: View {
                         y: 35 + 30 * cos(orbPhase2 * .pi * 2 * 0.8)
                     )
                     .blur(radius: 25)
+                    .animation(
+                        .linear(duration: 5.5).repeatForever(autoreverses: false), value: orbPhase2)
 
                 // Orb 3 - center float
                 Circle()
@@ -1033,9 +1037,16 @@ struct GeneratingImagePlaceholder: View {
                         y: -10 + 20 * cos(orbPhase3 * .pi * 2)
                     )
                     .blur(radius: 20)
+                    .animation(
+                        .linear(duration: 6.0).repeatForever(autoreverses: false), value: orbPhase3)
             }
             .rotationEffect(.degrees(rotationAngle))
+            .animation(
+                .linear(duration: 20.0).repeatForever(autoreverses: false), value: rotationAngle
+            )
             .scaleEffect(pulseScale)
+            .animation(
+                .easeInOut(duration: 2.0).repeatForever(autoreverses: true), value: pulseScale)
 
             // Mesh-like overlay shimmer
             GeometryReader { geo in
@@ -1050,6 +1061,9 @@ struct GeneratingImagePlaceholder: View {
                 )
                 .frame(width: geo.size.width * 0.6)
                 .offset(x: -geo.size.width * 0.3 + geo.size.width * 1.3 * shimmerPhase)
+                .animation(
+                    .linear(duration: 2.5).repeatForever(autoreverses: false), value: shimmerPhase
+                )
                 .rotationEffect(.degrees(25))
             }
             .mask(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -1075,6 +1089,9 @@ struct GeneratingImagePlaceholder: View {
                             )
                         )
                         .scaleEffect(pulseScale > 0.96 ? 1.05 : 0.95)
+                        .animation(
+                            .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
+                            value: pulseScale)
                 }
 
                 Text("Generating")
@@ -1104,6 +1121,9 @@ struct GeneratingImagePlaceholder: View {
                             .frame(width: 5, height: 5)
                             .scaleEffect(dotScale(index: i))
                             .opacity(dotOpacity(index: i))
+                            .animation(
+                                .linear(duration: 1.5).repeatForever(autoreverses: false),
+                                value: phase)
                     }
                 }
             }
@@ -1133,27 +1153,13 @@ struct GeneratingImagePlaceholder: View {
             radius: 20, x: 0, y: 8
         )
         .onAppear {
-            withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
-                orbPhase1 = 1
-            }
-            withAnimation(.linear(duration: 5.5).repeatForever(autoreverses: false)) {
-                orbPhase2 = 1
-            }
-            withAnimation(.linear(duration: 6.0).repeatForever(autoreverses: false)) {
-                orbPhase3 = 1
-            }
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                pulseScale = 1.04
-            }
-            withAnimation(.linear(duration: 2.5).repeatForever(autoreverses: false)) {
-                shimmerPhase = 1
-            }
-            withAnimation(.linear(duration: 20.0).repeatForever(autoreverses: false)) {
-                rotationAngle = 360
-            }
-            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                phase = 1
-            }
+            orbPhase1 = 1
+            orbPhase2 = 1
+            orbPhase3 = 1
+            pulseScale = 1.04
+            shimmerPhase = 1
+            rotationAngle = 360
+            phase = 1
         }
     }
 
@@ -1324,7 +1330,8 @@ extension QuickAIView {
                         .equatable()
                     }
                     if isLoading {
-
+                        ThinkingIndicator()
+                            .id("loading")
                     }
                 }
                 .padding(20)
