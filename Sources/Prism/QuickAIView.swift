@@ -1052,16 +1052,17 @@ struct GeneratingImagePlaceholder: View {
                 LinearGradient(
                     colors: [
                         .clear,
-                        .white.opacity(colorScheme == .dark ? 0.08 : 0.15),
+                        (colorScheme == .dark ? Color.white : Color.black).opacity(
+                            colorScheme == .dark ? 0.08 : 0.12),
                         .clear,
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
                 .frame(width: geo.size.width * 0.6)
-                .offset(x: -geo.size.width * 0.3 + geo.size.width * 1.3 * shimmerPhase)
+                .offset(x: geo.size.width * 1.0 - geo.size.width * 1.3 * shimmerPhase)
                 .animation(
-                    .linear(duration: 2.5).repeatForever(autoreverses: false), value: shimmerPhase
+                    .easeInOut(duration: 2.5).repeatForever(autoreverses: true), value: shimmerPhase
                 )
                 .rotationEffect(.degrees(25))
             }
@@ -1106,12 +1107,20 @@ struct GeneratingImagePlaceholder: View {
                         )
                     )
 
-                // Animated dots
+                // Animated dots — sequential left-to-right wave
                 TimelineView(.animation) { timeline in
                     let now = timeline.date.timeIntervalSinceReferenceDate
+                    let cycleDuration: Double = 1.2
+                    let dotDelay: Double = 0.2
                     HStack(spacing: 5) {
                         ForEach(0..<3, id: \.self) { i in
-                            let t = sin((now * 2.5) + Double(i) * 0.8)
+                            let phase =
+                                ((now - Double(i) * dotDelay).truncatingRemainder(
+                                    dividingBy: cycleDuration)) / cycleDuration
+                            // Smooth bump: rises then falls, spending time at rest
+                            let bump = max(0, sin(phase * .pi * 2 - .pi * 0.5) * 0.5 + 0.5)
+                            let scale = 0.6 + 0.8 * bump
+                            let opacity = 0.3 + 0.7 * bump
                             Circle()
                                 .fill(
                                     LinearGradient(
@@ -1121,8 +1130,8 @@ struct GeneratingImagePlaceholder: View {
                                     )
                                 )
                                 .frame(width: 5, height: 5)
-                                .scaleEffect(0.7 + 0.6 * t)
-                                .opacity(0.4 + 0.6 * ((t + 1) / 2))
+                                .scaleEffect(scale)
+                                .opacity(opacity)
                         }
                     }
                 }
