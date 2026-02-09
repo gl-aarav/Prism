@@ -1406,6 +1406,7 @@ struct ContentView: View {
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome: Bool = false
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
+    @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
     @AppStorage("WebSearchEnabled") private var webSearchEnabled: Bool = false
     @State private var showSplash: Bool = !AppState.shared.hasShownSplash
     @State private var currentTask: Task<Void, Never>?
@@ -1656,6 +1657,22 @@ struct ContentView: View {
         return ["Gemini Web", "ChatGPT Web", "Perplexity Web", "Grok Web"].contains(provider)
     }
 
+    private func autoSaveImage(_ image: NSImage, prompt: String) {
+        guard !imageDownloadPath.isEmpty else { return }
+        let dir = URL(fileURLWithPath: imageDownloadPath, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: dir.path) else { return }
+        let sanitized = prompt.prefix(40).replacingOccurrences(
+            of: "[^a-zA-Z0-9 ]", with: "", options: .regularExpression)
+        let filename = "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).png"
+        let fileURL = dir.appendingPathComponent(filename)
+        if let tiff = image.tiffRepresentation,
+            let rep = NSBitmapImageRep(data: tiff),
+            let png = rep.representation(using: .png, properties: [:])
+        {
+            try? png.write(to: fileURL)
+        }
+    }
+
     private func updateActiveToolName() {
         if showModelComparison {
             activeToolName = "Compare"
@@ -1664,7 +1681,7 @@ struct ContentView: View {
         } else if showQuizMe {
             activeToolName = "Quiz Me"
         } else if showImageGen {
-            activeToolName = "Image Gen"
+            activeToolName = "Image Generation"
         } else {
             activeToolName = ""
         }
@@ -1923,6 +1940,9 @@ struct ContentView: View {
                             }
                         }
                         let finalImage = receivedImage
+                        if let img = finalImage {
+                            self.autoSaveImage(img, prompt: input)
+                        }
                         DispatchQueue.main.async {
                             self.chatManager.updateMessage(
                                 id: aiMsgId, content: fullContent,
@@ -2381,7 +2401,7 @@ struct SidebarView: View {
                     }
                 } else if toolId == "imagegen" && showImageGenTool {
                     SidebarItem(
-                        icon: "paintbrush", title: "Image Gen", isSelected: showImageGen
+                        icon: "paintbrush", title: "Image Generation", isSelected: showImageGen
                     ) {
                         withAnimation {
                             showImageGen = true
@@ -2432,7 +2452,7 @@ struct SidebarView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     Toggle(isOn: $showImageGenTool) {
-                        Label("Image Gen", systemImage: "paintbrush")
+                        Label("Image Generation", systemImage: "paintbrush")
                             .font(.system(size: 12))
                     }
                     .toggleStyle(.switch)
@@ -2529,7 +2549,7 @@ struct SidebarView: View {
         case "compare": return "Compare"
         case "commands": return "Commands"
         case "quizme": return "Quiz Me"
-        case "imagegen": return "Image Gen"
+        case "imagegen": return "Image Generation"
         default: return id
         }
     }
@@ -4664,8 +4684,10 @@ struct MessageView: View, Equatable {
     var maxBubbleWidth: CGFloat = 500
 
     @State private var isCopied = false
+    @State private var isSaved = false
     @State private var isCursorVisible = true
     @State private var isThinkingExpanded = false
+    @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
     @Environment(\.colorScheme) private var colorScheme
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -4790,6 +4812,22 @@ struct MessageView: View, Equatable {
                         }
                         .buttonStyle(.plain)
 
+                        if message.image != nil && !imageDownloadPath.isEmpty {
+                            Button(action: {
+                                if let image = message.image {
+                                    downloadImage(image, prompt: message.content)
+                                }
+                            }) {
+                                Label(
+                                    isSaved ? "Saved" : "Download",
+                                    systemImage: isSaved ? "checkmark" : "arrow.down.circle"
+                                )
+                                .font(.caption)
+                                .foregroundColor(isSaved ? .green : .secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         if let onRegenerate = onRegenerate {
                             Button(action: onRegenerate) {
                                 Label("Regenerate", systemImage: "arrow.counterclockwise")
@@ -4845,6 +4883,26 @@ struct MessageView: View, Equatable {
             }
         }
     }
+
+    private func downloadImage(_ image: NSImage, prompt: String) {
+        guard !imageDownloadPath.isEmpty else { return }
+        let dir = URL(fileURLWithPath: imageDownloadPath, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: dir.path) else { return }
+        let sanitized = prompt.prefix(40).replacingOccurrences(
+            of: "[^a-zA-Z0-9 ]", with: "", options: .regularExpression)
+        let filename = "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).png"
+        let fileURL = dir.appendingPathComponent(filename)
+        if let tiff = image.tiffRepresentation,
+            let rep = NSBitmapImageRep(data: tiff),
+            let png = rep.representation(using: .png, properties: [:])
+        {
+            try? png.write(to: fileURL)
+            isSaved = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                isSaved = false
+            }
+        }
+    }
 }
 
 struct SettingsView: View {
@@ -4865,6 +4923,7 @@ struct SettingsView: View {
     @AppStorage("QuickAICommandBarVibrancy") private var quickAICommandBarVibrancy: Double = 0.55
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
+    @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
 
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
@@ -4999,6 +5058,34 @@ struct SettingsView: View {
                         }
                     }
                 }
+            }
+
+            Section(header: Text("Image Downloads")) {
+                HStack {
+                    Text("Auto-save path")
+                    Spacer()
+                    TextField("Disabled", text: $imageDownloadPath)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Browse") {
+                        let panel = NSOpenPanel()
+                        panel.canChooseFiles = false
+                        panel.canChooseDirectories = true
+                        panel.allowsMultipleSelection = false
+                        if panel.runModal() == .OK {
+                            imageDownloadPath = panel.url?.path ?? ""
+                        }
+                    }
+                    if !imageDownloadPath.isEmpty {
+                        Button(action: { imageDownloadPath = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Text("Generated images will be instantly saved to this folder. Leave empty to disable.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
 
             Section(header: Text("Gemini API")) {
@@ -5385,19 +5472,6 @@ struct ImageGalleryView: View {
                                 let pasteboard = NSPasteboard.general
                                 pasteboard.clearContents()
                                 pasteboard.writeObjects([item.2])
-                            }
-                            if #available(macOS 13.0, *) {
-                                ShareLink(
-                                    item: Image(nsImage: item.2),
-                                    preview: SharePreview(item.3, image: Image(nsImage: item.2)))
-                            } else {
-                                Button("Share") {
-                                    let picker = NSSharingServicePicker(items: [item.2])
-                                    if let view = NSApp.keyWindow?.contentView {
-                                        picker.show(
-                                            relativeTo: .zero, of: view, preferredEdge: .minY)
-                                    }
-                                }
                             }
                         }
                     }

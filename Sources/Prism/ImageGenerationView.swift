@@ -110,6 +110,7 @@ struct ImageGenerationView: View {
     @AppStorage("ShortcutImageGenChatGPT") private var shortcutImageGenChatGPT: String =
         "Generate Image ChatGPT"
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+    @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
     @Environment(\.colorScheme) private var colorScheme
 
     @StateObject private var store = ImageGenerationStore.shared
@@ -378,15 +379,25 @@ struct ImageGenerationView: View {
                                                 previewVisible = true
                                             }
                                             .contextMenu {
-                                                Button("Copy Image") {
+                                                Button("Copy") {
                                                     let pb = NSPasteboard.general
                                                     pb.clearContents()
                                                     pb.writeObjects([img])
                                                 }
-                                                Button("Save to Downloads") {
-                                                    saveImage(img, prompt: item.prompt)
-                                                }
                                             }
+
+                                        // Download button below image
+                                        if !imageDownloadPath.isEmpty {
+                                            Button(action: {
+                                                saveImageToConfiguredPath(img, prompt: item.prompt)
+                                            }) {
+                                                Label("Download", systemImage: "arrow.down.circle")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .padding(.top, 4)
+                                        }
 
                                         if let text = item.responseText, !text.isEmpty {
                                             Text(text)
@@ -581,6 +592,7 @@ struct ImageGenerationView: View {
                     store.updateItem(id: itemId, responseText: text, image: result.1, error: nil)
                     if let img = result.1 {
                         imageCache[itemId] = img
+                        saveImageToConfiguredPath(img, prompt: promptText)
                     }
                     loadingItemId = nil
                     isGenerating = false
@@ -625,6 +637,22 @@ struct ImageGenerationView: View {
         let filename = "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).png"
         let fileURL = downloadsURL.appendingPathComponent(filename)
 
+        if let tiff = image.tiffRepresentation,
+            let rep = NSBitmapImageRep(data: tiff),
+            let png = rep.representation(using: .png, properties: [:])
+        {
+            try? png.write(to: fileURL)
+        }
+    }
+
+    private func saveImageToConfiguredPath(_ image: NSImage, prompt: String) {
+        guard !imageDownloadPath.isEmpty else { return }
+        let dir = URL(fileURLWithPath: imageDownloadPath, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: dir.path) else { return }
+        let sanitized = prompt.prefix(40).replacingOccurrences(
+            of: "[^a-zA-Z0-9 ]", with: "", options: .regularExpression)
+        let filename = "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).png"
+        let fileURL = dir.appendingPathComponent(filename)
         if let tiff = image.tiffRepresentation,
             let rep = NSBitmapImageRep(data: tiff),
             let png = rep.representation(using: .png, properties: [:])
