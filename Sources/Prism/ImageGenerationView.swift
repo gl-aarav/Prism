@@ -159,14 +159,16 @@ struct ImageGenerationView: View {
                 header
 
                 // Content area
-                VStack(spacing: 0) {
-                    if store.items.isEmpty && !isGenerating {
-                        emptyState
-                    } else {
-                        messagesView
-                    }
-
-                    inputBar
+                if store.items.isEmpty && !isGenerating {
+                    emptyState
+                        .safeAreaInset(edge: .bottom) {
+                            inputBar
+                        }
+                } else {
+                    messagesView
+                        .safeAreaInset(edge: .bottom) {
+                            inputBar
+                        }
                 }
             }
             .allowsHitTesting(!previewVisible)
@@ -457,6 +459,14 @@ struct ImageGenerationView: View {
         }
     }
 
+    // Liquid Glass palette (matching main InputView)
+    private var innerGlowTop: Color {
+        colorScheme == .dark ? .white.opacity(0.18) : .white.opacity(0.7)
+    }
+    private var innerGlowBottom: Color {
+        colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.15)
+    }
+
     // MARK: - Input Bar (matches main chat window)
 
     private var inputBar: some View {
@@ -513,31 +523,55 @@ struct ImageGenerationView: View {
                     TextField("", text: $prompt)
                         .textFieldStyle(.plain)
                         .font(.system(size: 15))
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                         .focused($isInputFocused)
                         .onSubmit { generate() }
                 }
 
-                // Send/Stop button
+                // Send/Stop Button — Liquid Glass orb (matches main window)
                 Button(action: isGenerating ? stopGeneration : generate) {
-                    Image(
-                        systemName: isGenerating ? "stop.fill" : "arrow.up.circle.fill"
-                    )
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(
-                        isGenerating
-                            ? AnyShapeStyle(Color.red)
-                            : (prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                ? AnyShapeStyle(Color.secondary.opacity(0.4))
-                                : AnyShapeStyle(
-                                    LinearGradient(
-                                        colors: appTheme.colors.isEmpty
-                                            ? [.blue, .green]
-                                            : appTheme.colors,
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )))
-                    )
-                    .frame(width: 34, height: 34)
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: isGenerating
+                                        ? [.red.opacity(0.8), .red.opacity(0.5)]
+                                        : prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                                            .isEmpty
+                                            ? [
+                                                Color.secondary.opacity(0.3),
+                                                Color.secondary.opacity(0.15),
+                                            ]
+                                            : [
+                                                Color.primary.opacity(0.85),
+                                                Color.primary.opacity(0.65),
+                                            ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Ellipse()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.white.opacity(0.5), .white.opacity(0.0)],
+                                            startPoint: .top,
+                                            endPoint: .center
+                                        )
+                                    )
+                                    .frame(width: 22, height: 14)
+                                    .offset(y: -6)
+                            )
+
+                        Image(systemName: isGenerating ? "stop.fill" : "arrow.up")
+                            .font(.system(size: isGenerating ? 12 : 14, weight: .bold))
+                            .foregroundColor(
+                                isGenerating
+                                    ? .white
+                                    : (colorScheme == .dark ? .black : .white)
+                            )
+                    }
                 }
                 .buttonStyle(.plain)
                 .disabled(
@@ -546,30 +580,62 @@ struct ImageGenerationView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
+            // Liquid Glass container
             .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(colorScheme == .dark ? 0.15 : 0.6),
-                                        Color.white.opacity(colorScheme == .dark ? 0.05 : 0.2),
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 0.5
+                ZStack {
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .fill(.ultraThinMaterial)
+
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.06) : Color.white.opacity(0.4),
+                                    Color.clear,
+                                    colorScheme == .dark
+                                        ? Color.black.opacity(0.08) : Color.black.opacity(0.02),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
                             )
-                    )
-                    .shadow(
-                        color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.08),
-                        radius: 12, x: 0, y: 4)
+                        )
+                }
             )
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                    .stroke(
+                        LinearGradient(
+                            colors: isInputFocused
+                                ? [
+                                    innerGlowTop,
+                                    Color(hue: 0.6, saturation: 0.3, brightness: 1.0).opacity(0.3),
+                                    innerGlowBottom,
+                                    Color(hue: 0.8, saturation: 0.3, brightness: 1.0).opacity(0.2),
+                                    innerGlowTop.opacity(0.5),
+                                ]
+                                : [innerGlowTop, innerGlowBottom],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: isInputFocused ? 1.2 : 0.8
+                    )
+                    .animation(.easeInOut(duration: 0.35), value: isInputFocused)
+            )
+            .shadow(
+                color: colorScheme == .dark
+                    ? Color.black.opacity(isInputFocused ? 0.5 : 0.3)
+                    : Color.black.opacity(isInputFocused ? 0.12 : 0.06),
+                radius: isInputFocused ? 30 : 16,
+                x: 0,
+                y: isInputFocused ? 12 : 6
+            )
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isInputFocused)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .background(Color.clear)
     }
 
     // MARK: - Actions

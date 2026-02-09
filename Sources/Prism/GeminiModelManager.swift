@@ -76,6 +76,35 @@ class GeminiModelManager: ObservableObject {
         "deep-research-pro-preview-12-2025": "Deep Research Pro Preview (Dec-12-2025)",
     ]
 
+    struct ModelGroup {
+        let name: String
+        let models: [String]
+    }
+
+    static var modelGroups: [ModelGroup] {
+        let allModels = shared.availableModels
+        let groups: [(String, (String) -> Bool)] = [
+            ("Gemini 3", { $0.hasPrefix("gemini-3") }),
+            ("Nano Banana", { $0.contains("image") || $0.contains("nano-banana") }),
+            ("Gemini 2.5", { $0.hasPrefix("gemini-2.5") && !$0.contains("image") }),
+            ("Gemini 2.0", { $0.hasPrefix("gemini-2.0") && !$0.contains("image") }),
+            ("Gemma", { $0.hasPrefix("gemma") }),
+            ("Aliases", { $0.contains("latest") }),
+            ("Other", { _ in true }),
+        ]
+
+        var used = Set<String>()
+        var result: [ModelGroup] = []
+        for (name, predicate) in groups {
+            let models = allModels.filter { predicate($0) && !used.contains($0) }
+            if !models.isEmpty {
+                result.append(ModelGroup(name: name, models: models))
+                used.formUnion(models)
+            }
+        }
+        return result
+    }
+
     func displayName(for model: String) -> String {
         GeminiModelManager.displayNames[model] ?? model
     }

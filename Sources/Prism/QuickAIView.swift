@@ -601,7 +601,7 @@ extension QuickAIView {
                 Spacer()
                 if thinkingLevel == value {
                     Image(systemName: "checkmark")
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(colorScheme == .dark ? .white : .accentColor)
                 }
             }
         }
@@ -1293,6 +1293,8 @@ extension QuickAIView {
                                 Button(action: { selectedOllamaModel = model }) {
                                     if selectedOllamaModel == model {
                                         Label(model, systemImage: "checkmark")
+                                            .foregroundColor(
+                                                colorScheme == .dark ? .white : .primary)
                                     } else {
                                         Text(model)
                                     }
@@ -1311,6 +1313,8 @@ extension QuickAIView {
                                         Button(action: { selectedOllamaModel = model }) {
                                             if selectedOllamaModel == model {
                                                 Label(model, systemImage: "checkmark")
+                                                    .foregroundColor(
+                                                        colorScheme == .dark ? .white : .primary)
                                             } else {
                                                 Text(model)
                                             }
@@ -1376,6 +1380,8 @@ extension QuickAIView {
                                 } label: {
                                     if thinkingLevel == "high" {
                                         Label("Reasoning: On", systemImage: "checkmark")
+                                            .foregroundColor(
+                                                colorScheme == .dark ? .white : .primary)
                                     } else {
                                         Text("Reasoning: On")
                                     }
@@ -1385,6 +1391,8 @@ extension QuickAIView {
                                 } label: {
                                     if thinkingLevel != "high" {
                                         Label("Reasoning: Off", systemImage: "checkmark")
+                                            .foregroundColor(
+                                                colorScheme == .dark ? .white : .primary)
                                     } else {
                                         Text("Reasoning: Off")
                                     }
@@ -1413,6 +1421,8 @@ extension QuickAIView {
                                 Button(action: { geminiModel = model }) {
                                     if geminiModel == model {
                                         Label(model, systemImage: "checkmark")
+                                            .foregroundColor(
+                                                colorScheme == .dark ? .white : .primary)
                                     } else {
                                         Text(model)
                                     }
@@ -1420,17 +1430,20 @@ extension QuickAIView {
                             }
                         }
 
-                        Section("All Models") {
-                            ForEach(
-                                geminiManager.availableModels.filter {
-                                    !geminiManager.isFavorite($0)
-                                }, id: \.self
-                            ) { model in
-                                Button(action: { geminiModel = model }) {
-                                    if geminiModel == model {
-                                        Label(model, systemImage: "checkmark")
-                                    } else {
-                                        Text(model)
+                        ForEach(GeminiModelManager.modelGroups, id: \.name) { group in
+                            let nonFavModels = group.models.filter { !geminiManager.isFavorite($0) }
+                            if !nonFavModels.isEmpty {
+                                Section(group.name) {
+                                    ForEach(nonFavModels, id: \.self) { model in
+                                        Button(action: { geminiModel = model }) {
+                                            if geminiModel == model {
+                                                Label(model, systemImage: "checkmark")
+                                                    .foregroundColor(
+                                                        colorScheme == .dark ? .white : .primary)
+                                            } else {
+                                                Text(model)
+                                            }
+                                        }
                                     }
                                 }
                             }

@@ -17,15 +17,17 @@ struct ComparisonSlot: Identifiable {
 
 class ComparisonStateManager: ObservableObject {
     static let shared = ComparisonStateManager()
-    
+
     @Published var slots: [ComparisonSlot]
     @Published var synthesizedResponse: String = ""
     @Published var synthesizedThinking: String = ""
     @Published var showSynthesizePanel: Bool = false
-    
+
     private init() {
-        if let savedData = UserDefaults.standard.array(forKey: "ComparisonSlots") as? [[String: String]],
-           savedData.count >= 2 {
+        if let savedData = UserDefaults.standard.array(forKey: "ComparisonSlots")
+            as? [[String: String]],
+            savedData.count >= 2
+        {
             slots = savedData.map {
                 ComparisonSlot(
                     provider: $0["provider"] ?? "Gemini API",
@@ -39,7 +41,7 @@ class ComparisonStateManager: ObservableObject {
             ]
         }
     }
-    
+
     func saveSlotConfigurations() {
         let data = slots.map { ["provider": $0.provider, "model": $0.model] }
         UserDefaults.standard.set(data, forKey: "ComparisonSlots")
@@ -84,10 +86,10 @@ struct ModelComparisonView: View {
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
     private let webSearchService = WebSearchService()
-    
+
     // Convenience accessor for slots
     private var slots: [ComparisonSlot] {
-        get { state.slots }
+        state.slots
     }
 
     private func saveSlots() {
@@ -199,11 +201,11 @@ struct ModelComparisonView: View {
                                 ))
                     }
                 }
-                .padding(.bottom, 100)
+                .padding(.bottom, 20)
             }
-
-            // Input Bar
-            comparisonInputBar
+            .safeAreaInset(edge: .bottom) {
+                comparisonInputBar
+            }
         }
         .background(Color.clear)
         .onDisappear {
@@ -311,85 +313,6 @@ struct ModelComparisonView: View {
 
     private var comparisonInputBar: some View {
         VStack(spacing: 0) {
-            // Ollama options bar (thinking + web search)
-            if hasOllamaSlot {
-                HStack(spacing: 12) {
-                    // Thinking level for Ollama
-                    if hasThinkingCapableOllamaSlot {
-                        Menu {
-                            Button(action: { compareThinkingLevel = "low" }) {
-                                HStack {
-                                    Text("Low")
-                                    if compareThinkingLevel == "low" {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                            Button(action: { compareThinkingLevel = "medium" }) {
-                                HStack {
-                                    Text("Medium")
-                                    if compareThinkingLevel == "medium" {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                            Button(action: { compareThinkingLevel = "high" }) {
-                                HStack {
-                                    Text("High")
-                                    if compareThinkingLevel == "high" {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 5) {
-                                Image(systemName: "brain")
-                                    .font(.system(size: 11, weight: .medium))
-                                Text("Thinking: \(compareThinkingLevel.capitalized)")
-                                    .font(.system(size: 11, weight: .medium))
-                            }
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule()
-                                    .fill(Color.secondary.opacity(0.08))
-                            )
-                        }
-                        .menuStyle(.borderlessButton)
-                        .fixedSize()
-                    }
-
-                    // Web search toggle
-                    if !ollamaAPIKey.isEmpty {
-                        Button(action: { compareWebSearchEnabled.toggle() }) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "globe")
-                                    .font(.system(size: 11, weight: .medium))
-                                Text(compareWebSearchEnabled ? "Web Search: On" : "Web Search: Off")
-                                    .font(.system(size: 11, weight: .medium))
-                            }
-                            .foregroundColor(compareWebSearchEnabled ? .blue : .secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule()
-                                    .fill(
-                                        compareWebSearchEnabled
-                                            ? Color.blue.opacity(0.1)
-                                            : Color.secondary.opacity(0.08))
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 6)
-                .padding(.bottom, 4)
-            }
-
             HStack(spacing: 10) {
                 // Prompt field
                 ZStack(alignment: .leading) {
@@ -414,6 +337,72 @@ struct ModelComparisonView: View {
                                 return .handled
                             }
                         }
+                }
+
+                // Thinking level button (inside chat bar, like main window)
+                if hasOllamaSlot && hasThinkingCapableOllamaSlot {
+                    Menu {
+                        Button(action: { compareThinkingLevel = "low" }) {
+                            HStack {
+                                Text("Low")
+                                if compareThinkingLevel == "low" {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        Button(action: { compareThinkingLevel = "medium" }) {
+                            HStack {
+                                Text("Medium")
+                                if compareThinkingLevel == "medium" {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        Button(action: { compareThinkingLevel = "high" }) {
+                            HStack {
+                                Text("High")
+                                if compareThinkingLevel == "high" {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "brain")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04))
+                            )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Thinking: \(compareThinkingLevel.capitalized)")
+                }
+
+                // Web search toggle (inside chat bar, like main window)
+                if hasOllamaSlot && !ollamaAPIKey.isEmpty {
+                    Button(action: { compareWebSearchEnabled.toggle() }) {
+                        Image(systemName: "globe")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(compareWebSearchEnabled ? .blue : .secondary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        compareWebSearchEnabled
+                                            ? Color.blue.opacity(colorScheme == .dark ? 0.2 : 0.1)
+                                            : (colorScheme == .dark
+                                                ? Color.white.opacity(0.08)
+                                                : Color.black.opacity(0.04))
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(compareWebSearchEnabled ? "Web Search: On" : "Web Search: Off")
                 }
 
                 // Send/Stop Button — Liquid Glass orb
@@ -526,6 +515,7 @@ struct ModelComparisonView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .background(Color.clear)
     }
 
     // MARK: - Inline Synthesis Panel
@@ -553,17 +543,23 @@ struct ModelComparisonView: View {
                     }
                     Divider()
                     Menu("Gemini API") {
-                        ForEach(geminiManager.availableModels, id: \.self) { model in
-                            Button(action: {
-                                synthesizeProvider = "Gemini API"
-                                synthesizeModel = model
-                            }) {
-                                if synthesizeProvider == "Gemini API" && synthesizeModel == model {
-                                    Label(
-                                        geminiManager.displayName(for: model),
-                                        systemImage: "checkmark")
-                                } else {
-                                    Text(geminiManager.displayName(for: model))
+                        ForEach(GeminiModelManager.modelGroups, id: \.name) { group in
+                            Section(group.name) {
+                                ForEach(group.models, id: \.self) { model in
+                                    Button(action: {
+                                        synthesizeProvider = "Gemini API"
+                                        synthesizeModel = model
+                                    }) {
+                                        if synthesizeProvider == "Gemini API"
+                                            && synthesizeModel == model
+                                        {
+                                            Label(
+                                                geminiManager.displayName(for: model),
+                                                systemImage: "checkmark")
+                                        } else {
+                                            Text(geminiManager.displayName(for: model))
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -674,7 +670,8 @@ struct ModelComparisonView: View {
                         .buttonStyle(.plain)
                         Button(action: {
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(state.synthesizedResponse, forType: .string)
+                            NSPasteboard.general.setString(
+                                state.synthesizedResponse, forType: .string)
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "doc.on.doc")
@@ -800,7 +797,8 @@ struct ModelComparisonView: View {
                     .padding(16)
                 }
                 .frame(maxHeight: 350)
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: state.synthesizedResponse)
+                .animation(
+                    .spring(response: 0.4, dampingFraction: 0.8), value: state.synthesizedResponse)
 
                 if !state.synthesizedResponse.isEmpty && !isSynthesizing {
                     HStack {
@@ -1082,7 +1080,7 @@ struct ModelComparisonView: View {
 
         // Clear the input field
         prompt = ""
-        
+
         isComparing = true
         // Reset all slots
         for i in state.slots.indices {
@@ -1393,12 +1391,18 @@ struct ComparisonCard: View {
             }
             Divider()
             Menu("Gemini API") {
-                ForEach(geminiManager.availableModels, id: \.self) { model in
-                    Button(action: { onChangeProvider("Gemini API", model) }) {
-                        if slot.provider == "Gemini API" && slot.model == model {
-                            Label(geminiManager.displayName(for: model), systemImage: "checkmark")
-                        } else {
-                            Text(geminiManager.displayName(for: model))
+                ForEach(GeminiModelManager.modelGroups, id: \.name) { group in
+                    Section(group.name) {
+                        ForEach(group.models, id: \.self) { model in
+                            Button(action: { onChangeProvider("Gemini API", model) }) {
+                                if slot.provider == "Gemini API" && slot.model == model {
+                                    Label(
+                                        geminiManager.displayName(for: model),
+                                        systemImage: "checkmark")
+                                } else {
+                                    Text(geminiManager.displayName(for: model))
+                                }
+                            }
                         }
                     }
                 }
@@ -1522,19 +1526,17 @@ struct ComparisonCard: View {
 
             // Copy button + small model warning
             VStack(spacing: 6) {
-                // Small model disclaimer
-                if slot.provider == "Ollama" {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 9))
-                            .foregroundColor(.orange.opacity(0.7))
-                        Text("Information could be inaccurate")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary.opacity(0.6))
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
+                // Model disclaimer for all providers
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 9))
+                        .foregroundColor(.orange.opacity(0.7))
+                    Text("Information could be inaccurate")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary.opacity(0.6))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
 
                 HStack {
                     Spacer()

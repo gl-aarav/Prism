@@ -1537,7 +1537,10 @@ struct ContentView: View {
                                         } else {
                                             ForEach(messages) { message in
                                                 let isLast = message.id == messages.last?.id
-                                                let isLastUserMessage = message.isUser && messages.last(where: { $0.isUser })?.id == message.id
+                                                let isLastUserMessage =
+                                                    message.isUser
+                                                    && messages.last(where: { $0.isUser })?.id
+                                                        == message.id
                                                 MessageView(
                                                     message: message,
                                                     liveContent: streamBuffer[message.id] ?? nil,
@@ -1549,7 +1552,9 @@ struct ContentView: View {
                                                         : nil,
                                                     onEdit: (isLastUserMessage && !isLoading)
                                                         ? { newContent in
-                                                            editAndResend(message: message, newContent: newContent)
+                                                            editAndResend(
+                                                                message: message,
+                                                                newContent: newContent)
                                                         }
                                                         : nil,
                                                     canEdit: isLastUserMessage && !isLoading,
@@ -1876,15 +1881,15 @@ struct ContentView: View {
         // Since we only allow editing the LAST user message,
         // we only need to remove the AI response after it (if any)
         let currentMessages = chatManager.getCurrentMessages()
-        
+
         // Check if there's an AI response after this user message
         if let lastMessage = currentMessages.last, !lastMessage.isUser {
-            chatManager.removeLastMessage() // Remove the AI response
+            chatManager.removeLastMessage()  // Remove the AI response
         }
-        
+
         // Remove the user message being edited
         chatManager.removeLastMessage()
-        
+
         // Send the new edited message
         let userMsg = Message(
             content: newContent,
@@ -1894,7 +1899,7 @@ struct ContentView: View {
             isUser: true
         )
         chatManager.addMessage(userMsg)
-        
+
         // Reconstruct attachments for sending
         var attachments: [Attachment] = []
         if let msgAttachments = message.attachments {
@@ -3477,20 +3482,20 @@ struct InputView: View {
                             }
                         }
 
-                        Section("All Models") {
-                            ForEach(
-                                geminiManager.availableModels.filter {
-                                    !geminiManager.isFavorite($0)
-                                },
-                                id: \.self
-                            ) { model in
-                                Button(action: { geminiModel = model }) {
-                                    if geminiModel == model {
-                                        Label(
-                                            geminiManager.displayName(for: model),
-                                            systemImage: "checkmark")
-                                    } else {
-                                        Text(geminiManager.displayName(for: model))
+                        ForEach(GeminiModelManager.modelGroups, id: \.name) { group in
+                            let nonFavModels = group.models.filter { !geminiManager.isFavorite($0) }
+                            if !nonFavModels.isEmpty {
+                                Section(group.name) {
+                                    ForEach(nonFavModels, id: \.self) { model in
+                                        Button(action: { geminiModel = model }) {
+                                            if geminiModel == model {
+                                                Label(
+                                                    geminiManager.displayName(for: model),
+                                                    systemImage: "checkmark")
+                                            } else {
+                                                Text(geminiManager.displayName(for: model))
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -4783,7 +4788,7 @@ struct MessageView: View, Equatable {
                         )
                         .padding(.bottom, 4)
                     }
-                    
+
                     if isEditing {
                         // Inline editing mode - improved UI
                         VStack(alignment: .trailing, spacing: 12) {
@@ -4797,7 +4802,7 @@ struct MessageView: View, Equatable {
                                     .foregroundColor(.secondary)
                                 Spacer()
                             }
-                            
+
                             // Text editor with improved styling
                             TextEditor(text: $editText)
                                 .font(.system(size: 14))
@@ -4806,13 +4811,16 @@ struct MessageView: View, Equatable {
                                 .padding(12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 14)
-                                        .fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                                        .fill(
+                                            colorScheme == .dark
+                                                ? Color.white.opacity(0.05)
+                                                : Color.black.opacity(0.03))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14)
                                         .stroke(Color.blue.opacity(0.4), lineWidth: 1.5)
                                 )
-                            
+
                             // Action buttons
                             HStack(spacing: 10) {
                                 Button(action: {
@@ -4836,9 +4844,12 @@ struct MessageView: View, Equatable {
                                     )
                                 }
                                 .buttonStyle(.plain)
-                                
+
                                 Button(action: {
-                                    if let onEdit = onEdit, !editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    if let onEdit = onEdit,
+                                        !editText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                            .isEmpty
+                                    {
                                         onEdit(editText)
                                         withAnimation(.easeOut(duration: 0.2)) {
                                             isEditing = false
