@@ -993,7 +993,13 @@ class GeminiService {
                 request.addValue("application/json", forHTTPHeaderField: "Content-Type")
 
                 // Convert history to Gemini format
-                let contents: [[String: Any]] = history.map { msg in
+                // For image models, only send the latest user message to avoid
+                // thought_signature validation errors on multi-turn conversations
+                let messagesToSend =
+                    isImageModel
+                    ? history.filter { $0.isUser }.suffix(1).map { $0 }
+                    : history
+                let contents: [[String: Any]] = messagesToSend.map { msg in
                     var parts: [[String: Any]] = []
 
                     if !msg.content.isEmpty {
