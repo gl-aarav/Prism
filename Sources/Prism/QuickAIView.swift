@@ -939,43 +939,234 @@ struct ExpandedPanelBackground: View {
 }
 
 struct GeneratingImagePlaceholder: View {
-    @State private var phase: CGFloat = 0
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @Environment(\.colorScheme) var colorScheme
 
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(colorScheme == .dark ? Color.black : Color.white)
+    @State private var phase: CGFloat = 0
+    @State private var orbPhase1: CGFloat = 0
+    @State private var orbPhase2: CGFloat = 0
+    @State private var orbPhase3: CGFloat = 0
+    @State private var pulseScale: CGFloat = 0.92
+    @State private var shimmerPhase: CGFloat = 0
+    @State private var rotationAngle: Double = 0
 
-            // Shimmering Effect
+    private var themeColors: (Color, Color) {
+        let colors = appTheme.colors
+        return (colors.first ?? .blue, colors.last ?? .purple)
+    }
+
+    var body: some View {
+        let (startColor, endColor) = themeColors
+        let midColor = Color(
+            hue: 0.5,
+            saturation: 0.6,
+            brightness: colorScheme == .dark ? 0.8 : 0.9
+        )
+
+        ZStack {
+            // Background
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(
+                    colorScheme == .dark
+                        ? Color.black.opacity(0.5)
+                        : Color.white.opacity(0.5)
+                )
+
+            // Aurora gradient layer - slowly rotating
+            ZStack {
+                // Orb 1 - top-left drift
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                startColor.opacity(0.6),
+                                startColor.opacity(0.0),
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 80
+                        )
+                    )
+                    .frame(width: 160, height: 160)
+                    .offset(
+                        x: -40 + 30 * cos(orbPhase1 * .pi * 2),
+                        y: -40 + 25 * sin(orbPhase1 * .pi * 2 * 1.3)
+                    )
+                    .blur(radius: 30)
+
+                // Orb 2 - bottom-right drift
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                endColor.opacity(0.55),
+                                endColor.opacity(0.0),
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 70
+                        )
+                    )
+                    .frame(width: 140, height: 140)
+                    .offset(
+                        x: 35 + 25 * sin(orbPhase2 * .pi * 2),
+                        y: 35 + 30 * cos(orbPhase2 * .pi * 2 * 0.8)
+                    )
+                    .blur(radius: 25)
+
+                // Orb 3 - center float
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                midColor.opacity(0.45),
+                                midColor.opacity(0.0),
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 60
+                        )
+                    )
+                    .frame(width: 120, height: 120)
+                    .offset(
+                        x: 15 * sin(orbPhase3 * .pi * 2 * 1.5),
+                        y: -10 + 20 * cos(orbPhase3 * .pi * 2)
+                    )
+                    .blur(radius: 20)
+            }
+            .rotationEffect(.degrees(rotationAngle))
+            .scaleEffect(pulseScale)
+
+            // Mesh-like overlay shimmer
             GeometryReader { geo in
                 LinearGradient(
                     colors: [
                         .clear,
-                        (colorScheme == .dark ? Color.white : Color.black).opacity(0.1),
+                        .white.opacity(colorScheme == .dark ? 0.08 : 0.15),
                         .clear,
                     ],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
-                .rotationEffect(.degrees(45))
-                .offset(x: -geo.size.width + (geo.size.width * 2 * phase))
+                .frame(width: geo.size.width * 0.6)
+                .offset(x: -geo.size.width * 0.3 + geo.size.width * 1.3 * shimmerPhase)
+                .rotationEffect(.degrees(25))
             }
-            .mask(RoundedRectangle(cornerRadius: 16))
+            .mask(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-            // Border
-            RoundedRectangle(cornerRadius: 16)
+            // Center icon
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 48, height: 48)
+                        .shadow(
+                            color: startColor.opacity(0.3),
+                            radius: 12, x: 0, y: 4
+                        )
+
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [startColor, endColor],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .scaleEffect(pulseScale > 0.96 ? 1.05 : 0.95)
+                }
+
+                Text("Generating")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                colorScheme == .dark ? .white : .primary,
+                                .secondary,
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+
+                // Animated dots
+                HStack(spacing: 4) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [startColor, endColor],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .frame(width: 5, height: 5)
+                            .scaleEffect(dotScale(index: i))
+                            .opacity(dotOpacity(index: i))
+                    }
+                }
+            }
+
+            // Glass border
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(
-                    colorScheme == .dark ? Color.white.opacity(0.5) : Color.black.opacity(0.5),
-                    lineWidth: 2
+                    LinearGradient(
+                        colors: [
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.15)
+                                : Color.white.opacity(0.6),
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.05)
+                                : Color.black.opacity(0.05),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
                 )
         }
-        .frame(width: 200, height: 200)
+        .frame(width: 220, height: 220)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(
+            color: startColor.opacity(colorScheme == .dark ? 0.2 : 0.1),
+            radius: 20, x: 0, y: 8
+        )
         .onAppear {
-            withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
+            withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
+                orbPhase1 = 1
+            }
+            withAnimation(.linear(duration: 5.5).repeatForever(autoreverses: false)) {
+                orbPhase2 = 1
+            }
+            withAnimation(.linear(duration: 6.0).repeatForever(autoreverses: false)) {
+                orbPhase3 = 1
+            }
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                pulseScale = 1.04
+            }
+            withAnimation(.linear(duration: 2.5).repeatForever(autoreverses: false)) {
+                shimmerPhase = 1
+            }
+            withAnimation(.linear(duration: 20.0).repeatForever(autoreverses: false)) {
+                rotationAngle = 360
+            }
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
                 phase = 1
             }
         }
+    }
+
+    private func dotScale(index: Int) -> CGFloat {
+        let offset = CGFloat(index) * 0.33
+        let t = (phase + offset).truncatingRemainder(dividingBy: 1.0)
+        return 0.6 + 0.5 * sin(t * .pi)
+    }
+
+    private func dotOpacity(index: Int) -> Double {
+        let offset = CGFloat(index) * 0.33
+        let t = (phase + offset).truncatingRemainder(dividingBy: 1.0)
+        return 0.4 + 0.6 * sin(t * .pi)
     }
 }
 
@@ -1195,13 +1386,13 @@ extension QuickAIView {
                     if inputText.isEmpty {
                         Text("Request... (type / for commands)")
                             .font(.system(size: 16))
-                            .foregroundColor(.black.opacity(0.4))
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4))
                             .allowsHitTesting(false)
                     }
                     TextField("", text: $inputText, axis: .vertical)
                         .textFieldStyle(.plain)
                         .font(.system(size: 16))
-                        .foregroundColor(.black)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                         .lineLimit(1...6)
                         .multilineTextAlignment(.leading)
                         .focused($isFocused)
@@ -1344,13 +1535,13 @@ extension QuickAIView {
                     } label: {
                         Image(systemName: "server.rack")
                             .font(.system(size: 16))
-                            .foregroundColor(.black)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
                             .padding(6)
                             .background(Color.white.opacity(0.10))
                             .clipShape(Circle())
                     }
                     .menuStyle(.borderlessButton)
-                    .tint(.black)
+                    .tint(colorScheme == .dark ? .white : .black)
                     .help("Select Ollama Model")
                     .alert("Add Custom Ollama Model", isPresented: $showAddCustomOllamaModel) {
                         TextField("Model Name (e.g., llama3:70b)", text: $newCustomModelName)
@@ -1405,13 +1596,13 @@ extension QuickAIView {
                         } label: {
                             Image(systemName: "brain")
                                 .font(.system(size: 16))
-                                .foregroundColor(.black)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
                                 .padding(6)
                                 .background(Color.white.opacity(0.10))
                                 .clipShape(Circle())
                         }
                         .menuStyle(.borderlessButton)
-                        .tint(.black)
+                        .tint(colorScheme == .dark ? .white : .black)
                         .help("Reasoning Effort")
                     }
                 } else if selectedProvider == "Gemini API" {
@@ -1465,13 +1656,13 @@ extension QuickAIView {
                     } label: {
                         Image(systemName: "sparkles")
                             .font(.system(size: 16))
-                            .foregroundColor(.black)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
                             .padding(6)
                             .background(Color.white.opacity(0.10))
                             .clipShape(Circle())
                     }
                     .menuStyle(.borderlessButton)
-                    .tint(.black)
+                    .tint(colorScheme == .dark ? .white : .black)
                     .help("Select Gemini Model")
                 }
 
@@ -1480,7 +1671,7 @@ extension QuickAIView {
                     Button(action: { webSearchEnabled.toggle() }) {
                         Image(systemName: "globe")
                             .font(.system(size: 16))
-                            .foregroundColor(.black)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
                             .padding(6)
                             .background(
                                 webSearchEnabled
@@ -1497,7 +1688,7 @@ extension QuickAIView {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 28))
                         .symbolRenderingMode(.monochrome)
-                        .foregroundColor(.black)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                 }
                 .buttonStyle(.plain)
                 .disabled(inputText.isEmpty || isLoading)

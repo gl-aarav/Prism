@@ -480,6 +480,7 @@ struct ImageGenerationView: View {
                                 Button(action: { selectedStyle = item.value }) {
                                     if selectedStyle == item.value {
                                         Label(item.label, systemImage: "checkmark")
+                                            .foregroundColor(colorScheme == .dark ? .white : .primary)
                                     } else {
                                         Text(item.label)
                                     }
@@ -630,6 +631,14 @@ struct ImageGenerationView: View {
                 radius: isInputFocused ? 30 : 16,
                 x: 0,
                 y: isInputFocused ? 12 : 6
+            )
+            .shadow(
+                color: colorScheme == .dark
+                    ? Color.blue.opacity(isInputFocused ? 0.08 : 0.0)
+                    : Color.blue.opacity(isInputFocused ? 0.04 : 0.0),
+                radius: 40,
+                x: 0,
+                y: 0
             )
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isInputFocused)
         }
