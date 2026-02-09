@@ -4819,7 +4819,7 @@ struct MessageView: View, Equatable {
                                 }
                             }) {
                                 Label(
-                                    isSaved ? "Saved" : "Download",
+                                    isSaved ? "Downloaded" : "Download",
                                     systemImage: isSaved ? "checkmark" : "arrow.down.circle"
                                 )
                                 .font(.caption)

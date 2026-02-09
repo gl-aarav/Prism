@@ -126,6 +126,7 @@ struct ImageGenerationView: View {
     @State private var previewVisible: Bool = false
     @State private var previewSourceRect: CGRect = .zero
     @State private var imageFrames: [UUID: CGRect] = [:]
+    @State private var downloadedItemIds: Set<UUID> = []
     @FocusState private var isInputFocused: Bool
 
     private let shortcutService = ShortcutService()
@@ -390,10 +391,21 @@ struct ImageGenerationView: View {
                                         if !imageDownloadPath.isEmpty {
                                             Button(action: {
                                                 saveImageToConfiguredPath(img, prompt: item.prompt)
+                                                downloadedItemIds.insert(item.id)
+                                                DispatchQueue.main.asyncAfter(deadline: .now() + 2)
+                                                {
+                                                    downloadedItemIds.remove(item.id)
+                                                }
                                             }) {
-                                                Label("Download", systemImage: "arrow.down.circle")
-                                                    .font(.system(size: 12))
-                                                    .foregroundColor(.secondary)
+                                                let isDownloaded = downloadedItemIds.contains(
+                                                    item.id)
+                                                Label(
+                                                    isDownloaded ? "Downloaded" : "Download",
+                                                    systemImage: isDownloaded
+                                                        ? "checkmark" : "arrow.down.circle"
+                                                )
+                                                .font(.system(size: 12))
+                                                .foregroundColor(isDownloaded ? .green : .secondary)
                                             }
                                             .buttonStyle(.plain)
                                             .padding(.top, 4)
