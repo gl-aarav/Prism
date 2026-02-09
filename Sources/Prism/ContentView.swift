@@ -58,6 +58,13 @@ struct MessageAttachment: Identifiable, Codable, Equatable {
     var fileName: String?
 }
 
+struct MessageVersion: Codable, Equatable {
+    var content: String
+    var thinkingContent: String?
+    var imageData: Data?
+    var model: String?
+}
+
 struct Message: Identifiable, Codable, Equatable {
     var id = UUID()
     var content: String {
@@ -75,6 +82,8 @@ struct Message: Identifiable, Codable, Equatable {
     var timestamp = Date()
     var isStreaming: Bool = false
     var isGeneratingImage: Bool? = false
+    var versions: [MessageVersion]?
+    var currentVersionIndex: Int?
 
     // Cache the decoded image to avoid expensive decoding on main thread
     private var _cachedImage: NSImage?
@@ -101,7 +110,7 @@ struct Message: Identifiable, Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, content, thinkingContent, thinkingDuration, model, imageData, pdfData, attachments,
             isUser,
-            timestamp
+            timestamp, versions, currentVersionIndex
     }
 
     init(
@@ -143,6 +152,8 @@ struct Message: Identifiable, Codable, Equatable {
         attachments = try container.decodeIfPresent([MessageAttachment].self, forKey: .attachments)
         isUser = try container.decode(Bool.self, forKey: .isUser)
         timestamp = try container.decode(Date.self, forKey: .timestamp)
+        versions = try container.decodeIfPresent([MessageVersion].self, forKey: .versions)
+        currentVersionIndex = try container.decodeIfPresent(Int.self, forKey: .currentVersionIndex)
 
         if let data = imageData {
             _cachedImage = NSImage(data: data)
@@ -164,6 +175,8 @@ struct Message: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(attachments, forKey: .attachments)
         try container.encode(isUser, forKey: .isUser)
         try container.encode(timestamp, forKey: .timestamp)
+        try container.encodeIfPresent(versions, forKey: .versions)
+        try container.encodeIfPresent(currentVersionIndex, forKey: .currentVersionIndex)
     }
 
     static func parseMarkdown(_ text: String) -> [MarkdownBlock] {
@@ -457,6 +470,8 @@ struct Message: Identifiable, Codable, Equatable {
         if lhs.isStreaming != rhs.isStreaming { return false }
         if lhs.model != rhs.model { return false }
         if lhs.isGeneratingImage != rhs.isGeneratingImage { return false }
+        if lhs.currentVersionIndex != rhs.currentVersionIndex { return false }
+        if lhs.versions?.count != rhs.versions?.count { return false }
 
         // Optimization: Avoid deep data comparison for images if possible
         // If both have no image, equal.
@@ -659,6 +674,48 @@ class ChatManager: ObservableObject {
             sessions[index].messages.removeSubrange(msgIndex...)
             saveSessions()
         }
+    }
+
+    /// Switch to a specific version of a message
+    func switchVersion(messageId: UUID, to versionIndex: Int) {
+        guard let sessionIndex = sessions.firstIndex(where: { $0.id == currentSessionId }),
+            let msgIndex = sessions[sessionIndex].messages.firstIndex(where: { $0.id == messageId }
+            ),
+            let versions = sessions[sessionIndex].messages[msgIndex].versions,
+            versionIndex >= 0 && versionIndex < versions.count
+        else { return }
+
+        var msg = sessions[sessionIndex].messages[msgIndex]
+        let version = versions[versionIndex]
+        msg.content = version.content
+        msg.thinkingContent = version.thinkingContent
+        msg.imageData = version.imageData
+        msg.model = version.model
+        msg.currentVersionIndex = versionIndex
+        msg.ensureBlocksCached()
+        sessions[sessionIndex].messages[msgIndex] = msg
+        saveSessions()
+    }
+
+    /// Attach versions to a message and finalize as the latest version
+    func attachVersions(_ versions: [MessageVersion], to messageId: UUID) {
+        guard let sessionIndex = sessions.firstIndex(where: { $0.id == currentSessionId }),
+            let msgIndex = sessions[sessionIndex].messages.firstIndex(where: { $0.id == messageId })
+        else { return }
+
+        var msg = sessions[sessionIndex].messages[msgIndex]
+        let newVersion = MessageVersion(
+            content: msg.content,
+            thinkingContent: msg.thinkingContent,
+            imageData: msg.imageData,
+            model: msg.model
+        )
+        var allVersions = versions
+        allVersions.append(newVersion)
+        msg.versions = allVersions
+        msg.currentVersionIndex = allVersions.count - 1
+        sessions[sessionIndex].messages[msgIndex] = msg
+        saveSessions()
     }
 
     func saveSessions() {
@@ -1497,117 +1554,158 @@ struct ContentView: View {
                     }
                     .ignoresSafeArea()
 
-                    // Content Layer
-                    if showCommands {
-                        CommandsManagementView()
-                    } else if showModelComparison {
-                        ModelComparisonView()
-                    } else if showQuizMe {
-                        QuizMeView()
-                    } else if showImageGen {
-                        ImageGenerationView()
-                    } else if showImageGallery {
-                        ImageGalleryView(
-                            chatManager: chatManager, showImageGallery: $showImageGallery)
-                    } else if isWebViewProvider(selectedProvider) {
-                        VStack(spacing: 0) {
-                            HeaderView(
-                                selectedProvider: $selectedProvider,
-                                onNewChat: chatManager.createNewSession
-                            )
+                    // Content Layer — Chat always rendered; tools overlay on top
+                    ZStack {
+                        // Chat or Web view (always in tree to prevent rebuild flash)
+                        if isWebViewProvider(selectedProvider) {
+                            VStack(spacing: 0) {
+                                HeaderView(
+                                    selectedProvider: $selectedProvider,
+                                    onNewChat: chatManager.createNewSession
+                                )
 
-                            if let url = getWebURL(for: selectedProvider) {
-                                WebView(url: url)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                if let url = getWebURL(for: selectedProvider) {
+                                    WebView(url: url)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                }
                             }
-                        }
-                    } else {
-                        VStack(spacing: 0) {
-                            HeaderView(
-                                selectedProvider: $selectedProvider,
-                                onNewChat: chatManager.createNewSession
-                            )
+                        } else {
+                            VStack(spacing: 0) {
+                                HeaderView(
+                                    selectedProvider: $selectedProvider,
+                                    onNewChat: chatManager.createNewSession
+                                )
 
-                            ScrollViewReader { proxy in
-                                ScrollView {
-                                    LazyVStack(spacing: 24) {
-                                        let messages = chatManager.getCurrentMessages()
-                                        if messages.isEmpty {
-                                            EmptyStateView(appTheme: appTheme)
-                                        } else {
-                                            ForEach(messages) { message in
-                                                let isLast = message.id == messages.last?.id
-                                                let isLastUserMessage =
-                                                    message.isUser
-                                                    && messages.last(where: { $0.isUser })?.id
-                                                        == message.id
-                                                MessageView(
-                                                    message: message,
-                                                    liveContent: streamBuffer[message.id] ?? nil,
-                                                    liveThinking: streamThinkingBuffer[message.id]
-                                                        ?? nil,
-                                                    onRegenerate: (!message.isUser && !isLoading
-                                                        && isLast)
-                                                        ? { regenerateResponse(for: message.id) }
-                                                        : nil,
-                                                    onEdit: (isLastUserMessage && !isLoading)
-                                                        ? { newContent in
-                                                            editAndResend(
-                                                                message: message,
-                                                                newContent: newContent)
-                                                        }
-                                                        : nil,
-                                                    canEdit: isLastUserMessage && !isLoading,
-                                                    onImageTap: { img, rect in
-                                                        chatPreviewImage = img
-                                                        chatPreviewSourceRect = rect
-                                                        chatPreviewVisible = true
-                                                    }
-                                                )
-                                                .equatable()
+                                ScrollViewReader { proxy in
+                                    ScrollView {
+                                        LazyVStack(spacing: 24) {
+                                            let messages = chatManager.getCurrentMessages()
+                                            if messages.isEmpty {
+                                                EmptyStateView(appTheme: appTheme)
+                                            } else {
+                                                ForEach(messages) { message in
+                                                    let isLast = message.id == messages.last?.id
+                                                    let isLastUserMessage =
+                                                        message.isUser
+                                                        && messages.last(where: { $0.isUser })?.id
+                                                            == message.id
+                                                    MessageView(
+                                                        message: message,
+                                                        liveContent: streamBuffer[message.id]
+                                                            ?? nil,
+                                                        liveThinking: streamThinkingBuffer[
+                                                            message.id]
+                                                            ?? nil,
+                                                        onRegenerate: (!message.isUser
+                                                            && !isLoading
+                                                            && isLast)
+                                                            ? {
+                                                                regenerateResponse(
+                                                                    for: message.id)
+                                                            }
+                                                            : nil,
+                                                        onEdit: (isLastUserMessage && !isLoading)
+                                                            ? { newContent in
+                                                                editAndResend(
+                                                                    message: message,
+                                                                    newContent: newContent)
+                                                            }
+                                                            : nil,
+                                                        canEdit: isLastUserMessage && !isLoading,
+                                                        onImageTap: { img, rect in
+                                                            chatPreviewImage = img
+                                                            chatPreviewSourceRect = rect
+                                                            chatPreviewVisible = true
+                                                        },
+                                                        onSwitchVersion: (!message.isUser
+                                                            && message.versions != nil
+                                                            && (message.versions?.count ?? 0) > 1)
+                                                            ? { versionIndex in
+                                                                chatManager.switchVersion(
+                                                                    messageId: message.id,
+                                                                    to: versionIndex)
+                                                            }
+                                                            : nil
+                                                    )
+                                                    .equatable()
+                                                }
+                                            }
+                                        }
+                                        .padding()
+                                    }
+                                    .safeAreaInset(edge: .bottom) {
+                                        InputView(
+                                            inputText: $inputText,
+                                            selectedAttachments: $selectedAttachments,
+                                            thinkingLevel: $thinkingLevel,
+                                            isLoading: isLoading,
+                                            onSend: sendMessage,
+                                            onStop: stopGeneration,
+                                            onSelectAttachment: selectAttachment,
+                                            thinkingMode: thinkingMode,
+                                            isOllama: selectedProvider.contains("Ollama"),
+                                            isGemini: selectedProvider == "Gemini API",
+                                            webSearchEnabled: $webSearchEnabled,
+                                            hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
+                                            onSlashAction: handleSlashAction
+                                        )
+                                    }
+                                    .onChange(of: chatManager.getCurrentMessages().count) {
+                                        _, count in
+                                        handleScroll(proxy: proxy, newCount: count)
+                                    }
+                                    .onChange(of: chatManager.currentSessionId) { _, _ in
+                                        handleScroll(proxy: proxy)
+                                    }
+                                    .onChange(of: streamBuffer) { _, _ in
+                                        if isLoading,
+                                            let lastId = chatManager.getCurrentMessages().last?.id
+                                        {
+                                            proxy.scrollTo(lastId, anchor: .bottom)
+                                        }
+                                    }
+                                    .onChange(of: isLoading) { _, loading in
+                                        if loading {
+                                            withAnimation {
+                                                proxy.scrollTo("typingIndicator", anchor: .bottom)
                                             }
                                         }
                                     }
-                                    .padding()
-                                }
-                                .safeAreaInset(edge: .bottom) {
-                                    InputView(
-                                        inputText: $inputText,
-                                        selectedAttachments: $selectedAttachments,
-                                        thinkingLevel: $thinkingLevel,
-                                        isLoading: isLoading,
-                                        onSend: sendMessage,
-                                        onStop: stopGeneration,
-                                        onSelectAttachment: selectAttachment,
-                                        thinkingMode: thinkingMode,
-                                        isOllama: selectedProvider.contains("Ollama"),
-                                        isGemini: selectedProvider == "Gemini API",
-                                        webSearchEnabled: $webSearchEnabled,
-                                        hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
-                                        onSlashAction: handleSlashAction
-                                    )
-                                }
-                                .onChange(of: chatManager.getCurrentMessages().count) { _, count in
-                                    handleScroll(proxy: proxy, newCount: count)
-                                }
-                                .onChange(of: chatManager.currentSessionId) { _, _ in
-                                    handleScroll(proxy: proxy)
-                                }
-                                .onChange(of: streamBuffer) { _, _ in
-                                    if isLoading,
-                                        let lastId = chatManager.getCurrentMessages().last?.id
-                                    {
-                                        proxy.scrollTo(lastId, anchor: .bottom)
-                                    }
-                                }
-                                .onChange(of: isLoading) { _, loading in
-                                    if loading {
-                                        withAnimation {
-                                            proxy.scrollTo("typingIndicator", anchor: .bottom)
-                                        }
-                                    }
                                 }
                             }
+                            .opacity(
+                                showCommands || showModelComparison || showQuizMe || showImageGen
+                                    || showImageGallery ? 0 : 1
+                            )
+                            .allowsHitTesting(
+                                !(showCommands || showModelComparison || showQuizMe || showImageGen
+                                    || showImageGallery)
+                            )
+                            .transaction { t in t.animation = nil }
+                        }
+
+                        // Tool overlays — rendered on top when active
+                        if showCommands {
+                            CommandsManagementView()
+                                .transition(.opacity)
+                        }
+                        if showModelComparison {
+                            ModelComparisonView()
+                                .transition(.opacity)
+                        }
+                        if showQuizMe {
+                            QuizMeView()
+                                .transition(.opacity)
+                        }
+                        if showImageGen {
+                            ImageGenerationView()
+                                .transition(.opacity)
+                        }
+                        if showImageGallery {
+                            ImageGalleryView(
+                                chatManager: chatManager, showImageGallery: $showImageGallery
+                            )
+                            .transition(.opacity)
                         }
                     }
 
@@ -1827,11 +1925,57 @@ struct ContentView: View {
     }
 
     func regenerateResponse(for messageId: UUID? = nil) {
+        // Collect versions from existing AI message before removing it
+        var existingVersions: [MessageVersion]? = nil
+
         if let messageId = messageId {
+            let messages = chatManager.getCurrentMessages()
+            if let aiMsg = messages.first(where: { $0.id == messageId }) {
+                let currentVersion = MessageVersion(
+                    content: aiMsg.content,
+                    thinkingContent: aiMsg.thinkingContent,
+                    imageData: aiMsg.imageData,
+                    model: aiMsg.model
+                )
+                if var vers = aiMsg.versions {
+                    if let idx = aiMsg.currentVersionIndex, idx < vers.count - 1 {
+                        vers.removeSubrange((idx + 1)...)
+                    }
+                    if vers.last?.content != currentVersion.content
+                        || vers.last?.imageData != currentVersion.imageData
+                    {
+                        vers.append(currentVersion)
+                    }
+                    existingVersions = vers
+                } else {
+                    existingVersions = [currentVersion]
+                }
+            }
             chatManager.truncateHistory(from: messageId)
         } else {
             let messages = chatManager.getCurrentMessages()
             guard let lastMsg = messages.last, !lastMsg.isUser else { return }
+
+            let currentVersion = MessageVersion(
+                content: lastMsg.content,
+                thinkingContent: lastMsg.thinkingContent,
+                imageData: lastMsg.imageData,
+                model: lastMsg.model
+            )
+            if var vers = lastMsg.versions {
+                if let idx = lastMsg.currentVersionIndex, idx < vers.count - 1 {
+                    vers.removeSubrange((idx + 1)...)
+                }
+                if vers.last?.content != currentVersion.content
+                    || vers.last?.imageData != currentVersion.imageData
+                {
+                    vers.append(currentVersion)
+                }
+                existingVersions = vers
+            } else {
+                existingVersions = [currentVersion]
+            }
+
             chatManager.removeLastMessage()
         }
 
@@ -1857,7 +2001,8 @@ struct ContentView: View {
                 }
             }
             performSend(
-                input: lastUserMsg.content, attachments: attachments)
+                input: lastUserMsg.content, attachments: attachments,
+                existingVersions: existingVersions)
         }
     }
 
@@ -1913,7 +2058,9 @@ struct ContentView: View {
         isLoading = false
     }
 
-    func performSend(input: String, attachments: [Attachment]) {
+    func performSend(
+        input: String, attachments: [Attachment], existingVersions: [MessageVersion]? = nil
+    ) {
         isLoading = true
         let currentHistory = chatManager.getCurrentMessages()
         currentTask?.cancel()
@@ -1988,6 +2135,9 @@ struct ContentView: View {
                                 thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
                                 image: finalImage,
                                 isStreaming: false)
+                            if let versions = existingVersions {
+                                self.chatManager.attachVersions(versions, to: aiMsgId)
+                            }
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
                         }
@@ -2041,6 +2191,9 @@ struct ContentView: View {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: accumulatedContent, isStreaming: false)
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -2097,6 +2250,9 @@ struct ContentView: View {
                             content: fullContent,
                             thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
                             isStreaming: false)
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -2156,6 +2312,9 @@ struct ContentView: View {
                             image: result.1,
                             isStreaming: false
                         )
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -4651,66 +4810,179 @@ struct MarkdownView: View, Equatable {
 struct EmptyStateView: View {
     var appTheme: AppTheme = .default
     @State private var animate = false
+    @State private var orbPhase: CGFloat = 0
+    @State private var shimmer: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         let colors = appTheme.colors
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
 
-        return VStack(spacing: 30) {
-            Spacer()
-
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [startColor.opacity(0.1), endColor.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+        return ZStack {
+            // Floating ambient orbs
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [startColor.opacity(0.15), startColor.opacity(0)],
+                        center: .center, startRadius: 0, endRadius: 120
                     )
-                    .frame(width: 140, height: 140)
-                    .blur(radius: 20)
-                    .scaleEffect(animate ? 1.1 : 1.0)
+                )
+                .frame(width: 240, height: 240)
+                .offset(x: -80, y: -60)
+                .blur(radius: 50)
+                .scaleEffect(animate ? 1.2 : 0.9)
+                .opacity(animate ? 0.8 : 0.4)
 
-                Image(systemName: "sparkles")
-                    .font(.system(size: 50))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [startColor, endColor],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [endColor.opacity(0.12), endColor.opacity(0)],
+                        center: .center, startRadius: 0, endRadius: 100
                     )
-                    .shadow(color: startColor.opacity(0.3), radius: 10, x: 0, y: 5)
-            }
-            .onAppear {
-                withAnimation(.easeInOut(duration: 3).repeatForever(autoreverses: true)) {
-                    animate.toggle()
+                )
+                .frame(width: 200, height: 200)
+                .offset(x: 90, y: 50)
+                .blur(radius: 45)
+                .scaleEffect(animate ? 0.85 : 1.15)
+                .opacity(animate ? 0.5 : 0.8)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [startColor.opacity(0.08), endColor.opacity(0)],
+                        center: .center, startRadius: 0, endRadius: 80
+                    )
+                )
+                .frame(width: 160, height: 160)
+                .offset(x: 40, y: -100)
+                .blur(radius: 35)
+                .scaleEffect(animate ? 1.1 : 0.95)
+
+            VStack(spacing: 28) {
+                Spacer()
+
+                // Icon with layered glass effect
+                ZStack {
+                    // Outer glow ring
+                    Circle()
+                        .stroke(
+                            AngularGradient(
+                                colors: [
+                                    startColor.opacity(0.3), endColor.opacity(0.3),
+                                    startColor.opacity(0.1), endColor.opacity(0.3),
+                                ],
+                                center: .center,
+                                startAngle: .degrees(orbPhase),
+                                endAngle: .degrees(orbPhase + 360)
+                            ),
+                            lineWidth: 1.5
+                        )
+                        .frame(width: 100, height: 100)
+
+                    // Glass circle
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 90, height: 90)
+                        .overlay(
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            colorScheme == .dark
+                                                ? Color.white.opacity(0.12)
+                                                : Color.white.opacity(0.6),
+                                            Color.clear,
+                                            colorScheme == .dark
+                                                ? Color.white.opacity(0.04)
+                                                : Color.white.opacity(0.1),
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(colorScheme == .dark ? 0.2 : 0.5),
+                                            Color.white.opacity(colorScheme == .dark ? 0.05 : 0.15),
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 0.8
+                                )
+                        )
+                        .shadow(color: startColor.opacity(0.15), radius: 20, x: 0, y: 10)
+
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 36, weight: .light))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [startColor, endColor],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .scaleEffect(animate ? 1.05 : 0.95)
                 }
-            }
 
-            VStack(spacing: 8) {
-                Text("Hello")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [startColor, endColor],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                VStack(spacing: 10) {
+                    Text("Hello")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [startColor, endColor],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
 
-                Text("How can I help you today?")
-                    .font(.title3)
-                    .foregroundColor(.secondary)
+                    Text("How can I help you today?")
+                        .font(.system(size: 16, weight: .regular, design: .rounded))
+                        .foregroundColor(.secondary.opacity(0.7))
+                }
+
+                // Suggestion chips
+                HStack(spacing: 10) {
+                    ForEach(["Write", "Analyze", "Create", "Explain"], id: \.self) { suggestion in
+                        Text(suggestion)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(.secondary.opacity(0.6))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                Color.primary.opacity(
+                                                    colorScheme == .dark ? 0.08 : 0.06),
+                                                lineWidth: 0.5
+                                            )
+                                    )
+                            )
+                    }
+                }
+                .padding(.top, 4)
+
+                Spacer()
             }
-
-            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, 60)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
+                animate = true
+            }
+            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                orbPhase = 360
+            }
+        }
     }
 }
 
@@ -4722,6 +4994,7 @@ struct MessageView: View, Equatable {
     var onEdit: ((String) -> Void)?
     var canEdit: Bool = false  // Explicit flag for equality checking
     var onImageTap: ((NSImage, CGRect) -> Void)?
+    var onSwitchVersion: ((Int) -> Void)?
     var maxBubbleWidth: CGFloat = 500
 
     @State private var isCopied = false
@@ -5020,6 +5293,52 @@ struct MessageView: View, Equatable {
                                     .foregroundColor(.secondary)
                             }
                             .buttonStyle(.plain)
+                        }
+
+                        // Version navigator
+                        if let versions = message.versions, versions.count > 1 {
+                            let currentIdx = message.currentVersionIndex ?? (versions.count - 1)
+                            HStack(spacing: 6) {
+                                Button(action: {
+                                    if currentIdx > 0 {
+                                        onSwitchVersion?(currentIdx - 1)
+                                    }
+                                }) {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(
+                                            currentIdx > 0 ? .primary : .secondary.opacity(0.3))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(currentIdx <= 0)
+
+                                Text("\(currentIdx + 1)/\(versions.count)")
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .foregroundColor(.secondary)
+                                    .monospacedDigit()
+
+                                Button(action: {
+                                    if currentIdx < versions.count - 1 {
+                                        onSwitchVersion?(currentIdx + 1)
+                                    }
+                                }) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(
+                                            currentIdx < versions.count - 1
+                                                ? .primary : .secondary.opacity(0.3))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(currentIdx >= versions.count - 1)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                            )
                         }
                     }
                     .padding(.top, 4)
@@ -5464,104 +5783,336 @@ struct WelcomeView: View {
 struct SplashScreen: View {
     var onFinish: () -> Void
     @State private var stage: Int = 0
+    @State private var beamGlow: CGFloat = 0
+    @State private var particlePhase: CGFloat = 0
+    @State private var prismRotation: Double = 0
+    @State private var textOffset: CGFloat = 30
+    @State private var textOpacity: Double = 0
+    @State private var rainbowSpread: Double = 0
+    @State private var backgroundPulse: CGFloat = 0
+    @State private var prismScale: CGFloat = 0.3
+    @State private var prismOpacity: Double = 0
+    @State private var shimmerOffset: CGFloat = -200
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         let mainColor = colorScheme == .dark ? Color.white : Color.black
+        let bgColor = colorScheme == .dark ? Color.black : Color.white
 
         ZStack {
-            (colorScheme == .dark ? Color.black : Color.white)
-                .ignoresSafeArea()
+            bgColor.ignoresSafeArea()
 
-            // Prism Animation Container
+            // Ambient background glow pulses
             ZStack {
-                // 1. Light Beam (enters from left)
-                // We use a fixed frame container to anchor the growth to the leading edge (Source side),
-                // so it appears to travel towards the prism (Trailing side).
-                // Offset places the container: Width 150, Center -95 => Right Edge at -20 (hitting prism).
-                Color.clear
-                    .frame(width: 150, height: 2)
-                    .overlay(
-                        Rectangle()
-                            .fill(mainColor)
-                            .frame(width: stage >= 1 ? 150 : 0)  // Animates 0 -> 150
-                        , alignment: .leading  // Anchored at Source (Left)
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.blue.opacity(0.06), Color.clear],
+                            center: .center, startRadius: 0, endRadius: 250
+                        )
                     )
-                    .offset(x: -95, y: -2)
-                    .rotationEffect(.degrees(15), anchor: .trailing)  // Rotate around the Prism impact point
-                    .opacity(stage >= 1 ? 0.9 : 0)
-                    .blur(radius: 4)
+                    .frame(width: 500, height: 500)
+                    .scaleEffect(backgroundPulse)
+                    .opacity(stage >= 1 ? 0.8 : 0)
 
-                // 2. The Prism (Triangle)
-                Triangle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [mainColor.opacity(0.8), mainColor.opacity(0.2)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.purple.opacity(0.04), Color.clear],
+                            center: .center, startRadius: 0, endRadius: 200
+                        )
                     )
-                    .background(Triangle().fill(mainColor.opacity(0.05)))
-                    .frame(width: 80, height: 80)
-                    .shadow(color: mainColor.opacity(0.3), radius: 10)
-                    .overlay(
-                        // Shine effect on prism
-                        Triangle()
-                            .stroke(mainColor.opacity(stage >= 1 ? 0.8 : 0), lineWidth: 2)
-                            .blur(radius: 2)
-                    )
+                    .frame(width: 400, height: 400)
+                    .offset(x: 60, y: -40)
+                    .scaleEffect(backgroundPulse * 0.9)
+                    .opacity(stage >= 2 ? 0.6 : 0)
 
-                // 3. Refracted Light (Rainbow out to right)
-                // Removed the "if stage >= 2" check so the views exist in the hierarchy.
-                // This ensures the width animation (0 -> 150) plays smoothly when stage changes to 2.
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.orange.opacity(0.03), Color.clear],
+                            center: .center, startRadius: 0, endRadius: 180
+                        )
+                    )
+                    .frame(width: 360, height: 360)
+                    .offset(x: -50, y: 30)
+                    .scaleEffect(backgroundPulse * 0.85)
+                    .opacity(stage >= 2 ? 0.5 : 0)
+            }
+
+            // Main animation container
+            ZStack {
+                // Particle field around prism
+                ForEach(0..<20, id: \.self) { i in
+                    let angle = Double(i) * 18.0
+                    let radius: CGFloat = 80 + CGFloat(i % 5) * 25
+                    let delay = Double(i) * 0.06
+                    Circle()
+                        .fill(splashParticleColor(i))
+                        .frame(width: CGFloat(2 + i % 3), height: CGFloat(2 + i % 3))
+                        .offset(
+                            x: cos(angle * .pi / 180 + particlePhase) * radius,
+                            y: sin(angle * .pi / 180 + particlePhase) * radius
+                        )
+                        .opacity(stage >= 2 ? Double(0.2 + (Double(i % 5) * 0.12)) : 0)
+                        .blur(radius: CGFloat(i % 3))
+                        .animation(
+                            .easeInOut(duration: 2.0 + Double(i % 3) * 0.5)
+                                .repeatForever(autoreverses: true)
+                                .delay(delay),
+                            value: particlePhase
+                        )
+                }
+
+                // 1. Light beam (enters from left with glow)
+                ZStack {
+                    // Core beam
+                    Color.clear
+                        .frame(width: 180, height: 2)
+                        .overlay(
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [mainColor.opacity(0), mainColor.opacity(0.9)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: stage >= 1 ? 180 : 0),
+                            alignment: .leading
+                        )
+
+                    // Beam glow
+                    Color.clear
+                        .frame(width: 180, height: 8)
+                        .overlay(
+                            Rectangle()
+                                .fill(mainColor.opacity(beamGlow * 0.3))
+                                .frame(width: stage >= 1 ? 180 : 0),
+                            alignment: .leading
+                        )
+                        .blur(radius: 6)
+                }
+                .offset(x: -110, y: -2)
+                .rotationEffect(.degrees(15), anchor: .trailing)
+                .opacity(stage >= 1 ? 1 : 0)
+
+                // 2. The Prism with glass effect
+                ZStack {
+                    // Prism glow underneath
+                    Triangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.blue.opacity(0.15),
+                                    Color.purple.opacity(0.1),
+                                    Color.clear,
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 100, height: 100)
+                        .blur(radius: 15)
+                        .opacity(stage >= 1 ? 0.8 : 0)
+
+                    // Main prism body with glass effect
+                    Triangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    mainColor.opacity(0.06),
+                                    mainColor.opacity(0.02),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 90, height: 90)
+
+                    // Prism edge stroke
+                    Triangle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    mainColor.opacity(0.7),
+                                    mainColor.opacity(0.3),
+                                    mainColor.opacity(0.5),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                        .frame(width: 90, height: 90)
+
+                    // Inner shine highlight
+                    Triangle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    mainColor.opacity(stage >= 1 ? 0.6 : 0),
+                                    mainColor.opacity(0),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 2
+                        )
+                        .frame(width: 70, height: 70)
+                        .blur(radius: 1)
+
+                    // Shimmer sweep across prism
+                    Triangle()
+                        .fill(Color.clear)
+                        .frame(width: 90, height: 90)
+                        .overlay(
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.clear,
+                                            mainColor.opacity(0.15),
+                                            Color.clear,
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: 40)
+                                .offset(x: shimmerOffset)
+                                .blur(radius: 3)
+                        )
+                        .clipShape(Triangle())
+                }
+                .scaleEffect(prismScale)
+                .opacity(prismOpacity)
+                .shadow(color: mainColor.opacity(0.15), radius: 20)
+
+                // 3. Refracted rainbow light (dramatic spread)
                 ZStack {
                     ForEach(0..<7) { i in
+                        let spreadAngle = Double(i) * 5.5 - 16.5
+
                         Color.clear
-                            .frame(width: 150, height: 3, alignment: .leading)
+                            .frame(width: 200, height: 3, alignment: .leading)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                rainbowColor(i).opacity(0.9),
+                                                rainbowColor(i).opacity(0.3),
+                                            ],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: stage >= 2 ? 200 : 0),
+                                alignment: .leading
+                            )
+                            .offset(x: 110, y: 0)
+                            .rotationEffect(
+                                .degrees(spreadAngle * rainbowSpread),
+                                anchor: .leading
+                            )
+                            .blur(radius: 4)
+
+                        // Secondary glow layer for each beam
+                        Color.clear
+                            .frame(width: 200, height: 8, alignment: .leading)
                             .overlay(
                                 Rectangle()
-                                    .fill(rainbowColor(i))
-                                    .frame(width: stage >= 2 ? 150 : 0), alignment: .leading
+                                    .fill(rainbowColor(i).opacity(0.15))
+                                    .frame(width: stage >= 2 ? 200 : 0),
+                                alignment: .leading
                             )
-                            .offset(x: 95, y: 0)
+                            .offset(x: 110, y: 0)
                             .rotationEffect(
-                                .degrees(Double(i) * 6.0 - 18.0), anchor: .leading
+                                .degrees(spreadAngle * rainbowSpread),
+                                anchor: .leading
                             )
-                            .opacity(0.8)
-                            .blur(radius: 6)
+                            .blur(radius: 10)
                     }
                 }
 
-                if stage >= 2 {
+                // 4. Text reveal
+                VStack(spacing: 8) {
                     Text("Prism")
-                        .font(.system(size: 40, weight: .light, design: .serif))
-                        .foregroundStyle(mainColor.opacity(0.9))
-                        .offset(y: 100)
-                        .transition(.opacity.animation(.easeIn(duration: 1.0)))
+                        .font(.system(size: 46, weight: .light, design: .serif))
+                        .tracking(6)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: stage >= 3
+                                    ? [.red, .orange, .yellow, .green, .blue, .purple]
+                                    : [mainColor, mainColor],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .opacity(textOpacity)
+                        .offset(y: textOffset)
                 }
+                .offset(y: 110)
             }
-            .scaleEffect(stage == 3 ? 1.05 : 1.0)  // Gentle scale out
-            .opacity(stage == 3 ? 0 : 1)
+            .scaleEffect(stage == 4 ? 1.08 : 1.0)
+            .opacity(stage == 4 ? 0 : 1)
         }
         .onAppear {
-            // Animate beam in
-            withAnimation(.easeOut(duration: 0.8)) {
+            // Stage 0 -> 1: Prism appears + beam enters
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                prismScale = 1.0
+                prismOpacity = 1.0
+            }
+            withAnimation(.easeOut(duration: 1.0).delay(0.3)) {
                 stage = 1
+                beamGlow = 1.0
+            }
+            withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                backgroundPulse = 1.2
             }
 
-            // Animate rainbow out (starts after beam hits prism)
+            // Shimmer sweep
+            withAnimation(.easeInOut(duration: 1.5).delay(0.5)) {
+                shimmerOffset = 200
+            }
+
+            // Stage 2: Rainbow + particles
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                withAnimation(.easeOut(duration: 1.2)) {
+                withAnimation(.easeOut(duration: 1.0)) {
                     stage = 2
+                }
+                withAnimation(.easeOut(duration: 1.2)) {
+                    rainbowSpread = 1.0
+                }
+                withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                    particlePhase = .pi * 2
                 }
             }
 
-            // Fade out
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) {
-                withAnimation(.easeInOut(duration: 1.5)) {
+            // Stage 2.5: Text appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                withAnimation(.spring(response: 0.8, dampingFraction: 0.8)) {
+                    textOffset = 0
+                    textOpacity = 1.0
+                }
+            }
+
+            // Stage 3: Rainbow text
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                withAnimation(.easeInOut(duration: 0.8)) {
                     stage = 3
                 }
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.8) {
+            // Stage 4: Fade out
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) {
+                withAnimation(.easeInOut(duration: 1.0)) {
+                    stage = 4
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.9) {
                 onFinish()
             }
         }
@@ -5569,6 +6120,14 @@ struct SplashScreen: View {
 
     func rainbowColor(_ i: Int) -> Color {
         let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .indigo, .purple]
+        return colors[i % colors.count]
+    }
+
+    func splashParticleColor(_ i: Int) -> Color {
+        let colors: [Color] = [
+            .red.opacity(0.6), .orange.opacity(0.6), .yellow.opacity(0.6),
+            .green.opacity(0.6), .blue.opacity(0.6), .indigo.opacity(0.6), .purple.opacity(0.6),
+        ]
         return colors[i % colors.count]
     }
 }

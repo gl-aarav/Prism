@@ -265,50 +265,120 @@ struct ImageGenerationView: View {
         let startColor = colors.first ?? .orange
         let endColor = colors.last ?? .pink
 
-        return VStack(spacing: 24) {
-            Spacer()
-
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [startColor.opacity(0.1), endColor.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+        return ZStack {
+            // Floating ambient orbs
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [startColor.opacity(0.12), startColor.opacity(0)],
+                        center: .center, startRadius: 0, endRadius: 100
                     )
-                    .frame(width: 120, height: 120)
-                    .blur(radius: 20)
+                )
+                .frame(width: 200, height: 200)
+                .offset(x: -70, y: -50)
+                .blur(radius: 40)
 
-                Image(systemName: "paintbrush.pointed.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [startColor, endColor],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [endColor.opacity(0.1), endColor.opacity(0)],
+                        center: .center, startRadius: 0, endRadius: 90
                     )
-                    .shadow(color: startColor.opacity(0.3), radius: 10, x: 0, y: 5)
+                )
+                .frame(width: 180, height: 180)
+                .offset(x: 80, y: 40)
+                .blur(radius: 35)
+
+            VStack(spacing: 24) {
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 82, height: 82)
+                        .overlay(
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            colorScheme == .dark
+                                                ? Color.white.opacity(0.1)
+                                                : Color.white.opacity(0.5),
+                                            Color.clear,
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(colorScheme == .dark ? 0.15 : 0.4),
+                                            Color.white.opacity(colorScheme == .dark ? 0.03 : 0.1),
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 0.8
+                                )
+                        )
+                        .shadow(color: startColor.opacity(0.12), radius: 16, x: 0, y: 8)
+
+                    Image(systemName: "paintbrush.pointed.fill")
+                        .font(.system(size: 32, weight: .light))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [startColor, endColor],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+
+                VStack(spacing: 8) {
+                    Text("Create Images")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [startColor, endColor],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    Text("Describe what you'd like and pick a style")
+                        .font(.system(size: 15, weight: .regular, design: .rounded))
+                        .foregroundColor(.secondary.opacity(0.7))
+                }
+
+                // Style chips
+                HStack(spacing: 8) {
+                    ForEach(["Animation", "Illustration", "Sketch"], id: \.self) { style in
+                        Text(style)
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(.secondary.opacity(0.6))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(
+                                                Color.primary.opacity(
+                                                    colorScheme == .dark ? 0.08 : 0.06),
+                                                lineWidth: 0.5
+                                            )
+                                    )
+                            )
+                    }
+                }
+                .padding(.top, 2)
+
+                Spacer()
             }
-
-            VStack(spacing: 8) {
-                Text("Create Images")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [startColor, endColor],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                Text("Describe what you'd like and pick a style")
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, 60)
