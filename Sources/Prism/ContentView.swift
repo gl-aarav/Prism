@@ -4680,10 +4680,11 @@ struct MessageView: View, Equatable {
                 Spacer()
                 VStack(alignment: .trailing) {
                     if let image = message.image {
-                        ThumbnailView(image: image, maxWidth: 200, maxHeight: 300,
-                                      messageId: message.id,
-                                      coordinateSpaceName: "detailContainer",
-                                      onImageTap: onImageTap)
+                        ThumbnailView(
+                            image: image, maxWidth: 200, maxHeight: 300,
+                            messageId: message.id,
+                            coordinateSpaceName: "detailContainer",
+                            onImageTap: onImageTap)
                     }
                     if message.pdfData != nil {
                         HStack(spacing: 8) {
@@ -4738,11 +4739,13 @@ struct MessageView: View, Equatable {
                         }
 
                         if let image = message.image {
-                            ThumbnailView(image: image, maxWidth: 300, maxHeight: 300,
-                                          messageId: message.id,
-                                          coordinateSpaceName: "detailContainer",
-                                          onImageTap: onImageTap)
-                                .padding(.bottom, 4)
+                            ThumbnailView(
+                                image: image, maxWidth: 300, maxHeight: 300,
+                                messageId: message.id,
+                                coordinateSpaceName: "detailContainer",
+                                onImageTap: onImageTap
+                            )
+                            .padding(.bottom, 4)
                         }
                         let activeContent = liveContent ?? message.content
 
