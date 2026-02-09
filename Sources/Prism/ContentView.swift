@@ -5445,10 +5445,7 @@ struct SettingsView: View {
             .listRowBackground(Color.clear)
 
             Section(header: Text("Theme")) {
-                HStack(alignment: .top) {
-                    Text("Color")
-                        .padding(.top, 6)
-                    Spacer()
+                LabeledContent("Color") {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(AppTheme.allCases) { theme in
@@ -5498,93 +5495,95 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
 
                 if enableQuickAI {
-                    HStack {
-                        Text("Global Shortcut")
-                        Spacer()
+                    LabeledContent("Global Shortcut") {
                         KeyboardShortcuts.Recorder(for: .toggleQuickAI)
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Quick AI Background Opacity")
-                        Spacer()
-                        Text("\(Int(min(max(quickAIBackgroundOpacity, 0.05), 0.55) * 100))%")
+                LabeledContent("Quick AI Background Opacity") {
+                    VStack(spacing: 8) {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { quickAIBackgroundOpacity },
+                                    set: { quickAIBackgroundOpacity = min(max($0, 0.05), 0.55) }
+                                ),
+                                in: 0.05...0.55
+                            )
+                            Text("\(Int(min(max(quickAIBackgroundOpacity, 0.05), 0.55) * 100))%")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 35, alignment: .trailing)
+                        }
+                        HStack {
+                            Text("Clear").font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Text("Opaque").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                LabeledContent("Quick AI Chat Bar Vibrancy") {
+                    VStack(spacing: 8) {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { quickAICommandBarVibrancy },
+                                    set: { quickAICommandBarVibrancy = min(max($0, 0.05), 0.9) }
+                                ),
+                                in: 0.05...0.9
+                            )
+                            Text(
+                                "\(Int(min(max(quickAICommandBarVibrancy, 0.05), 0.9) * 100))%"
+                            )
                             .foregroundStyle(.secondary)
-                    }
-                    Slider(
-                        value: Binding(
-                            get: { quickAIBackgroundOpacity },
-                            set: { quickAIBackgroundOpacity = min(max($0, 0.05), 0.55) }
-                        ),
-                        in: 0.05...0.55
-                    )
-                    HStack {
-                        Text("Clear").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Text("Opaque").font(.caption).foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+                        }
+                        HStack {
+                            Text("Subtle").font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Text("Punchy").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Background Image") {
                     HStack {
-                        Text("Quick AI Chat Bar Vibrancy")
-                        Spacer()
-                        Text(
-                            "\(Int(min(max(quickAICommandBarVibrancy, 0.05), 0.9) * 100))%"
-                        )
-                        .foregroundStyle(.secondary)
-                    }
-                    Slider(
-                        value: Binding(
-                            get: { quickAICommandBarVibrancy },
-                            set: { quickAICommandBarVibrancy = min(max($0, 0.05), 0.9) }
-                        ),
-                        in: 0.05...0.9
-                    )
-                    HStack {
-                        Text("Subtle").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Text("Punchy").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-
-                HStack {
-                    Text("Background Image")
-                    Spacer()
-                    TextField("Path", text: $backgroundImagePath)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Browse") {
-                        let panel = NSOpenPanel()
-                        panel.allowedContentTypes = [.image]
-                        if panel.runModal() == .OK {
-                            backgroundImagePath = panel.url?.path ?? ""
+                        TextField("Path", text: $backgroundImagePath)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Browse") {
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [.image]
+                            if panel.runModal() == .OK {
+                                backgroundImagePath = panel.url?.path ?? ""
+                            }
                         }
                     }
                 }
             }
 
             Section(header: Text("Image Downloads")) {
-                HStack {
-                    Text("Image save path")
-                    Spacer()
-                    TextField("", text: $imageDownloadPath)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Browse") {
-                        let panel = NSOpenPanel()
-                        panel.canChooseFiles = false
-                        panel.canChooseDirectories = true
-                        panel.allowsMultipleSelection = false
-                        if panel.runModal() == .OK {
-                            imageDownloadPath = panel.url?.path ?? ""
+                LabeledContent("Image save path") {
+                    HStack {
+                         TextField("", text: $imageDownloadPath)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Browse") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+                            if panel.runModal() == .OK {
+                                imageDownloadPath = panel.url?.path ?? ""
+                            }
                         }
-                    }
-                    if !imageDownloadPath.isEmpty {
-                        Button(action: { imageDownloadPath = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
+                        if !imageDownloadPath.isEmpty {
+                            Button(action: { imageDownloadPath = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 Text(
