@@ -5083,9 +5083,11 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                Text("Generated images will be instantly saved to this folder. Leave empty to disable.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text(
+                    "Generated images will be instantly saved to this folder. Leave empty to disable."
+                )
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
 
             Section(header: Text("Gemini API")) {
