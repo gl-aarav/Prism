@@ -5350,20 +5350,22 @@ struct ImageGalleryView: View {
                                 .aspectRatio(contentMode: .fit)
                                 .cornerRadius(8)
                                 .shadow(radius: 2)
+                                .background(
+                                    GeometryReader { imgGeo in
+                                        Color.clear.preference(
+                                            key: ImageFramePreferenceKey.self,
+                                            value: [
+                                                item.1: imgGeo.frame(in: .named("galleryContainer"))
+                                            ]
+                                        )
+                                    }
+                                )
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .aspectRatio(1, contentMode: .fit)
                         .background(Color.white.opacity(0.05))
                         .cornerRadius(16)
-                        .background(
-                            GeometryReader { imgGeo in
-                                Color.clear.preference(
-                                    key: ImageFramePreferenceKey.self,
-                                    value: [item.1: imgGeo.frame(in: .named("galleryContainer"))]
-                                )
-                            }
-                        )
                         .onTapGesture {
                             previewSourceRect = imageFrames[item.1] ?? .zero
                             selectedImageForPreview = item.2
