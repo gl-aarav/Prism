@@ -88,6 +88,7 @@ struct QuickAIView: View {
                                     .foregroundColor(.secondary)
                                 Spacer()
                                 Button(action: {
+                                    activeToolName = ""
                                     chatManager.createNewSession()
                                     withAnimation(collapseAnimation) {
                                         isExpanded = false
@@ -319,6 +320,7 @@ struct QuickAIView: View {
             inputText = ""
             switch command.trigger {
             case "/clear":
+                activeToolName = ""
                 chatManager.deleteCurrentSession()
                 chatManager.createNewSession()
                 withAnimation(collapseAnimation) {
@@ -327,6 +329,7 @@ struct QuickAIView: View {
             case "/quit":
                 NSApplication.shared.terminate(nil)
             case "/new":
+                activeToolName = ""
                 chatManager.createNewSession()
                 withAnimation(collapseAnimation) {
                     isExpanded = false
@@ -1082,6 +1085,7 @@ extension QuickAIView {
 
             // New Chat
             Button(action: {
+                activeToolName = ""
                 chatManager.createNewSession()
                 withAnimation(collapseAnimation) {
                     isExpanded = false
