@@ -70,6 +70,29 @@ struct MarkdownParser {
         .replacingOccurrences(of: "<br/>", with: "\n", options: .caseInsensitive)
         .replacingOccurrences(of: "<br />", with: "\n", options: .caseInsensitive)
 
+        // Handle markdown links [text](url) before other delimiters
+        if let linkMatch = try? NSRegularExpression(pattern: "\\[([^\\]]+)\\]\\((https?://[^)]+)\\)")
+            .firstMatch(in: textWithBreaks, range: NSRange(textWithBreaks.startIndex..., in: textWithBreaks)),
+           linkMatch.numberOfRanges == 3,
+           let fullRange = Range(linkMatch.range(at: 0), in: textWithBreaks),
+           let textRange = Range(linkMatch.range(at: 1), in: textWithBreaks),
+           let urlRange = Range(linkMatch.range(at: 2), in: textWithBreaks)
+        {
+            let prefix = String(textWithBreaks[..<fullRange.lowerBound])
+            let linkText = String(textWithBreaks[textRange])
+            let urlString = String(textWithBreaks[urlRange])
+            let suffix = String(textWithBreaks[fullRange.upperBound...])
+
+            var linkAttr = AttributedString(linkText)
+            if let url = URL(string: urlString) {
+                linkAttr.link = url
+                linkAttr.underlineStyle = .single
+                linkAttr.foregroundColor = .blue
+            }
+
+            return parseInlineMarkdown(prefix) + linkAttr + parseInlineMarkdown(suffix)
+        }
+
         let delimiters = [
             "**", "*", "`", "\\(", "$", "\\textbf{", "\\textit{", "\\underline{", "\\emph{",
             "\\texttt{",
