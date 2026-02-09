@@ -209,19 +209,25 @@ struct CommandsManagementView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    Image(systemName: "command")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: appTheme.colors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                     Text("Slash Commands")
-                        .font(.system(size: 22, weight: .bold))
-                    Text("Type / in the chat to use commands. Add your own shortcuts below.")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
                 }
                 Spacer()
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 24)
-            .padding(.bottom, 16)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
 
             Divider()
                 .padding(.horizontal, 16)
