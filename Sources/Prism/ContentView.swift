@@ -1537,6 +1537,7 @@ struct ContentView: View {
                                         } else {
                                             ForEach(messages) { message in
                                                 let isLast = message.id == messages.last?.id
+                                                let isLastUserMessage = message.isUser && messages.last(where: { $0.isUser })?.id == message.id
                                                 MessageView(
                                                     message: message,
                                                     liveContent: streamBuffer[message.id] ?? nil,
@@ -1546,6 +1547,12 @@ struct ContentView: View {
                                                         && isLast)
                                                         ? { regenerateResponse(for: message.id) }
                                                         : nil,
+                                                    onEdit: (isLastUserMessage && !isLoading)
+                                                        ? { newContent in
+                                                            editAndResend(message: message, newContent: newContent)
+                                                        }
+                                                        : nil,
+                                                    canEdit: isLastUserMessage && !isLoading,
                                                     onImageTap: { img, rect in
                                                         chatPreviewImage = img
                                                         chatPreviewSourceRect = rect
@@ -1863,6 +1870,52 @@ struct ContentView: View {
             performSend(
                 input: lastUserMsg.content, attachments: attachments)
         }
+    }
+
+    func editAndResend(message: Message, newContent: String) {
+        // Since we only allow editing the LAST user message,
+        // we only need to remove the AI response after it (if any)
+        let currentMessages = chatManager.getCurrentMessages()
+        
+        // Check if there's an AI response after this user message
+        if let lastMessage = currentMessages.last, !lastMessage.isUser {
+            chatManager.removeLastMessage() // Remove the AI response
+        }
+        
+        // Remove the user message being edited
+        chatManager.removeLastMessage()
+        
+        // Send the new edited message
+        let userMsg = Message(
+            content: newContent,
+            image: message.image,
+            pdfData: message.pdfData,
+            attachments: message.attachments,
+            isUser: true
+        )
+        chatManager.addMessage(userMsg)
+        
+        // Reconstruct attachments for sending
+        var attachments: [Attachment] = []
+        if let msgAttachments = message.attachments {
+            attachments = msgAttachments.map {
+                let attachType: AttachmentType
+                switch $0.type {
+                case "image": attachType = .image
+                case "text": attachType = .text
+                default: attachType = .pdf
+                }
+                return Attachment(type: attachType, data: $0.data, fileName: $0.fileName)
+            }
+        } else {
+            if let img = message.image, let tiff = img.tiffRepresentation {
+                attachments.append(Attachment(type: .image, data: tiff))
+            }
+            if let pdf = message.pdfData {
+                attachments.append(Attachment(type: .pdf, data: pdf))
+            }
+        }
+        performSend(input: newContent, attachments: attachments)
     }
 
     func stopGeneration() {
@@ -4680,6 +4733,8 @@ struct MessageView: View, Equatable {
     var liveContent: String? = nil
     var liveThinking: String? = nil
     var onRegenerate: (() -> Void)?
+    var onEdit: ((String) -> Void)?
+    var canEdit: Bool = false  // Explicit flag for equality checking
     var onImageTap: ((NSImage, CGRect) -> Void)?
     var maxBubbleWidth: CGFloat = 500
 
@@ -4687,13 +4742,15 @@ struct MessageView: View, Equatable {
     @State private var isSaved = false
     @State private var isCursorVisible = true
     @State private var isThinkingExpanded = false
+    @State private var isEditing = false
+    @State private var editText = ""
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
     @Environment(\.colorScheme) private var colorScheme
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     static func == (lhs: MessageView, rhs: MessageView) -> Bool {
         return lhs.message == rhs.message && lhs.liveContent == rhs.liveContent
-            && lhs.liveThinking == rhs.liveThinking
+            && lhs.liveThinking == rhs.liveThinking && lhs.canEdit == rhs.canEdit
     }
 
     var body: some View {
@@ -4726,12 +4783,148 @@ struct MessageView: View, Equatable {
                         )
                         .padding(.bottom, 4)
                     }
-                    Text(message.content)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                        .padding(12)
-                        .background(Color.blue.opacity(0.2))
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(16)
+                    
+                    if isEditing {
+                        // Inline editing mode - improved UI
+                        VStack(alignment: .trailing, spacing: 12) {
+                            // Edit header
+                            HStack(spacing: 6) {
+                                Image(systemName: "pencil.circle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.blue)
+                                Text("Editing message")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                            
+                            // Text editor with improved styling
+                            TextEditor(text: $editText)
+                                .font(.system(size: 14))
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 80, maxHeight: 250)
+                                .padding(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color.blue.opacity(0.4), lineWidth: 1.5)
+                                )
+                            
+                            // Action buttons
+                            HStack(spacing: 10) {
+                                Button(action: {
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        isEditing = false
+                                        editText = ""
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 11, weight: .semibold))
+                                        Text("Cancel")
+                                            .font(.system(size: 12, weight: .medium))
+                                    }
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(Color.gray.opacity(0.15))
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                
+                                Button(action: {
+                                    if let onEdit = onEdit, !editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        onEdit(editText)
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            isEditing = false
+                                            editText = ""
+                                        }
+                                    }
+                                }) {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "arrow.up.circle.fill")
+                                            .font(.system(size: 12, weight: .semibold))
+                                        Text("Save & Send")
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [Color.blue, Color.blue.opacity(0.8)],
+                                                    startPoint: .top,
+                                                    endPoint: .bottom
+                                                )
+                                            )
+                                    )
+                                    .shadow(color: Color.blue.opacity(0.3), radius: 4, y: 2)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(.ultraThinMaterial)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                        )
+                        .frame(maxWidth: maxBubbleWidth)
+                    } else {
+                        // Normal display mode
+                        Text(message.content)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .padding(12)
+                            .background(Color.blue.opacity(0.2))
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(16)
+
+                        // Action Buttons for user messages
+                        HStack(spacing: 12) {
+                            if canEdit {
+                                Button(action: {
+                                    editText = message.content
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        isEditing = true
+                                    }
+                                }) {
+                                    Label("Edit", systemImage: "pencil")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            Button(action: {
+                                let pasteboard = NSPasteboard.general
+                                pasteboard.clearContents()
+                                pasteboard.setString(message.content, forType: .string)
+                                isCopied = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    isCopied = false
+                                }
+                            }) {
+                                Label(
+                                    isCopied ? "Copied" : "Copy",
+                                    systemImage: isCopied ? "checkmark" : "doc.on.doc"
+                                )
+                                .font(.caption)
+                                .foregroundColor(isCopied ? .green : .secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.top, 4)
+                    }
                 }
                 .frame(maxWidth: maxBubbleWidth, alignment: .trailing)
             } else {

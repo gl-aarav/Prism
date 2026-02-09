@@ -13,6 +13,39 @@ struct ComparisonSlot: Identifiable {
     var elapsedTime: TimeInterval?
 }
 
+// MARK: - Comparison State Manager (singleton to persist across view lifecycle)
+
+class ComparisonStateManager: ObservableObject {
+    static let shared = ComparisonStateManager()
+    
+    @Published var slots: [ComparisonSlot]
+    @Published var synthesizedResponse: String = ""
+    @Published var synthesizedThinking: String = ""
+    @Published var showSynthesizePanel: Bool = false
+    
+    private init() {
+        if let savedData = UserDefaults.standard.array(forKey: "ComparisonSlots") as? [[String: String]],
+           savedData.count >= 2 {
+            slots = savedData.map {
+                ComparisonSlot(
+                    provider: $0["provider"] ?? "Gemini API",
+                    model: $0["model"] ?? "gemini-2.5-flash"
+                )
+            }
+        } else {
+            slots = [
+                ComparisonSlot(provider: "Gemini API", model: "gemini-2.5-flash"),
+                ComparisonSlot(provider: "Ollama", model: "llama3.3"),
+            ]
+        }
+    }
+    
+    func saveSlotConfigurations() {
+        let data = slots.map { ["provider": $0.provider, "model": $0.model] }
+        UserDefaults.standard.set(data, forKey: "ComparisonSlots")
+    }
+}
+
 // MARK: - Model Comparison View
 
 struct ModelComparisonView: View {
@@ -23,8 +56,8 @@ struct ModelComparisonView: View {
 
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
+    @ObservedObject private var state = ComparisonStateManager.shared
 
-    @State private var slots: [ComparisonSlot] = ModelComparisonView.loadSavedSlots()
     @AppStorage("ComparePrompt") private var prompt: String = ""
     @State private var isComparing: Bool = false
     @State private var currentTasks: [UUID: Task<Void, Never>] = [:]
@@ -32,9 +65,6 @@ struct ModelComparisonView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     // Synthesize state
-    @State private var showSynthesizePanel: Bool = false
-    @State private var synthesizedResponse: String = ""
-    @State private var synthesizedThinking: String = ""
     @State private var isSynthesizing: Bool = false
     @State private var synthesizeProvider: String = "Gemini API"
     @State private var synthesizeModel: String = "gemini-2.5-flash"
@@ -54,30 +84,14 @@ struct ModelComparisonView: View {
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
     private let webSearchService = WebSearchService()
-
-    // MARK: - Slot Persistence
-
-    private static func loadSavedSlots() -> [ComparisonSlot] {
-        if let savedData = UserDefaults.standard.array(forKey: "ComparisonSlots")
-            as? [[String: String]],
-            savedData.count >= 2
-        {
-            return savedData.map {
-                ComparisonSlot(
-                    provider: $0["provider"] ?? "Gemini API",
-                    model: $0["model"] ?? "gemini-2.5-flash"
-                )
-            }
-        }
-        return [
-            ComparisonSlot(provider: "Gemini API", model: "gemini-2.5-flash"),
-            ComparisonSlot(provider: "Ollama", model: "llama3.3"),
-        ]
+    
+    // Convenience accessor for slots
+    private var slots: [ComparisonSlot] {
+        get { state.slots }
     }
 
     private func saveSlots() {
-        let data = slots.map { ["provider": $0.provider, "model": $0.model] }
-        UserDefaults.standard.set(data, forKey: "ComparisonSlots")
+        state.saveSlotConfigurations()
     }
 
     // Liquid Glass palette (matching main InputView)
@@ -110,8 +124,8 @@ struct ModelComparisonView: View {
                                 } : nil,
                             onChangeProvider: { provider, model in
                                 if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    slots[idx].provider = provider
-                                    slots[idx].model = model
+                                    state.slots[idx].provider = provider
+                                    state.slots[idx].model = model
                                     saveSlots()
                                 }
                             },
@@ -126,8 +140,8 @@ struct ModelComparisonView: View {
                     if slots.filter({ !$0.response.isEmpty && !$0.isLoading }).count >= 2 {
                         Button(action: {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                                showSynthesizePanel.toggle()
-                                if !showSynthesizePanel {
+                                state.showSynthesizePanel.toggle()
+                                if !state.showSynthesizePanel {
                                     synthesizeTask?.cancel()
                                     synthesizeTask = nil
                                     isSynthesizing = false
@@ -138,7 +152,7 @@ struct ModelComparisonView: View {
                                 Image(systemName: "wand.and.stars")
                                     .font(.system(size: 15, weight: .semibold))
                                 Text(
-                                    showSynthesizePanel
+                                    state.showSynthesizePanel
                                         ? "Hide Synthesis" : "Synthesize All Responses"
                                 )
                                 .font(.system(size: 14, weight: .semibold))
@@ -174,7 +188,7 @@ struct ModelComparisonView: View {
                     }
 
                     // Inline synthesis panel
-                    if showSynthesizePanel {
+                    if state.showSynthesizePanel {
                         synthesizeInlinePanel
                             .transition(
                                 .asymmetric(
@@ -200,8 +214,8 @@ struct ModelComparisonView: View {
             currentTasks.removeAll()
             synthesizeTask?.cancel()
             synthesizeTask = nil
-            for i in slots.indices {
-                slots[i].isLoading = false
+            for i in state.slots.indices {
+                state.slots[i].isLoading = false
             }
             isComparing = false
             isSynthesizing = false
@@ -595,7 +609,7 @@ struct ModelComparisonView: View {
 
                 Spacer()
 
-                if !isSynthesizing && synthesizedResponse.isEmpty {
+                if !isSynthesizing && state.synthesizedResponse.isEmpty {
                     Button(action: startSynthesis) {
                         HStack(spacing: 5) {
                             Image(systemName: "sparkles")
@@ -643,8 +657,8 @@ struct ModelComparisonView: View {
                     // Has response - show copy/retry
                     HStack(spacing: 8) {
                         Button(action: {
-                            synthesizedResponse = ""
-                            synthesizedThinking = ""
+                            state.synthesizedResponse = ""
+                            state.synthesizedThinking = ""
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.counterclockwise")
@@ -660,7 +674,7 @@ struct ModelComparisonView: View {
                         .buttonStyle(.plain)
                         Button(action: {
                             NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(synthesizedResponse, forType: .string)
+                            NSPasteboard.general.setString(state.synthesizedResponse, forType: .string)
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "doc.on.doc")
@@ -741,7 +755,7 @@ struct ModelComparisonView: View {
             }
 
             // Response content
-            if synthesizedResponse.isEmpty && !isSynthesizing {
+            if state.synthesizedResponse.isEmpty && !isSynthesizing {
                 HStack {
                     Spacer()
                     VStack(spacing: 8) {
@@ -760,9 +774,9 @@ struct ModelComparisonView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
-                        if !synthesizedThinking.isEmpty {
+                        if !state.synthesizedThinking.isEmpty {
                             DisclosureGroup {
-                                Text(synthesizedThinking)
+                                Text(state.synthesizedThinking)
                                     .font(.system(size: 12, design: .monospaced))
                                     .foregroundColor(.secondary)
                                     .textSelection(.enabled)
@@ -779,16 +793,16 @@ struct ModelComparisonView: View {
                             .padding(.bottom, 4)
                         }
 
-                        MarkdownView(blocks: Message.parseMarkdown(synthesizedResponse))
+                        MarkdownView(blocks: Message.parseMarkdown(state.synthesizedResponse))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
                 }
                 .frame(maxHeight: 350)
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: synthesizedResponse)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: state.synthesizedResponse)
 
-                if !synthesizedResponse.isEmpty && !isSynthesizing {
+                if !state.synthesizedResponse.isEmpty && !isSynthesizing {
                     HStack {
                         Text("Synthesized by \(synthesizeProvider) — \(synthesizeModel)")
                             .font(.system(size: 10))
@@ -882,8 +896,8 @@ struct ModelComparisonView: View {
         let completedSlots = slots.filter { !$0.response.isEmpty && !$0.isLoading }
         guard completedSlots.count >= 2 else { return }
 
-        synthesizedResponse = ""
-        synthesizedThinking = ""
+        state.synthesizedResponse = ""
+        state.synthesizedThinking = ""
         isSynthesizing = true
 
         // Build the synthesis prompt
@@ -924,7 +938,7 @@ struct ModelComparisonView: View {
                 case "Gemini API":
                     guard !geminiKey.isEmpty else {
                         await MainActor.run {
-                            synthesizedResponse = "Error: No Gemini API key set."
+                            state.synthesizedResponse = "Error: No Gemini API key set."
                             isSynthesizing = false
                         }
                         return
@@ -937,7 +951,7 @@ struct ModelComparisonView: View {
                     ) {
                         full += chunk
                         let content = full
-                        await MainActor.run { synthesizedResponse = content }
+                        await MainActor.run { state.synthesizedResponse = content }
                     }
 
                 case "Ollama":
@@ -957,9 +971,9 @@ struct ModelComparisonView: View {
                             let content = full
                             let thinking = fullThinking
                             await MainActor.run {
-                                synthesizedResponse = content
+                                state.synthesizedResponse = content
                                 if !thinking.isEmpty {
-                                    synthesizedThinking = thinking
+                                    state.synthesizedThinking = thinking
                                 }
                             }
                             lastUpdateTime = Date()
@@ -969,9 +983,9 @@ struct ModelComparisonView: View {
                     let finalSynthContent = full
                     let finalSynthThinking = fullThinking
                     await MainActor.run {
-                        synthesizedResponse = finalSynthContent
+                        state.synthesizedResponse = finalSynthContent
                         if !finalSynthThinking.isEmpty {
-                            synthesizedThinking = finalSynthThinking
+                            state.synthesizedThinking = finalSynthThinking
                         }
                     }
 
@@ -982,19 +996,19 @@ struct ModelComparisonView: View {
                     ) {
                         full += chunk
                         let content = full
-                        await MainActor.run { synthesizedResponse = content }
+                        await MainActor.run { state.synthesizedResponse = content }
                     }
 
                 default:
                     await MainActor.run {
-                        synthesizedResponse = "Error: Provider not supported."
+                        state.synthesizedResponse = "Error: Provider not supported."
                     }
                 }
             } catch {
                 if !Task.isCancelled {
                     await MainActor.run {
-                        if synthesizedResponse.isEmpty {
-                            synthesizedResponse = "Error: \(error.localizedDescription)"
+                        if state.synthesizedResponse.isEmpty {
+                            state.synthesizedResponse = "Error: \(error.localizedDescription)"
                         }
                     }
                 }
@@ -1018,18 +1032,18 @@ struct ModelComparisonView: View {
         ]
         let newDefault = defaults[slots.count % defaults.count]
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-            slots.append(ComparisonSlot(provider: newDefault.0, model: newDefault.1))
+            state.slots.append(ComparisonSlot(provider: newDefault.0, model: newDefault.1))
         }
         saveSlots()
     }
 
     private func removeSlot(at index: Int) {
         guard slots.count > 2, index < slots.count else { return }
-        let slotId = slots[index].id
+        let slotId = state.slots[index].id
         currentTasks[slotId]?.cancel()
         currentTasks.removeValue(forKey: slotId)
         let _ = withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            slots.remove(at: index)
+            state.slots.remove(at: index)
         }
         saveSlots()
     }
@@ -1040,12 +1054,12 @@ struct ModelComparisonView: View {
         }
         currentTasks.removeAll()
         withAnimation {
-            for i in slots.indices {
-                slots[i].response = ""
-                slots[i].error = nil
-                slots[i].isLoading = false
-                slots[i].thinkingContent = nil
-                slots[i].elapsedTime = nil
+            for i in state.slots.indices {
+                state.slots[i].response = ""
+                state.slots[i].error = nil
+                state.slots[i].isLoading = false
+                state.slots[i].thinkingContent = nil
+                state.slots[i].elapsedTime = nil
             }
         }
         isComparing = false
@@ -1056,8 +1070,8 @@ struct ModelComparisonView: View {
             task.cancel()
         }
         currentTasks.removeAll()
-        for i in slots.indices {
-            slots[i].isLoading = false
+        for i in state.slots.indices {
+            state.slots[i].isLoading = false
         }
         isComparing = false
     }
@@ -1068,12 +1082,12 @@ struct ModelComparisonView: View {
 
         isComparing = true
         // Reset all slots
-        for i in slots.indices {
-            slots[i].response = ""
-            slots[i].error = nil
-            slots[i].isLoading = true
-            slots[i].thinkingContent = nil
-            slots[i].elapsedTime = nil
+        for i in state.slots.indices {
+            state.slots[i].response = ""
+            state.slots[i].error = nil
+            state.slots[i].isLoading = true
+            state.slots[i].thinkingContent = nil
+            state.slots[i].elapsedTime = nil
         }
 
         // Build a minimal history with just the user message
@@ -1081,10 +1095,10 @@ struct ModelComparisonView: View {
         let history = [userMsg]
 
         // Launch parallel tasks for each slot
-        for i in slots.indices {
-            let slotId = slots[i].id
-            let provider = slots[i].provider
-            let model = slots[i].model
+        for i in state.slots.indices {
+            let slotId = state.slots[i].id
+            let provider = state.slots[i].provider
+            let model = state.slots[i].model
 
             let task = Task {
                 let startTime = Date()
@@ -1094,8 +1108,8 @@ struct ModelComparisonView: View {
                         guard !geminiKey.isEmpty else {
                             await MainActor.run {
                                 if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    slots[idx].error = "No Gemini API key set"
-                                    slots[idx].isLoading = false
+                                    state.slots[idx].error = "No Gemini API key set"
+                                    state.slots[idx].isLoading = false
                                 }
                             }
                             return
@@ -1111,15 +1125,15 @@ struct ModelComparisonView: View {
                             let content = fullContent
                             await MainActor.run {
                                 if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    slots[idx].response = content
+                                    state.slots[idx].response = content
                                 }
                             }
                         }
                         let elapsed = Date().timeIntervalSince(startTime)
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                slots[idx].isLoading = false
-                                slots[idx].elapsedTime = elapsed
+                                state.slots[idx].isLoading = false
+                                state.slots[idx].elapsedTime = elapsed
                             }
                         }
 
@@ -1159,9 +1173,9 @@ struct ModelComparisonView: View {
                                 let thinking = fullThinking
                                 await MainActor.run {
                                     if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                        slots[idx].response = content
+                                        state.slots[idx].response = content
                                         if !thinking.isEmpty {
-                                            slots[idx].thinkingContent = thinking
+                                            state.slots[idx].thinkingContent = thinking
                                         }
                                     }
                                 }
@@ -1174,12 +1188,12 @@ struct ModelComparisonView: View {
                         let elapsed = Date().timeIntervalSince(startTime)
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                slots[idx].response = finalContent
+                                state.slots[idx].response = finalContent
                                 if !finalThinking.isEmpty {
-                                    slots[idx].thinkingContent = finalThinking
+                                    state.slots[idx].thinkingContent = finalThinking
                                 }
-                                slots[idx].isLoading = false
-                                slots[idx].elapsedTime = elapsed
+                                state.slots[idx].isLoading = false
+                                state.slots[idx].elapsedTime = elapsed
                             }
                         }
 
@@ -1192,24 +1206,24 @@ struct ModelComparisonView: View {
                             let content = fullContent
                             await MainActor.run {
                                 if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    slots[idx].response = content
+                                    state.slots[idx].response = content
                                 }
                             }
                         }
                         let elapsed = Date().timeIntervalSince(startTime)
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                slots[idx].isLoading = false
-                                slots[idx].elapsedTime = elapsed
+                                state.slots[idx].isLoading = false
+                                state.slots[idx].elapsedTime = elapsed
                             }
                         }
 
                     default:
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                slots[idx].error =
+                                state.slots[idx].error =
                                     "Provider '\(provider)' not supported for comparison"
-                                slots[idx].isLoading = false
+                                state.slots[idx].isLoading = false
                             }
                         }
                     }
@@ -1218,9 +1232,9 @@ struct ModelComparisonView: View {
                         let elapsed = Date().timeIntervalSince(startTime)
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                slots[idx].error = error.localizedDescription
-                                slots[idx].isLoading = false
-                                slots[idx].elapsedTime = elapsed
+                                state.slots[idx].error = error.localizedDescription
+                                state.slots[idx].isLoading = false
+                                state.slots[idx].elapsedTime = elapsed
                             }
                         }
                     }
@@ -1511,7 +1525,7 @@ struct ComparisonCard: View {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 9))
                             .foregroundColor(.orange.opacity(0.7))
-                        Text("Results may be less accurate with small models")
+                        Text("Information could be inaccurate")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary.opacity(0.6))
                     }
