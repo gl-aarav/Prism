@@ -167,8 +167,6 @@ struct ImageGenerationView: View {
                     inputBar
                 }
             }
-            .blur(radius: previewVisible ? 20 : 0)
-            .animation(.spring(response: 0.45, dampingFraction: 0.88), value: previewVisible)
             .allowsHitTesting(!previewVisible)
 
             // Full-screen image preview overlay
@@ -672,10 +670,8 @@ struct ImagePreviewOverlay: View {
             let currentRect = expanded ? targetRect : sourceRect
 
             ZStack {
-                // Backdrop blur + dim
-                Color.black.opacity(expanded ? 0.35 : 0)
-                    .background(expanded ? .ultraThinMaterial : .bar)
-                    .opacity(expanded ? 1 : 0)
+                // Backdrop dim
+                Color.black.opacity(expanded ? 0.5 : 0)
                     .ignoresSafeArea()
                     .onTapGesture { dismiss() }
 
@@ -690,8 +686,7 @@ struct ImagePreviewOverlay: View {
                                 .frame(width: 28, height: 28)
                                 .background(
                                     Circle()
-                                        .fill(.ultraThinMaterial)
-                                        .overlay(Circle().fill(Color.white.opacity(0.15)))
+                                        .fill(Color.white.opacity(0.2))
                                 )
                         }
                         .buttonStyle(.plain)

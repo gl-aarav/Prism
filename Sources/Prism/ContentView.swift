@@ -5401,8 +5401,6 @@ struct ImageGalleryView: View {
                 .frame(maxWidth: .infinity)
             }
             .navigationTitle("Images")
-            .blur(radius: previewVisible ? 20 : 0)
-            .animation(.spring(response: 0.45, dampingFraction: 0.88), value: previewVisible)
             .allowsHitTesting(!previewVisible)
 
             if previewVisible, let image = selectedImageForPreview {
