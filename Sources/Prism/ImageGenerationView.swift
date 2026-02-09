@@ -680,7 +680,6 @@ struct ImageGenerationView: View {
                     store.updateItem(id: itemId, responseText: text, image: result.1, error: nil)
                     if let img = result.1 {
                         imageCache[itemId] = img
-                        saveImageToConfiguredPath(img, prompt: promptText)
                     }
                     loadingItemId = nil
                     isGenerating = false

@@ -1669,22 +1669,6 @@ struct ContentView: View {
         return ["Gemini Web", "ChatGPT Web", "Perplexity Web", "Grok Web"].contains(provider)
     }
 
-    private func autoSaveImage(_ image: NSImage, prompt: String) {
-        guard !imageDownloadPath.isEmpty else { return }
-        let dir = URL(fileURLWithPath: imageDownloadPath, isDirectory: true)
-        guard FileManager.default.fileExists(atPath: dir.path) else { return }
-        let sanitized = prompt.prefix(40).replacingOccurrences(
-            of: "[^a-zA-Z0-9 ]", with: "", options: .regularExpression)
-        let filename = "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).png"
-        let fileURL = dir.appendingPathComponent(filename)
-        if let tiff = image.tiffRepresentation,
-            let rep = NSBitmapImageRep(data: tiff),
-            let png = rep.representation(using: .png, properties: [:])
-        {
-            try? png.write(to: fileURL)
-        }
-    }
-
     private func updateActiveToolName() {
         if showModelComparison {
             activeToolName = "Compare"
@@ -1998,9 +1982,6 @@ struct ContentView: View {
                             }
                         }
                         let finalImage = receivedImage
-                        if let img = finalImage {
-                            self.autoSaveImage(img, prompt: input)
-                        }
                         DispatchQueue.main.async {
                             self.chatManager.updateMessage(
                                 id: aiMsgId, content: fullContent,
