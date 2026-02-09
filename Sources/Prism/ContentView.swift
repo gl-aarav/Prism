@@ -5566,9 +5566,9 @@ struct SettingsView: View {
 
             Section(header: Text("Image Downloads")) {
                 HStack {
-                    Text("Auto-save path")
+                    Text("Image save path")
                     Spacer()
-                    TextField("Disabled", text: $imageDownloadPath)
+                    TextField("", text: $imageDownloadPath)
                         .textFieldStyle(.roundedBorder)
                     Button("Browse") {
                         let panel = NSOpenPanel()
