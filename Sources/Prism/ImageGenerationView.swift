@@ -480,7 +480,8 @@ struct ImageGenerationView: View {
                                 Button(action: { selectedStyle = item.value }) {
                                     if selectedStyle == item.value {
                                         Label(item.label, systemImage: "checkmark")
-                                            .foregroundColor(colorScheme == .dark ? .white : .primary)
+                                            .foregroundColor(
+                                                colorScheme == .dark ? .white : .primary)
                                     } else {
                                         Text(item.label)
                                     }

@@ -1386,7 +1386,9 @@ extension QuickAIView {
                     if inputText.isEmpty {
                         Text("Request... (type / for commands)")
                             .font(.system(size: 16))
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4))
+                            .foregroundColor(
+                                colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)
+                            )
                             .allowsHitTesting(false)
                     }
                     TextField("", text: $inputText, axis: .vertical)
