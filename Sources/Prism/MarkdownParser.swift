@@ -71,12 +71,15 @@ struct MarkdownParser {
         .replacingOccurrences(of: "<br />", with: "\n", options: .caseInsensitive)
 
         // Handle markdown links [text](url) before other delimiters
-        if let linkMatch = try? NSRegularExpression(pattern: "\\[([^\\]]+)\\]\\((https?://[^)]+)\\)")
-            .firstMatch(in: textWithBreaks, range: NSRange(textWithBreaks.startIndex..., in: textWithBreaks)),
-           linkMatch.numberOfRanges == 3,
-           let fullRange = Range(linkMatch.range(at: 0), in: textWithBreaks),
-           let textRange = Range(linkMatch.range(at: 1), in: textWithBreaks),
-           let urlRange = Range(linkMatch.range(at: 2), in: textWithBreaks)
+        if let linkMatch = try? NSRegularExpression(
+            pattern: "\\[([^\\]]+)\\]\\((https?://[^)]+)\\)"
+        )
+        .firstMatch(
+            in: textWithBreaks, range: NSRange(textWithBreaks.startIndex..., in: textWithBreaks)),
+            linkMatch.numberOfRanges == 3,
+            let fullRange = Range(linkMatch.range(at: 0), in: textWithBreaks),
+            let textRange = Range(linkMatch.range(at: 1), in: textWithBreaks),
+            let urlRange = Range(linkMatch.range(at: 2), in: textWithBreaks)
         {
             let prefix = String(textWithBreaks[..<fullRange.lowerBound])
             let linkText = String(textWithBreaks[textRange])
@@ -301,13 +304,13 @@ struct MarkdownParser {
         content = content.replacingOccurrences(of: "\\", with: "")
         content = content.replacingOccurrences(of: "{", with: "")
         content = content.replacingOccurrences(of: "}", with: "")
-        
+
         // Collapse multiple spaces
         while content.contains("  ") {
             content = content.replacingOccurrences(of: "  ", with: " ")
         }
         content = content.trimmingCharacters(in: .whitespaces)
-        
+
         // Fallback: if conversion resulted in empty/whitespace, return original latex
         if content.isEmpty {
             return latex
@@ -390,7 +393,7 @@ struct MarkdownParser {
 
         return newText
     }
-    
+
     private func replaceTextCommand(_ text: String) -> String {
         var newText = text
         let pattern =
@@ -571,6 +574,5 @@ struct MarkdownParser {
 
         return content
     }
-    
 
 }
