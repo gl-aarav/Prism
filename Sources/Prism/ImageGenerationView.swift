@@ -816,7 +816,7 @@ struct ImagePreviewOverlay: View {
                 // Image
                 Image(nsImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .aspectRatio(contentMode: .fit)
                     .frame(width: currentRect.width, height: currentRect.height)
                     .clipShape(
                         RoundedRectangle(cornerRadius: expanded ? 10 : 12, style: .continuous)
