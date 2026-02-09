@@ -1721,6 +1721,9 @@ struct ThinkingIndicator: View {
                     .frame(width: 16, height: 16)
                     .opacity(isAnimating ? 0.3 : 1.0)
                     .scaleEffect(isAnimating ? 1.2 : 0.8)
+                    .animation(
+                        .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
+                        value: isAnimating)
 
                 Circle()
                     .fill(
@@ -1730,11 +1733,12 @@ struct ThinkingIndicator: View {
                     )
                     .frame(width: 8, height: 8)
                     .scaleEffect(isAnimating ? 0.8 : 1.2)
+                    .animation(
+                        .easeInOut(duration: 1.0).repeatForever(autoreverses: true),
+                        value: isAnimating)
             }
             .onAppear {
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                    isAnimating = true
-                }
+                isAnimating = true
             }
 
             Text("Thinking...")
