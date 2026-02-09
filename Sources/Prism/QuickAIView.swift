@@ -942,7 +942,6 @@ struct GeneratingImagePlaceholder: View {
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @Environment(\.colorScheme) var colorScheme
 
-    @State private var phase: CGFloat = 0
     @State private var orbPhase1: CGFloat = 0
     @State private var orbPhase2: CGFloat = 0
     @State private var orbPhase3: CGFloat = 0
@@ -1108,22 +1107,23 @@ struct GeneratingImagePlaceholder: View {
                     )
 
                 // Animated dots
-                HStack(spacing: 4) {
-                    ForEach(0..<3, id: \.self) { i in
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [startColor, endColor],
-                                    startPoint: .top,
-                                    endPoint: .bottom
+                TimelineView(.animation) { timeline in
+                    let now = timeline.date.timeIntervalSinceReferenceDate
+                    HStack(spacing: 5) {
+                        ForEach(0..<3, id: \.self) { i in
+                            let t = sin((now * 2.5) + Double(i) * 0.8)
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [startColor, endColor],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
                                 )
-                            )
-                            .frame(width: 5, height: 5)
-                            .scaleEffect(dotScale(index: i))
-                            .opacity(dotOpacity(index: i))
-                            .animation(
-                                .linear(duration: 1.5).repeatForever(autoreverses: false),
-                                value: phase)
+                                .frame(width: 5, height: 5)
+                                .scaleEffect(0.7 + 0.6 * t)
+                                .opacity(0.4 + 0.6 * ((t + 1) / 2))
+                        }
                     }
                 }
             }
@@ -1159,20 +1159,7 @@ struct GeneratingImagePlaceholder: View {
             pulseScale = 1.04
             shimmerPhase = 1
             rotationAngle = 360
-            phase = 1
         }
-    }
-
-    private func dotScale(index: Int) -> CGFloat {
-        let offset = CGFloat(index) * 0.33
-        let t = (phase + offset).truncatingRemainder(dividingBy: 1.0)
-        return 0.6 + 0.5 * sin(t * .pi)
-    }
-
-    private func dotOpacity(index: Int) -> Double {
-        let offset = CGFloat(index) * 0.33
-        let t = (phase + offset).truncatingRemainder(dividingBy: 1.0)
-        return 0.4 + 0.6 * sin(t * .pi)
     }
 }
 
