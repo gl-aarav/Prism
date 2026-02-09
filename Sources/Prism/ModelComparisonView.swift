@@ -1080,6 +1080,9 @@ struct ModelComparisonView: View {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        // Clear the input field
+        prompt = ""
+        
         isComparing = true
         // Reset all slots
         for i in state.slots.indices {
