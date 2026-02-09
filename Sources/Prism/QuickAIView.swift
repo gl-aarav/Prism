@@ -1325,10 +1325,6 @@ extension QuickAIView {
                         )
                         .equatable()
                     }
-                    if isLoading {
-                        ThinkingIndicator()
-                            .id("loading")
-                    }
                 }
                 .padding(20)
             }

@@ -127,6 +127,7 @@ struct ImageGenerationView: View {
     @State private var previewSourceRect: CGRect = .zero
     @State private var imageFrames: [UUID: CGRect] = [:]
     @State private var downloadedItemIds: Set<UUID> = []
+    @State private var copiedItemIds: Set<UUID> = []
     @FocusState private var isInputFocused: Bool
 
     private let shortcutService = ShortcutService()
@@ -459,29 +460,55 @@ struct ImageGenerationView: View {
                                                 }
                                             }
 
-                                        // Download button below image
-                                        if !imageDownloadPath.isEmpty {
+                                        // Copy & Download buttons below image
+                                        HStack(spacing: 12) {
                                             Button(action: {
-                                                saveImageToConfiguredPath(img, prompt: item.prompt)
-                                                downloadedItemIds.insert(item.id)
+                                                let pb = NSPasteboard.general
+                                                pb.clearContents()
+                                                pb.writeObjects([img])
+                                                copiedItemIds.insert(item.id)
                                                 DispatchQueue.main.asyncAfter(deadline: .now() + 2)
                                                 {
-                                                    downloadedItemIds.remove(item.id)
+                                                    copiedItemIds.remove(item.id)
                                                 }
                                             }) {
-                                                let isDownloaded = downloadedItemIds.contains(
-                                                    item.id)
+                                                let isCopied = copiedItemIds.contains(item.id)
                                                 Label(
-                                                    isDownloaded ? "Downloaded" : "Download",
-                                                    systemImage: isDownloaded
-                                                        ? "checkmark" : "arrow.down.circle"
+                                                    isCopied ? "Copied" : "Copy",
+                                                    systemImage: isCopied
+                                                        ? "checkmark" : "doc.on.doc"
                                                 )
                                                 .font(.system(size: 12))
-                                                .foregroundColor(isDownloaded ? .green : .secondary)
+                                                .foregroundColor(isCopied ? .green : .secondary)
                                             }
                                             .buttonStyle(.plain)
-                                            .padding(.top, 4)
+
+                                            if !imageDownloadPath.isEmpty {
+                                                Button(action: {
+                                                    saveImageToConfiguredPath(
+                                                        img, prompt: item.prompt)
+                                                    downloadedItemIds.insert(item.id)
+                                                    DispatchQueue.main.asyncAfter(
+                                                        deadline: .now() + 2
+                                                    ) {
+                                                        downloadedItemIds.remove(item.id)
+                                                    }
+                                                }) {
+                                                    let isDownloaded = downloadedItemIds.contains(
+                                                        item.id)
+                                                    Label(
+                                                        isDownloaded ? "Downloaded" : "Download",
+                                                        systemImage: isDownloaded
+                                                            ? "checkmark" : "arrow.down.circle"
+                                                    )
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(
+                                                        isDownloaded ? .green : .secondary)
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
                                         }
+                                        .padding(.top, 4)
 
                                         if let text = item.responseText, !text.isEmpty {
                                             Text(text)
