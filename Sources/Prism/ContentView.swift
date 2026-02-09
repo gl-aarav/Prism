@@ -3831,6 +3831,9 @@ struct ThumbnailView: View {
     let image: NSImage
     let maxWidth: CGFloat
     let maxHeight: CGFloat
+    var messageId: UUID? = nil
+    var coordinateSpaceName: String? = nil
+    var onImageTap: ((NSImage, CGRect) -> Void)? = nil
 
     @State private var thumbnail: NSImage?
 
@@ -3842,6 +3845,30 @@ struct ThumbnailView: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: maxWidth, maxHeight: maxHeight)
                     .cornerRadius(12)
+                    .background(
+                        GeometryReader { g in
+                            Color.clear.preference(
+                                key: ImageFramePreferenceKey.self,
+                                value: messageId != nil && coordinateSpaceName != nil
+                                    ? [messageId!: g.frame(in: .named(coordinateSpaceName!))]
+                                    : [:]
+                            )
+                        }
+                    )
+                    .onTapGesture {
+                        // no-op here; tap handled by overlay if onImageTap not set via ThumbnailView
+                    }
+                    .overlay(
+                        GeometryReader { g in
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    if let coordSpace = coordinateSpaceName {
+                                        onImageTap?(image, g.frame(in: .named(coordSpace)))
+                                    }
+                                }
+                        }
+                    )
             } else {
                 Rectangle()
                     .fill(Color.gray.opacity(0.2))
@@ -4653,26 +4680,10 @@ struct MessageView: View, Equatable {
                 Spacer()
                 VStack(alignment: .trailing) {
                     if let image = message.image {
-                        ThumbnailView(image: image, maxWidth: 200, maxHeight: 300)
-                            .background(
-                                GeometryReader { g in
-                                    Color.clear.preference(
-                                        key: ImageFramePreferenceKey.self,
-                                        value: [message.id: g.frame(in: .named("detailContainer"))]
-                                    )
-                                }
-                            )
-                            .onPreferenceChange(ImageFramePreferenceKey.self) { _ in }
-                            .overlay(
-                                GeometryReader { g in
-                                    Color.clear
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            onImageTap?(
-                                                image, g.frame(in: .named("detailContainer")))
-                                        }
-                                }
-                            )
+                        ThumbnailView(image: image, maxWidth: 200, maxHeight: 300,
+                                      messageId: message.id,
+                                      coordinateSpaceName: "detailContainer",
+                                      onImageTap: onImageTap)
                     }
                     if message.pdfData != nil {
                         HStack(spacing: 8) {
@@ -4727,28 +4738,11 @@ struct MessageView: View, Equatable {
                         }
 
                         if let image = message.image {
-                            ThumbnailView(image: image, maxWidth: 300, maxHeight: 300)
+                            ThumbnailView(image: image, maxWidth: 300, maxHeight: 300,
+                                          messageId: message.id,
+                                          coordinateSpaceName: "detailContainer",
+                                          onImageTap: onImageTap)
                                 .padding(.bottom, 4)
-                                .background(
-                                    GeometryReader { g in
-                                        Color.clear.preference(
-                                            key: ImageFramePreferenceKey.self,
-                                            value: [
-                                                message.id: g.frame(in: .named("detailContainer"))
-                                            ]
-                                        )
-                                    }
-                                )
-                                .overlay(
-                                    GeometryReader { g in
-                                        Color.clear
-                                            .contentShape(Rectangle())
-                                            .onTapGesture {
-                                                onImageTap?(
-                                                    image, g.frame(in: .named("detailContainer")))
-                                            }
-                                    }
-                                )
                         }
                         let activeContent = liveContent ?? message.content
 
