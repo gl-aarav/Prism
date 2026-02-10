@@ -3047,170 +3047,91 @@ struct SidebarRow: View {
     var onPin: () -> Void
 
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
-    @State private var offset: CGFloat = 0
-    @State private var isHoveringTrash: Bool = false
     @FocusState private var isFocused: Bool
 
-    private var deleteRevealProgress: CGFloat {
-        min(1, abs(offset) / 60)
-    }
-
     var body: some View {
-        ZStack(alignment: .trailing) {
-            // Delete Action Background — polished reveal
-            if offset < 0 {
-                HStack(spacing: 0) {
-                    Spacer()
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            offset = 0
-                        }
-                        onDelete()
-                    }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: isHoveringTrash ? "trash.circle.fill" : "trash.fill")
-                                .font(.system(size: isHoveringTrash ? 22 : 17, weight: .medium))
-                                .foregroundColor(.white)
-                                .scaleEffect(isHoveringTrash ? 1.15 : 1.0)
-                                .animation(.spring(response: 0.25), value: isHoveringTrash)
-                            if deleteRevealProgress > 0.8 {
-                                Text("Delete")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.85))
-                                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                            }
-                        }
-                        .frame(width: 60)
-                        .frame(maxHeight: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.red.opacity(0.85), Color.red],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        isHoveringTrash = hovering
-                    }
-                    .opacity(Double(deleteRevealProgress))
-                    .scaleEffect(x: deleteRevealProgress, y: 1, anchor: .trailing)
-                }
-            }
-
-            // Content
-            HStack(spacing: 12) {
-                // Indicator
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: appTheme.colors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+        // Content
+        HStack(spacing: 12) {
+            // Indicator
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: appTheme.colors,
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-                    .frame(width: 8, height: 8)
-                    .opacity(isSelected ? 1 : 0)
+                )
+                .frame(width: 8, height: 8)
+                .opacity(isSelected ? 1 : 0)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 4) {
-                        if isRenaming {
-                            TextField("Title", text: $renameText)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 13, weight: .medium))
-                                .focused($isFocused)
-                                .onSubmit(onCommitRename)
-                                .onAppear { isFocused = true }
-                        } else {
-                            Text(session.title.isEmpty ? "New Chat" : session.title)
-                                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                                .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
-                                .lineLimit(1)
-                        }
-                        if session.isPinned {
-                            Image(systemName: "pin.fill")
-                                .font(.system(size: 8))
-                                .foregroundColor(.secondary.opacity(0.5))
-                                .rotationEffect(.degrees(45))
-                        }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    if isRenaming {
+                        TextField("Title", text: $renameText)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13, weight: .medium))
+                            .focused($isFocused)
+                            .onSubmit(onCommitRename)
+                            .onAppear { isFocused = true }
+                    } else {
+                        Text(session.title.isEmpty ? "New Chat" : session.title)
+                            .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                            .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
+                            .lineLimit(1)
                     }
-
-                    Text(session.date, style: .date)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                    if session.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .rotationEffect(.degrees(45))
+                    }
                 }
 
-                Spacer()
+                Text(session.date, style: .date)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
 
-                if !session.messages.isEmpty {
-                    Text("\(session.messages.count)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary.opacity(0.5))
+            Spacer()
+
+            if !session.messages.isEmpty {
+                Text("\(session.messages.count)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.5))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            ZStack {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(Color.primary.opacity(0.1))
+                        .matchedGeometryEffect(id: "selection", in: animation)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(
-                ZStack {
-                    if isSelected {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.primary.opacity(0.1))
-                            .matchedGeometryEffect(id: "selection", in: animation)
-                    }
-                }
-            )
-            .contentShape(Rectangle())
-            .offset(x: offset)
-            .gesture(
-                DragGesture(minimumDistance: 20, coordinateSpace: .local)
-                    .onChanged { gesture in
-                        if gesture.translation.width < 0 {
-                            withAnimation(.interactiveSpring()) {
-                                offset = gesture.translation.width
-                            }
-                        }
-                    }
-                    .onEnded { gesture in
-                        if gesture.translation.width < -60 {
-                            withAnimation(.spring()) {
-                                offset = -60
-                            }
-                        } else {
-                            withAnimation(.spring()) {
-                                offset = 0
-                            }
-                        }
-                    }
-            )
-            .onTapGesture {
-                if offset < 0 {
-                    withAnimation(.spring()) {
-                        offset = 0
-                    }
-                } else if !isRenaming {
-                    onSelect()
-                }
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if !isRenaming {
+                onSelect()
             }
-            .contextMenu {
-                Button("Rename") {
-                    onRename()
-                }
-                Divider()
-                Button {
-                    onPin()
-                } label: {
-                    Label(
-                        session.isPinned ? "Unpin" : "Pin",
-                        systemImage: session.isPinned ? "pin.slash" : "pin")
-                }
-                Divider()
-                Button("Delete", role: .destructive) {
-                    onDelete()
-                }
+        }
+        .contextMenu {
+            Button("Rename") {
+                onRename()
+            }
+            Divider()
+            Button {
+                onPin()
+            } label: {
+                Label(
+                    session.isPinned ? "Unpin" : "Pin",
+                    systemImage: session.isPinned ? "pin.slash" : "pin")
+            }
+            Divider()
+            Button("Delete", role: .destructive) {
+                onDelete()
             }
         }
     }
@@ -4586,46 +4507,11 @@ func containsInlineMath(_ text: String) -> Bool {
 }
 
 // MARK: - TextBlockView (conditionally uses RichTextView for inline math)
-struct LinkCursorView: NSViewRepresentable {
-    let content: AttributedString
-    let font: NSFont
-    let textColor: NSColor
-
-    func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField(wrappingLabelWithString: "")
-        field.isEditable = false
-        field.isSelectable = true
-        field.drawsBackground = false
-        field.isBordered = false
-        field.allowsEditingTextAttributes = true
-        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        return field
-    }
-
-    func updateNSView(_ nsView: NSTextField, context: Context) {
-        let ns = NSMutableAttributedString(content)
-        let fullRange = NSRange(location: 0, length: ns.length)
-        ns.addAttribute(.font, value: font, range: fullRange)
-        ns.addAttribute(.foregroundColor, value: textColor, range: fullRange)
-        nsView.attributedStringValue = ns
-    }
-}
-
 struct TextBlockView: View {
     let text: String
     let cachedAttributedText: AttributedString?
     let textColor: Color
     @State private var webViewHeight: CGFloat = 20
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var hasLinks: Bool {
-        if let cached = cachedAttributedText {
-            for run in cached.runs where run.link != nil {
-                return true
-            }
-        }
-        return text.contains("](http")
-    }
 
     var body: some View {
         if containsInlineMath(text) {
@@ -4633,15 +4519,6 @@ struct TextBlockView: View {
                 .textSelection(.disabled)
                 .frame(height: webViewHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        } else if hasLinks {
-            let attrText = cachedAttributedText ?? MarkdownParser.shared.parse(text)
-            LinkCursorView(
-                content: attrText,
-                font: .systemFont(ofSize: 15),
-                textColor: colorScheme == .dark ? .white : .black
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
         } else {
             if let cached = cachedAttributedText {
                 Text(cached)
