@@ -750,35 +750,30 @@ struct QuickAIMessageView: View, Equatable {
                                     isCopied = false
                                 }
                             }) {
-                                Label(
-                                    isCopied ? "Copied" : "Copy",
-                                    systemImage: isCopied ? "checkmark" : "doc.on.doc"
-                                )
-                                .font(.caption2)
-                                .foregroundColor(isCopied ? .green : .secondary)
-                                .padding(4)
-                                .background(Color.black.opacity(0.05))
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                                    .font(.caption2)
+                                    .foregroundColor(isCopied ? .green : .secondary)
+                                    .padding(4)
+                                    .background(Color.black.opacity(0.05))
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
                             .buttonStyle(.plain)
+                            .help(isCopied ? "Copied!" : "Copy")
 
                             // Paste to App button (only for text content)
                             if message.image == nil && !message.content.isEmpty {
                                 Button(action: {
                                     QuickAIManager.shared.pasteToActiveApp(text: message.content)
                                 }) {
-                                    Label(
-                                        "Paste to App",
-                                        systemImage: "arrow.up.doc"
-                                    )
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                    .padding(4)
-                                    .background(Color.black.opacity(0.05))
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                                    Image(systemName: "arrow.up.doc")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .padding(4)
+                                        .background(Color.black.opacity(0.05))
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
                                 }
                                 .buttonStyle(.plain)
-                                .help("Paste this response into the previous app")
+                                .help("Paste to App")
                             }
 
                             Spacer()

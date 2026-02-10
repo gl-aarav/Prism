@@ -4760,22 +4760,19 @@ struct CodeBlockView: View {
                         }
                     }
                 }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 11, weight: .medium))
-                        Text(copied ? "Copied!" : "Copy")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(copied ? .green : langColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06))
-                    )
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(copied ? .green : langColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(
+                                    isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06))
+                        )
                 }
                 .buttonStyle(.plain)
-                .help("Copy Code")
+                .help(copied ? "Copied!" : "Copy Code")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -5326,11 +5323,12 @@ struct MessageView: View, Equatable {
                                         isEditing = true
                                     }
                                 }) {
-                                    Label("Edit", systemImage: "pencil")
+                                    Image(systemName: "pencil")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
                                 .buttonStyle(.plain)
+                                .help("Edit")
                             }
 
                             Button(action: {
@@ -5342,14 +5340,12 @@ struct MessageView: View, Equatable {
                                     isCopied = false
                                 }
                             }) {
-                                Label(
-                                    isCopied ? "Copied" : "Copy",
-                                    systemImage: isCopied ? "checkmark" : "doc.on.doc"
-                                )
-                                .font(.caption)
-                                .foregroundColor(isCopied ? .green : .secondary)
+                                Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                                    .font(.caption)
+                                    .foregroundColor(isCopied ? .green : .secondary)
                             }
                             .buttonStyle(.plain)
+                            .help(isCopied ? "Copied!" : "Copy")
                         }
                         .padding(.top, 4)
                     }
@@ -5430,14 +5426,12 @@ struct MessageView: View, Equatable {
                                 isCopied = false
                             }
                         }) {
-                            Label(
-                                isCopied ? "Copied" : "Copy",
-                                systemImage: isCopied ? "checkmark" : "doc.on.doc"
-                            )
-                            .font(.caption)
-                            .foregroundColor(isCopied ? .green : .secondary)
+                            Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                                .font(.caption)
+                                .foregroundColor(isCopied ? .green : .secondary)
                         }
                         .buttonStyle(.plain)
+                        .help(isCopied ? "Copied!" : "Copy")
 
                         if message.image != nil && !imageDownloadPath.isEmpty {
                             Button(action: {
@@ -5445,23 +5439,22 @@ struct MessageView: View, Equatable {
                                     downloadImage(image, prompt: message.content)
                                 }
                             }) {
-                                Label(
-                                    isSaved ? "Downloaded" : "Download",
-                                    systemImage: isSaved ? "checkmark" : "arrow.down.circle"
-                                )
-                                .font(.caption)
-                                .foregroundColor(isSaved ? .green : .secondary)
+                                Image(systemName: isSaved ? "checkmark" : "arrow.down.circle")
+                                    .font(.caption)
+                                    .foregroundColor(isSaved ? .green : .secondary)
                             }
                             .buttonStyle(.plain)
+                            .help(isSaved ? "Downloaded!" : "Download")
                         }
 
                         if let onRegenerate = onRegenerate {
                             Button(action: onRegenerate) {
-                                Label("Regenerate", systemImage: "arrow.counterclockwise")
+                                Image(systemName: "arrow.counterclockwise")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                             .buttonStyle(.plain)
+                            .help("Regenerate")
                         }
 
                         // Version navigator
