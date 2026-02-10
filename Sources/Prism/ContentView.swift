@@ -250,19 +250,29 @@ struct Message: Identifiable, Codable, Equatable {
                         currentText = ""
                     }
 
-                    if trimmedLine.count > startDelim.count && trimmedLine.hasSuffix(endDelim) {
-                        // Single line block: $$ x^2 $$ or \[ x^2 \]
-                        let content = String(
-                            trimmedLine.dropFirst(startDelim.count).dropLast(endDelim.count))
+                    // Look for a closing delimiter within the same line (after the opening)
+                    let afterOpen = String(trimmedLine.dropFirst(startDelim.count))
+                    if let closeRange = afterOpen.range(of: endDelim) {
+                        // Found closing delimiter on this line
+                        let mathContent = String(afterOpen[..<closeRange.lowerBound])
+                        let afterClose = String(afterOpen[closeRange.upperBound...])
+                            .trimmingCharacters(in: .whitespaces)
+
                         blocks.append(
-                            MarkdownBlock(type: .math(content.trimmingCharacters(in: .whitespaces)))
+                            MarkdownBlock(
+                                type: .math(mathContent.trimmingCharacters(in: .whitespaces)))
                         )
+
+                        // If there's trailing text after the closing delimiter, add it as text
+                        if !afterClose.isEmpty {
+                            currentText += afterClose + "\n"
+                        }
                     } else {
+                        // No closing delimiter on this line — start a multi-line math block
                         inMathBlock = true
                         mathDelimiter = endDelim
-                        let content = String(trimmedLine.dropFirst(startDelim.count))
-                        if !content.isEmpty {
-                            mathBlockContent += content + "\n"
+                        if !afterOpen.isEmpty {
+                            mathBlockContent += afterOpen + "\n"
                         }
                     }
                 }
@@ -274,6 +284,19 @@ struct Message: Identifiable, Codable, Equatable {
                             type: .math(mathBlockContent.trimmingCharacters(in: .newlines))))
                     mathBlockContent = ""
                     inMathBlock = false
+                } else if let closeRange = trimmedLine.range(of: mathDelimiter) {
+                    // Closing delimiter found mid-line with trailing text
+                    mathBlockContent += String(trimmedLine[..<closeRange.lowerBound])
+                    blocks.append(
+                        MarkdownBlock(
+                            type: .math(mathBlockContent.trimmingCharacters(in: .newlines))))
+                    mathBlockContent = ""
+                    inMathBlock = false
+                    let afterClose = String(trimmedLine[closeRange.upperBound...])
+                        .trimmingCharacters(in: .whitespaces)
+                    if !afterClose.isEmpty {
+                        currentText += afterClose + "\n"
+                    }
                 } else {
                     mathBlockContent += line + "\n"
                 }

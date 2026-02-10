@@ -9,7 +9,188 @@ struct MarkdownParser {
     private let latexScaleFactor: CGFloat = 2.0 / 3.0
 
     func parse(_ text: String) -> AttributedString {
-        return parseMarkdownToAttributedString(text)
+        let preprocessedText = preprocessBlockMath(text)
+        return parseMarkdownToAttributedString(preprocessedText)
+    }
+
+    /// Preprocesses text to handle edge cases where block math ($$...$$) appears
+    /// on the same line as other content (text or inline math).
+    /// This ensures block equations are properly separated for correct rendering.
+    private func preprocessBlockMath(_ text: String) -> String {
+        // Pattern to find $$...$$ followed by non-whitespace content on the same line,
+        // then another $$...$$. We need to insert newlines to separate them.
+        // This handles: $$eq1$$ text $$eq2$$ -> $$eq1$$\ntext\n$$eq2$$
+
+        // First, normalize: ensure $$ blocks that have content between them are separated
+        // We'll process line by line and fix lines that have multiple $$ blocks with text between
+
+        let lines = text.components(separatedBy: "\n")
+        var processedLines: [String] = []
+
+        for line in lines {
+            let processed = normalizeBlockMathInLine(line)
+            processedLines.append(contentsOf: processed)
+        }
+
+        return processedLines.joined(separator: "\n")
+    }
+
+    /// Normalizes a single line that may contain multiple block math expressions with text between them.
+    /// Handles both $$...$$ and \[...\] delimiters.
+    /// Returns an array of lines (may split one line into multiple).
+    private func normalizeBlockMathInLine(_ line: String) -> [String] {
+        // First handle $$ delimiters
+        let dollarResult = normalizeBlockDelimiters(in: line, openDelim: "$$", closeDelim: "$$")
+
+        // Then handle \[...\] delimiters on each resulting line
+        var finalResult: [String] = []
+        for l in dollarResult {
+            let processed = normalizeBlockDelimiters(in: l, openDelim: "\\[", closeDelim: "\\]")
+            finalResult.append(contentsOf: processed)
+        }
+
+        return finalResult
+    }
+
+    /// Normalizes block delimiters in a line, splitting when there's text between blocks.
+    private func normalizeBlockDelimiters(in line: String, openDelim: String, closeDelim: String)
+        -> [String]
+    {
+        // For matching delimiters like $$...$$, we need to find pairs
+        if openDelim == closeDelim {
+            return normalizeMatchingDelimiters(in: line, delimiter: openDelim)
+        }
+
+        // For different delimiters like \[...\], find opening and closing separately
+        return normalizeDistinctDelimiters(in: line, openDelim: openDelim, closeDelim: closeDelim)
+    }
+
+    /// Handles matching delimiters like $$...$$
+    private func normalizeMatchingDelimiters(in line: String, delimiter: String) -> [String] {
+        var positions: [String.Index] = []
+        var index = line.startIndex
+
+        while index < line.endIndex {
+            if let range = line.range(of: delimiter, range: index..<line.endIndex) {
+                positions.append(range.lowerBound)
+                index = range.upperBound
+            } else {
+                break
+            }
+        }
+
+        // Need at least 4 markers for the problematic case: $$...$$text$$...$$
+        if positions.count < 4 {
+            return [line]
+        }
+
+        var resultLines: [String] = []
+        var currentPos = line.startIndex
+        var i = 0
+        let delimLen = delimiter.count
+
+        while i + 3 < positions.count {
+            let closeEnd = line.index(positions[i + 1], offsetBy: delimLen)
+            let nextOpenStart = positions[i + 2]
+
+            if closeEnd < nextOpenStart {
+                let textBetween = String(line[closeEnd..<nextOpenStart])
+
+                if !textBetween.trimmingCharacters(in: .whitespaces).isEmpty {
+                    let firstPart = String(line[currentPos..<closeEnd])
+                    resultLines.append(firstPart)
+
+                    let middlePart = textBetween.trimmingCharacters(in: .whitespaces)
+                    if !middlePart.isEmpty {
+                        resultLines.append(middlePart)
+                    }
+
+                    currentPos = nextOpenStart
+                    i += 2
+                    continue
+                }
+            }
+            i += 2
+        }
+
+        if currentPos < line.endIndex {
+            let remaining = String(line[currentPos...])
+            if !remaining.isEmpty {
+                resultLines.append(remaining)
+            }
+        }
+
+        return resultLines.isEmpty ? [line] : resultLines
+    }
+
+    /// Handles distinct delimiters like \[...\]
+    private func normalizeDistinctDelimiters(in line: String, openDelim: String, closeDelim: String)
+        -> [String]
+    {
+        var openPositions: [String.Index] = []
+        var closePositions: [String.Index] = []
+        var index = line.startIndex
+
+        while index < line.endIndex {
+            if let range = line.range(of: openDelim, range: index..<line.endIndex) {
+                openPositions.append(range.lowerBound)
+                index = range.upperBound
+            } else {
+                break
+            }
+        }
+
+        index = line.startIndex
+        while index < line.endIndex {
+            if let range = line.range(of: closeDelim, range: index..<line.endIndex) {
+                closePositions.append(range.lowerBound)
+                index = range.upperBound
+            } else {
+                break
+            }
+        }
+
+        // Need at least 2 complete blocks for the problematic case
+        if openPositions.count < 2 || closePositions.count < 2 {
+            return [line]
+        }
+
+        var resultLines: [String] = []
+        var currentPos = line.startIndex
+        let closeLen = closeDelim.count
+
+        // Pair up opens with closes and check for text between blocks
+        for i in 0..<min(openPositions.count - 1, closePositions.count - 1) {
+            guard i < closePositions.count && i + 1 < openPositions.count else { break }
+
+            let closeEnd = line.index(closePositions[i], offsetBy: closeLen)
+            let nextOpenStart = openPositions[i + 1]
+
+            if closeEnd < nextOpenStart {
+                let textBetween = String(line[closeEnd..<nextOpenStart])
+
+                if !textBetween.trimmingCharacters(in: .whitespaces).isEmpty {
+                    let firstPart = String(line[currentPos..<closeEnd])
+                    resultLines.append(firstPart)
+
+                    let middlePart = textBetween.trimmingCharacters(in: .whitespaces)
+                    if !middlePart.isEmpty {
+                        resultLines.append(middlePart)
+                    }
+
+                    currentPos = nextOpenStart
+                }
+            }
+        }
+
+        if currentPos < line.endIndex {
+            let remaining = String(line[currentPos...])
+            if !remaining.isEmpty {
+                resultLines.append(remaining)
+            }
+        }
+
+        return resultLines.isEmpty ? [line] : resultLines
     }
 
     private func parseMarkdownToAttributedString(_ text: String) -> AttributedString {
@@ -38,8 +219,11 @@ struct MarkdownParser {
             let prefix = text[..<range.lowerBound]
             let remainder = text[range.upperBound...]
 
-            // Look for closing delimiter
-            if let closeRange = remainder.range(of: closingDelimiter) {
+            // Look for closing delimiter - find the FIRST valid closing $$
+            // that doesn't cross into inline $ math
+            if let closeRange = findClosingBlockDelimiter(
+                in: String(remainder), delimiter: closingDelimiter)
+            {
                 // If the closing delimiter is found immediately after (empty block), handle it
                 if closeRange.lowerBound == remainder.startIndex {
                     return parseInlineMarkdown(String(prefix))
@@ -60,6 +244,13 @@ struct MarkdownParser {
         }
 
         return parseInlineMarkdown(text)
+    }
+
+    /// Finds the closing block delimiter ($$), being careful to match properly
+    private func findClosingBlockDelimiter(in text: String, delimiter: String) -> Range<
+        String.Index
+    >? {
+        return text.range(of: delimiter)
     }
 
     private func parseInlineMarkdown(_ text: String) -> AttributedString {
