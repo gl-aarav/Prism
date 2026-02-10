@@ -5185,13 +5185,16 @@ struct PointingHandCursor: NSViewRepresentable {
             addTrackingArea(
                 NSTrackingArea(
                     rect: bounds,
-                    options: [.cursorUpdate, .activeAlways],
+                    options: [.mouseEnteredAndExited, .activeAlways],
                     owner: self,
                     userInfo: nil
                 ))
         }
-        override func cursorUpdate(with event: NSEvent) {
-            NSCursor.pointingHand.set()
+        override func mouseEntered(with event: NSEvent) {
+            NSCursor.pointingHand.push()
+        }
+        override func mouseExited(with event: NSEvent) {
+            NSCursor.pop()
         }
     }
 }
