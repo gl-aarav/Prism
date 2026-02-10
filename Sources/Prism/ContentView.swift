@@ -3288,8 +3288,7 @@ struct HeaderView: View {
                 .padding(.vertical, 8)
                 .background(
                     Capsule()
-                        .fill(Color.primary.opacity(0.06))
-                        .shadow(color: Color.black.opacity(0.06), radius: 2, y: 1)
+                        .fill(.ultraThinMaterial)
                 )
                 .glassEffect(.regular, in: .capsule)
             }

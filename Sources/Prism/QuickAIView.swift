@@ -116,8 +116,10 @@ struct QuickAIView: View {
                             )
                         }
 
-                        headerSection
                         messagesSection
+                            .safeAreaInset(edge: .top) {
+                                headerSection
+                            }
                     }
                     // ...existing code...
                     .padding(10)
@@ -857,31 +859,10 @@ struct QuickAIMessageView: View, Equatable {
 
 struct CommandBarBackground: View {
     var cornerRadius: CGFloat = 20
-    @Environment(\.colorScheme) private var colorScheme
-    @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
-    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
-
-    private var clampedVibrancy: Double {
-        min(max(commandBarVibrancy, 0.05), 0.9)
-    }
 
     var body: some View {
-        let colors = appTheme.colors
-
-        let startColor = colors.first ?? .blue
-        let endColor = colors.last ?? .green
-
-        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        startColor.opacity(clampedVibrancy * 0.3),
-                        endColor.opacity(clampedVibrancy * 0.25),
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color.clear)
             .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
     }
 }
@@ -1254,19 +1235,10 @@ extension QuickAIView {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
-                    Capsule(style: .continuous)
-                        .fill(
-                            Color.gray.opacity(colorScheme == .dark ? 0.18 : 0.14)
-                        )
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(
-                                    Color.white.opacity(
-                                        colorScheme == .dark ? 0.22 : 0.18),
-                                    lineWidth: 0.8
-                                )
-                        )
+                    Capsule()
+                        .fill(.ultraThinMaterial)
                 )
+                .glassEffect(.regular, in: .capsule)
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
@@ -1286,20 +1258,10 @@ extension QuickAIView {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
-                        Capsule(style: .continuous)
-                            .fill(
-                                Color.gray.opacity(
-                                    colorScheme == .dark ? 0.18 : 0.14)
-                            )
-                            .overlay(
-                                Capsule(style: .continuous)
-                                    .stroke(
-                                        Color.white.opacity(
-                                            colorScheme == .dark ? 0.22 : 0.18),
-                                        lineWidth: 0.8
-                                    )
-                            )
+                        Capsule()
+                            .fill(.ultraThinMaterial)
                     )
+                    .glassEffect(.regular, in: .capsule)
             }
             .buttonStyle(.plain)
             .help("New Chat")
@@ -1537,8 +1499,8 @@ extension QuickAIView {
                             .font(.system(size: 16))
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(6)
-                            .background(Color.white.opacity(0.10))
-                            .clipShape(Circle())
+                            .background(Circle().fill(Color.primary.opacity(0.06)))
+                            .glassEffect(.regular, in: .circle)
                     }
                     .menuStyle(.borderlessButton)
                     .tint(colorScheme == .dark ? .white : .black)
@@ -1598,8 +1560,8 @@ extension QuickAIView {
                                 .font(.system(size: 16))
                                 .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                                 .padding(6)
-                                .background(Color.white.opacity(0.10))
-                                .clipShape(Circle())
+                                .background(Circle().fill(Color.primary.opacity(0.06)))
+                                .glassEffect(.regular, in: .circle)
                         }
                         .menuStyle(.borderlessButton)
                         .tint(colorScheme == .dark ? .white : .black)
@@ -1659,8 +1621,8 @@ extension QuickAIView {
                             .font(.system(size: 16))
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(6)
-                            .background(Color.white.opacity(0.10))
-                            .clipShape(Circle())
+                            .background(Circle().fill(Color.primary.opacity(0.06)))
+                            .glassEffect(.regular, in: .circle)
                     }
                     .menuStyle(.borderlessButton)
                     .tint(colorScheme == .dark ? .white : .black)
@@ -1693,8 +1655,8 @@ extension QuickAIView {
                                 .font(.system(size: 16))
                                 .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                                 .padding(6)
-                                .background(Color.white.opacity(0.10))
-                                .clipShape(Circle())
+                                .background(Circle().fill(Color.primary.opacity(0.06)))
+                                .glassEffect(.regular, in: .circle)
                         }
                         .menuStyle(.borderlessButton)
                         .tint(colorScheme == .dark ? .white : .black)
@@ -1710,11 +1672,13 @@ extension QuickAIView {
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(6)
                             .background(
-                                webSearchEnabled
-                                    ? Color.blue.opacity(0.15)
-                                    : Color.white.opacity(0.10)
+                                Circle().fill(
+                                    webSearchEnabled
+                                        ? Color.blue.opacity(0.15)
+                                        : Color.primary.opacity(0.06)
+                                )
                             )
-                            .clipShape(Circle())
+                            .glassEffect(.regular, in: .circle)
                     }
                     .buttonStyle(.plain)
                     .help(webSearchEnabled ? "Web Search: On" : "Web Search: Off")
