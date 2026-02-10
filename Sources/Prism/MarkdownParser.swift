@@ -70,6 +70,44 @@ struct MarkdownParser {
         .replacingOccurrences(of: "<br/>", with: "\n", options: .caseInsensitive)
         .replacingOccurrences(of: "<br />", with: "\n", options: .caseInsensitive)
 
+        // Handle bold/italic wrapped links: **[text](url)** or *[text](url)*
+        if let wrappedLinkMatch = try? NSRegularExpression(
+            pattern: "(\\*\\*|\\*)\\[([^\\]]+)\\]\\((https?://[^)]+)\\)(\\*\\*|\\*)"
+        )
+        .firstMatch(
+            in: textWithBreaks, range: NSRange(textWithBreaks.startIndex..., in: textWithBreaks)),
+            wrappedLinkMatch.numberOfRanges == 5,
+            let fullRange = Range(wrappedLinkMatch.range(at: 0), in: textWithBreaks),
+            let openDelimRange = Range(wrappedLinkMatch.range(at: 1), in: textWithBreaks),
+            let textRange = Range(wrappedLinkMatch.range(at: 2), in: textWithBreaks),
+            let urlRange = Range(wrappedLinkMatch.range(at: 3), in: textWithBreaks),
+            let closeDelimRange = Range(wrappedLinkMatch.range(at: 4), in: textWithBreaks)
+        {
+            let openDelim = String(textWithBreaks[openDelimRange])
+            let closeDelim = String(textWithBreaks[closeDelimRange])
+            // Only apply if delimiters match
+            if openDelim == closeDelim {
+                let prefix = String(textWithBreaks[..<fullRange.lowerBound])
+                let linkText = String(textWithBreaks[textRange])
+                let urlString = String(textWithBreaks[urlRange])
+                let suffix = String(textWithBreaks[fullRange.upperBound...])
+
+                var linkAttr = AttributedString(linkText)
+                if let url = URL(string: urlString) {
+                    linkAttr.link = url
+                    linkAttr.underlineStyle = .single
+                    linkAttr.foregroundColor = .blue
+                }
+                if openDelim == "**" {
+                    linkAttr.font = .system(size: 15, weight: .bold)
+                } else {
+                    linkAttr.font = .system(size: 15).italic()
+                }
+
+                return parseInlineMarkdown(prefix) + linkAttr + parseInlineMarkdown(suffix)
+            }
+        }
+
         // Handle markdown links [text](url) before other delimiters
         if let linkMatch = try? NSRegularExpression(
             pattern: "\\[([^\\]]+)\\]\\((https?://[^)]+)\\)"
