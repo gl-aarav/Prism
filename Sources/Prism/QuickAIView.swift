@@ -682,7 +682,9 @@ struct QuickAIMessageView: View, Equatable {
                                         .font(.caption)
                                 }
                                 .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .contentShape(Rectangle())
                             }
+                            .animation(.spring(response: 0.35, dampingFraction: 0.86), value: isThinkingExpanded)
                             .padding(.bottom, 4)
                         }
 
@@ -790,12 +792,14 @@ struct QuickAIMessageView: View, Equatable {
         }
         .onChange(of: liveThinking) { _, newValue in
             if let val = newValue, !val.isEmpty, liveContent == nil || liveContent!.isEmpty {
-                isThinkingExpanded = true
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                    isThinkingExpanded = true
+                }
             }
         }
         .onChange(of: liveContent) { _, newValue in
             if let val = newValue, !val.isEmpty {
-                withAnimation {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
                     isThinkingExpanded = false
                 }
             }

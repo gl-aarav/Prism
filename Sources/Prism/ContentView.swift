@@ -5358,7 +5358,9 @@ struct MessageView: View, Equatable {
                                         .font(.caption)
                                 }
                                 .foregroundColor(.secondary)
+                                .contentShape(Rectangle())
                             }
+                            .animation(.spring(response: 0.35, dampingFraction: 0.86), value: isThinkingExpanded)
                             .padding(.bottom, 4)
                         }
 
@@ -5508,12 +5510,14 @@ struct MessageView: View, Equatable {
         }
         .onChange(of: liveThinking) { _, newValue in
             if let val = newValue, !val.isEmpty, liveContent == nil || liveContent!.isEmpty {
-                isThinkingExpanded = true
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                    isThinkingExpanded = true
+                }
             }
         }
         .onChange(of: liveContent) { _, newValue in
             if let val = newValue, !val.isEmpty {
-                withAnimation {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
                     isThinkingExpanded = false
                 }
             }
@@ -5521,12 +5525,14 @@ struct MessageView: View, Equatable {
         .onChange(of: message.thinkingContent) { _, newValue in
             let currentContent = liveContent ?? message.content
             if let val = newValue, !val.isEmpty, currentContent.isEmpty {
-                isThinkingExpanded = true
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                    isThinkingExpanded = true
+                }
             }
         }
         .onChange(of: message.content) { _, newValue in
             if !newValue.isEmpty {
-                withAnimation {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
                     isThinkingExpanded = false
                 }
             }
