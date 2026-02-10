@@ -1563,6 +1563,7 @@ struct ContentView: View {
     // Legacy single selection states removed/replaced
     @State private var isLoading: Bool = false
     @AppStorage("ThinkingLevel") private var thinkingLevel: String = "medium"
+    @AppStorage("GeminiThinkingLevel") private var geminiThinkingLevel: String = "auto"
     @State private var showSidebar: Bool = false
     @State private var lastMessageCount: Int = 0
     @State private var lastSessionId: UUID?
@@ -1626,6 +1627,24 @@ struct ContentView: View {
             return .none
         }
         return .none
+    }
+
+    /// Returns a binding to the correct thinking level storage based on the current provider
+    var activeThinkingLevel: Binding<String> {
+        if selectedProvider == "Gemini API" {
+            return $geminiThinkingLevel
+        } else {
+            return $thinkingLevel
+        }
+    }
+
+    /// The current thinking level value for the active provider
+    var currentThinkingLevel: String {
+        if selectedProvider == "Gemini API" {
+            return geminiThinkingLevel
+        } else {
+            return thinkingLevel
+        }
     }
 
     var body: some View {
@@ -1763,7 +1782,7 @@ struct ContentView: View {
                                         InputView(
                                             inputText: $inputText,
                                             selectedAttachments: $selectedAttachments,
-                                            thinkingLevel: $thinkingLevel,
+                                            thinkingLevel: activeThinkingLevel,
                                             isLoading: isLoading,
                                             onSend: sendMessage,
                                             onStop: stopGeneration,
@@ -2229,7 +2248,7 @@ struct ContentView: View {
                         for try await (contentChunk, thinkingChunk, imageData)
                             in geminiService.sendMessageStream(
                                 history: currentHistory, apiKey: geminiKey, model: geminiModel,
-                                systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
+                                systemPrompt: systemPrompt, thinkingLevel: currentThinkingLevel)
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {
@@ -2351,7 +2370,7 @@ struct ContentView: View {
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: currentHistory, endpoint: ollamaURL, model: activeModel,
-                        systemPrompt: effectiveSystemPrompt, thinkingLevel: thinkingLevel)
+                        systemPrompt: effectiveSystemPrompt, thinkingLevel: currentThinkingLevel)
                     {
                         fullContent += contentChunk
                         if let thinking = thinkingChunk {

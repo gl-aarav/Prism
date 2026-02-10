@@ -10,7 +10,8 @@ struct QuickAIView: View {
     @State private var inputLineCount: Int = 1
     @State private var isLoading: Bool = false
     @AppStorage("selectedProvider") private var selectedProvider: String = "Apple Foundation Model"
-    @State private var thinkingLevel: String = "medium"
+    @AppStorage("ThinkingLevel") private var thinkingLevel: String = "medium"
+    @AppStorage("GeminiThinkingLevel") private var geminiThinkingLevel: String = "auto"
     @State private var isExpanded: Bool = false
     @State private var expandedContentOpacity: Double = 0
     @State private var headerOffset: CGFloat = 20
@@ -385,7 +386,7 @@ struct QuickAIView: View {
                             in geminiService.sendMessageStream(
                                 history: chatManager.getCurrentMessages(), apiKey: geminiKey,
                                 model: geminiModel, systemPrompt: systemPrompt,
-                                thinkingLevel: thinkingLevel)
+                                thinkingLevel: geminiThinkingLevel)
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {
@@ -600,6 +601,19 @@ extension QuickAIView {
                 Text(title)
                 Spacer()
                 if thinkingLevel == value {
+                    Image(systemName: "checkmark")
+                        .foregroundColor(colorScheme == .dark ? .white : .accentColor)
+                }
+            }
+        }
+    }
+
+    func geminiThinkingOption(title: String, value: String) -> some View {
+        Button(action: { geminiThinkingLevel = value }) {
+            HStack {
+                Text(title)
+                Spacer()
+                if geminiThinkingLevel == value {
                     Image(systemName: "checkmark")
                         .foregroundColor(colorScheme == .dark ? .white : .accentColor)
                 }
@@ -1680,20 +1694,20 @@ extension QuickAIView {
                         let isGemini3Pro = geminiModel.lowercased().hasPrefix("gemini-3-pro")
                         Menu {
                             Button {
-                                thinkingLevel = "auto"
+                                geminiThinkingLevel = "auto"
                             } label: {
-                                if thinkingLevel == "auto" {
+                                if geminiThinkingLevel == "auto" {
                                     Label("Auto", systemImage: "checkmark")
                                         .foregroundColor(colorScheme == .dark ? .white : .primary)
                                 } else {
                                     Text("Auto")
                                 }
                             }
-                            thinkingOption(title: "Low", value: "low")
+                            geminiThinkingOption(title: "Low", value: "low")
                             if !isGemini3Pro {
-                                thinkingOption(title: "Medium", value: "medium")
+                                geminiThinkingOption(title: "Medium", value: "medium")
                             }
-                            thinkingOption(title: "High", value: "high")
+                            geminiThinkingOption(title: "High", value: "high")
                         } label: {
                             Image(systemName: "brain")
                                 .font(.system(size: 16))

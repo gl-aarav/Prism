@@ -11,6 +11,8 @@ struct ComparisonSlot: Identifiable {
     var error: String?
     var thinkingContent: String?
     var elapsedTime: TimeInterval?
+    var thinkingLevel: String = "auto"
+    var webSearchEnabled: Bool = false
 }
 
 // MARK: - Comparison State Manager (singleton to persist across view lifecycle)
@@ -31,7 +33,9 @@ class ComparisonStateManager: ObservableObject {
             slots = savedData.map {
                 ComparisonSlot(
                     provider: $0["provider"] ?? "Gemini API",
-                    model: $0["model"] ?? "gemini-2.5-flash"
+                    model: $0["model"] ?? "gemini-2.5-flash",
+                    thinkingLevel: $0["thinkingLevel"] ?? "auto",
+                    webSearchEnabled: $0["webSearchEnabled"] == "true"
                 )
             }
         } else {
@@ -43,7 +47,14 @@ class ComparisonStateManager: ObservableObject {
     }
 
     func saveSlotConfigurations() {
-        let data = slots.map { ["provider": $0.provider, "model": $0.model] }
+        let data = slots.map {
+            [
+                "provider": $0.provider,
+                "model": $0.model,
+                "thinkingLevel": $0.thinkingLevel,
+                "webSearchEnabled": $0.webSearchEnabled ? "true" : "false",
+            ]
+        }
         UserDefaults.standard.set(data, forKey: "ComparisonSlots")
     }
 }
@@ -131,8 +142,21 @@ struct ModelComparisonView: View {
                                     saveSlots()
                                 }
                             },
+                            onChangeThinkingLevel: { level in
+                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                    state.slots[idx].thinkingLevel = level
+                                    saveSlots()
+                                }
+                            },
+                            onChangeWebSearch: { enabled in
+                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                    state.slots[idx].webSearchEnabled = enabled
+                                    saveSlots()
+                                }
+                            },
                             ollamaManager: ollamaManager,
-                            geminiManager: geminiManager
+                            geminiManager: geminiManager,
+                            hasOllamaAPIKey: !ollamaAPIKey.isEmpty
                         )
                     }
                     .padding(.horizontal, 20)
@@ -337,72 +361,6 @@ struct ModelComparisonView: View {
                                 return .handled
                             }
                         }
-                }
-
-                // Thinking level button (inside chat bar, like main window)
-                if hasOllamaSlot && hasThinkingCapableOllamaSlot {
-                    Menu {
-                        Button(action: { compareThinkingLevel = "low" }) {
-                            HStack {
-                                Text("Low")
-                                if compareThinkingLevel == "low" {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                        Button(action: { compareThinkingLevel = "medium" }) {
-                            HStack {
-                                Text("Medium")
-                                if compareThinkingLevel == "medium" {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                        Button(action: { compareThinkingLevel = "high" }) {
-                            HStack {
-                                Text("High")
-                                if compareThinkingLevel == "high" {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "brain")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
-                            .frame(width: 34, height: 34)
-                            .background(
-                                Circle()
-                                    .fill(
-                                        colorScheme == .dark
-                                            ? Color.white.opacity(0.08)
-                                            : Color.black.opacity(0.04))
-                            )
-                    }
-                    .menuStyle(.borderlessButton)
-                    .help("Thinking: \(compareThinkingLevel.capitalized)")
-                }
-
-                // Web search toggle (inside chat bar, like main window)
-                if hasOllamaSlot && !ollamaAPIKey.isEmpty {
-                    Button(action: { compareWebSearchEnabled.toggle() }) {
-                        Image(systemName: "globe")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(compareWebSearchEnabled ? .blue : .secondary)
-                            .frame(width: 34, height: 34)
-                            .background(
-                                Circle()
-                                    .fill(
-                                        compareWebSearchEnabled
-                                            ? Color.blue.opacity(colorScheme == .dark ? 0.2 : 0.1)
-                                            : (colorScheme == .dark
-                                                ? Color.white.opacity(0.08)
-                                                : Color.black.opacity(0.04))
-                                    )
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .help(compareWebSearchEnabled ? "Web Search: On" : "Web Search: Off")
                 }
 
                 // Send/Stop Button — Liquid Glass orb
@@ -869,14 +827,16 @@ struct ModelComparisonView: View {
     }
 
     /// Compute the effective thinking level for a given provider/model.
-    /// Gemini never gets thinking. Ollama gpt-oss gets the app-level thinkingLevel.
-    /// DeepSeek gets true only when "high". All others get "false".
     private func effectiveThinkingLevel(provider: String, model: String) -> String {
         return effectiveThinkingLevel(provider: provider, model: model, level: compareThinkingLevel)
     }
 
     private func effectiveThinkingLevel(provider: String, model: String, level: String) -> String {
         if provider == "Gemini API" {
+            let lower = model.lowercased()
+            if lower.hasPrefix("gemini-3") || lower.hasPrefix("gemini-2.5") {
+                return level  // auto, low, medium, high
+            }
             return "none"
         } else if provider == "Ollama" {
             let lower = model.lowercased()
@@ -1100,6 +1060,8 @@ struct ModelComparisonView: View {
             let slotId = state.slots[i].id
             let provider = state.slots[i].provider
             let model = state.slots[i].model
+            let slotThinkingLevel = state.slots[i].thinkingLevel
+            let slotWebSearch = state.slots[i].webSearchEnabled
 
             let task = Task {
                 let startTime = Date()
@@ -1116,23 +1078,40 @@ struct ModelComparisonView: View {
                             return
                         }
                         var fullContent = ""
+                        var fullThinking = ""
                         let geminiThinking = effectiveThinkingLevel(
-                            provider: provider, model: model)
-                        for try await (chunk, _, _) in geminiService.sendMessageStream(
+                            provider: provider, model: model, level: slotThinkingLevel)
+                        var lastGeminiUpdateTime = Date()
+                        for try await (chunk, thinkChunk, _) in geminiService.sendMessageStream(
                             history: history, apiKey: geminiKey, model: model,
                             systemPrompt: systemPrompt, thinkingLevel: geminiThinking
                         ) {
                             fullContent += chunk
-                            let content = fullContent
-                            await MainActor.run {
-                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    state.slots[idx].response = content
+                            if let t = thinkChunk { fullThinking += t }
+
+                            if Date().timeIntervalSince(lastGeminiUpdateTime) > 0.05 {
+                                let content = fullContent
+                                let thinking = fullThinking
+                                await MainActor.run {
+                                    if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                        state.slots[idx].response = content
+                                        if !thinking.isEmpty {
+                                            state.slots[idx].thinkingContent = thinking
+                                        }
+                                    }
                                 }
+                                lastGeminiUpdateTime = Date()
                             }
                         }
                         let elapsed = Date().timeIntervalSince(startTime)
+                        let finalGeminiContent = fullContent
+                        let finalGeminiThinking = fullThinking
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                state.slots[idx].response = finalGeminiContent
+                                if !finalGeminiThinking.isEmpty {
+                                    state.slots[idx].thinkingContent = finalGeminiThinking
+                                }
                                 state.slots[idx].isLoading = false
                                 state.slots[idx].elapsedTime = elapsed
                             }
@@ -1143,11 +1122,11 @@ struct ModelComparisonView: View {
                         var fullThinking = ""
                         var lastUpdateTime = Date()
                         let ollamaThinking = effectiveThinkingLevel(
-                            provider: provider, model: model)
+                            provider: provider, model: model, level: slotThinkingLevel)
 
                         // Web search augmentation for Ollama
                         var ollamaSystemPrompt = systemPrompt
-                        if compareWebSearchEnabled && !ollamaAPIKey.isEmpty {
+                        if slotWebSearch && !ollamaAPIKey.isEmpty {
                             do {
                                 let searchResults = try await webSearchService.search(
                                     query: trimmed, apiKey: ollamaAPIKey)
@@ -1262,9 +1241,12 @@ struct ComparisonCard: View {
     let appTheme: AppTheme
     var onRemove: (() -> Void)?
     var onChangeProvider: (String, String) -> Void
+    var onChangeThinkingLevel: (String) -> Void
+    var onChangeWebSearch: (Bool) -> Void
 
     @ObservedObject var ollamaManager: OllamaModelManager
     @ObservedObject var geminiManager: GeminiModelManager
+    var hasOllamaAPIKey: Bool = false
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var isHovered: Bool = false
@@ -1282,6 +1264,30 @@ struct ComparisonCard: View {
         case "Ollama": return "laptopcomputer"
         default: return "cpu"
         }
+    }
+
+    /// Determine the thinking mode for this slot's provider/model
+    private var slotThinkingMode: ThinkingMode {
+        let lower = slot.model.lowercased()
+        if slot.provider == "Gemini API" {
+            if lower.hasPrefix("gemini-3-pro") {
+                return .geminiPro
+            } else if lower.hasPrefix("gemini-3") || lower.hasPrefix("gemini-2.5") {
+                return .geminiFlash
+            }
+        } else if slot.provider == "Ollama" {
+            if lower.contains("gpt-oss") {
+                return .threeState
+            } else if lower.contains("deepseek") || lower.contains("r1") {
+                return .binary
+            }
+        }
+        return .none
+    }
+
+    /// Whether this slot can show web search toggle
+    private var slotCanWebSearch: Bool {
+        slot.provider == "Ollama" && hasOllamaAPIKey
     }
 
     var body: some View {
@@ -1348,6 +1354,160 @@ struct ComparisonCard: View {
             }
 
             Spacer()
+
+            // Thinking & web search controls
+            HStack(spacing: 6) {
+                if slotThinkingMode != .none {
+                    Menu {
+                        if slotThinkingMode == .binary {
+                            Button {
+                                onChangeThinkingLevel("high")
+                            } label: {
+                                if slot.thinkingLevel == "high" {
+                                    Label("Reasoning: On", systemImage: "checkmark")
+                                } else {
+                                    Text("Reasoning: On")
+                                }
+                            }
+                            Button {
+                                onChangeThinkingLevel("low")
+                            } label: {
+                                if slot.thinkingLevel != "high" {
+                                    Label("Reasoning: Off", systemImage: "checkmark")
+                                } else {
+                                    Text("Reasoning: Off")
+                                }
+                            }
+                        } else if slotThinkingMode == .geminiPro {
+                            Button {
+                                onChangeThinkingLevel("auto")
+                            } label: {
+                                if slot.thinkingLevel == "auto" {
+                                    Label("Auto", systemImage: "checkmark")
+                                } else {
+                                    Text("Auto")
+                                }
+                            }
+                            Button {
+                                onChangeThinkingLevel("low")
+                            } label: {
+                                if slot.thinkingLevel == "low" {
+                                    Label("Low", systemImage: "checkmark")
+                                } else {
+                                    Text("Low")
+                                }
+                            }
+                            Button {
+                                onChangeThinkingLevel("high")
+                            } label: {
+                                if slot.thinkingLevel == "high" {
+                                    Label("High", systemImage: "checkmark")
+                                } else {
+                                    Text("High")
+                                }
+                            }
+                        } else if slotThinkingMode == .geminiFlash {
+                            Button {
+                                onChangeThinkingLevel("auto")
+                            } label: {
+                                if slot.thinkingLevel == "auto" {
+                                    Label("Auto", systemImage: "checkmark")
+                                } else {
+                                    Text("Auto")
+                                }
+                            }
+                            Button {
+                                onChangeThinkingLevel("low")
+                            } label: {
+                                if slot.thinkingLevel == "low" {
+                                    Label("Low", systemImage: "checkmark")
+                                } else {
+                                    Text("Low")
+                                }
+                            }
+                            Button {
+                                onChangeThinkingLevel("medium")
+                            } label: {
+                                if slot.thinkingLevel == "medium" {
+                                    Label("Medium", systemImage: "checkmark")
+                                } else {
+                                    Text("Medium")
+                                }
+                            }
+                            Button {
+                                onChangeThinkingLevel("high")
+                            } label: {
+                                if slot.thinkingLevel == "high" {
+                                    Label("High", systemImage: "checkmark")
+                                } else {
+                                    Text("High")
+                                }
+                            }
+                        } else {
+                            // threeState (Ollama gpt-oss)
+                            Button {
+                                onChangeThinkingLevel("low")
+                            } label: {
+                                if slot.thinkingLevel == "low" {
+                                    Label("Low", systemImage: "checkmark")
+                                } else {
+                                    Text("Low")
+                                }
+                            }
+                            Button {
+                                onChangeThinkingLevel("medium")
+                            } label: {
+                                if slot.thinkingLevel == "medium" {
+                                    Label("Medium", systemImage: "checkmark")
+                                } else {
+                                    Text("Medium")
+                                }
+                            }
+                            Button {
+                                onChangeThinkingLevel("high")
+                            } label: {
+                                if slot.thinkingLevel == "high" {
+                                    Label("High", systemImage: "checkmark")
+                                } else {
+                                    Text("High")
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "brain")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(accentColor.opacity(0.8))
+                            .padding(5)
+                            .background(
+                                Circle()
+                                    .fill(accentColor.opacity(0.1))
+                            )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("Reasoning: \(slot.thinkingLevel.capitalized)")
+                }
+
+                if slotCanWebSearch {
+                    Button(action: { onChangeWebSearch(!slot.webSearchEnabled) }) {
+                        Image(systemName: "globe")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(
+                                slot.webSearchEnabled ? .blue : .secondary.opacity(0.6)
+                            )
+                            .padding(5)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        slot.webSearchEnabled
+                                            ? Color.blue.opacity(0.12)
+                                            : Color.secondary.opacity(0.08))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(slot.webSearchEnabled ? "Web Search: On" : "Web Search: Off")
+                }
+            }
 
             // Status & actions
             HStack(spacing: 8) {
