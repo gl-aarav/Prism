@@ -14,17 +14,17 @@ struct SlashCommandAutocomplete: View {
             HStack(spacing: 6) {
                 Image(systemName: "command")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Text("Commands")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Text("↑↓ navigate")
                     .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .foregroundStyle(.secondary.opacity(0.6))
                 Text("↵ select")
                     .font(.system(size: 10))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .foregroundStyle(.secondary.opacity(0.6))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -72,7 +72,7 @@ struct SlashCommandRow: View {
             // Icon
             Image(systemName: iconForCommand(command))
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(isSelected ? .white : commandColor(command))
+                .foregroundStyle(isSelected ? Color.white : commandColor(command))
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -86,15 +86,15 @@ struct SlashCommandRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(command.trigger)
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundColor(isSelected ? .white : .primary)
+                    .foregroundStyle(isSelected ? Color.white : Color.primary)
 
                 if !command.expansion.isEmpty {
                     Text(command.expansion)
                         .font(.system(size: 11))
-                        .foregroundColor(
+                        .foregroundStyle(
                             isSelected
-                                ? .white.opacity(0.7)
-                                : .secondary
+                                ? Color.white.opacity(0.7)
+                                : Color.secondary
                         )
                         .lineLimit(1)
                 }
@@ -105,7 +105,9 @@ struct SlashCommandRow: View {
             if command.isBuiltIn {
                 Text("built-in")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary.opacity(0.5))
+                    .foregroundStyle(
+                        isSelected ? Color.white.opacity(0.6) : Color.secondary.opacity(0.5)
+                    )
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
@@ -202,7 +204,7 @@ struct CommandsManagementView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Icon")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         Menu {
                             ForEach(SlashCommand.availableIcons, id: \.symbol) { icon in
                                 Button(action: { newIcon = icon.symbol }) {
@@ -216,7 +218,7 @@ struct CommandsManagementView: View {
                                     .frame(width: 20)
                                 Image(systemName: "chevron.up.chevron.down")
                                     .font(.system(size: 8, weight: .semibold))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
@@ -240,11 +242,11 @@ struct CommandsManagementView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Command")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         HStack(spacing: 4) {
                             Text("/")
                                 .font(.system(size: 15, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                             TextField("shortcut", text: $newTrigger)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 14, design: .monospaced))
@@ -270,7 +272,7 @@ struct CommandsManagementView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Expands to")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         TextField("What should it type...", text: $newExpansion)
                             .textFieldStyle(.plain)
                             .font(.system(size: 14))
@@ -370,7 +372,7 @@ struct CommandsManagementView: View {
                         )
                     Text("Slash Commands")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -418,7 +420,7 @@ struct SectionHeader: View {
         HStack {
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .textCase(.uppercase)
             Spacer()
         }
@@ -472,7 +474,7 @@ struct CommandListRow: View {
                     HStack(spacing: 2) {
                         Text("/")
                             .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         TextField("command", text: $editTrigger)
                             .textFieldStyle(.plain)
                             .font(.system(size: 13, design: .monospaced))
@@ -505,13 +507,13 @@ struct CommandListRow: View {
 
                     Button(action: onSave) {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                            .foregroundStyle(.green)
                     }
                     .buttonStyle(.plain)
 
                     Button(action: onCancel) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -519,7 +521,7 @@ struct CommandListRow: View {
                 // Display mode
                 Image(systemName: iconForCommand(command))
                     .font(.system(size: 13))
-                    .foregroundColor(commandColor(command))
+                    .foregroundStyle(commandColor(command))
                     .frame(width: 26, height: 26)
                     .background(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -528,18 +530,18 @@ struct CommandListRow: View {
 
                 Text(command.trigger)
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .frame(width: 120, alignment: .leading)
 
                 if SlashCommandManager.actionCommands.contains(command.trigger) {
                     Text(actionDescription(command.trigger))
                         .font(.system(size: 13))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .italic()
                 } else {
                     Text(command.expansion)
                         .font(.system(size: 13))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
 
@@ -550,7 +552,7 @@ struct CommandListRow: View {
                         Button(action: onEdit) {
                             Image(systemName: "pencil")
                                 .font(.system(size: 12))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
 
@@ -558,7 +560,7 @@ struct CommandListRow: View {
                             Button(action: onDelete) {
                                 Image(systemName: "trash")
                                     .font(.system(size: 12))
-                                    .foregroundColor(.red.opacity(0.7))
+                                    .foregroundStyle(.red.opacity(0.7))
                             }
                             .buttonStyle(.plain)
                         }

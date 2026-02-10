@@ -235,7 +235,7 @@ struct ImageGenerationView: View {
                 Text(selectedStyle)
                     .font(.system(size: 11, weight: .medium))
             }
-            .foregroundColor(.secondary)
+            .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .glassEffect(.regular, in: .capsule)
@@ -248,7 +248,7 @@ struct ImageGenerationView: View {
                         Text("Clear All")
                             .font(.system(size: 11, weight: .medium))
                     }
-                    .foregroundColor(.red.opacity(0.8))
+                    .foregroundStyle(.red.opacity(0.8))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .glassEffect(.regular, in: .capsule)
@@ -326,7 +326,7 @@ struct ImageGenerationView: View {
                         )
                     Text("Describe what you'd like and pick a style")
                         .font(.system(size: 15, weight: .regular, design: .rounded))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .foregroundStyle(.secondary.opacity(0.7))
                 }
 
                 // Style chips
@@ -334,7 +334,7 @@ struct ImageGenerationView: View {
                     ForEach(["Animation", "Illustration", "Sketch"], id: \.self) { style in
                         Text(style)
                             .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary.opacity(0.6))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .glassEffect(.regular, in: .capsule)
@@ -363,7 +363,7 @@ struct ImageGenerationView: View {
                                 VStack(alignment: .trailing, spacing: 4) {
                                     Text(item.prompt)
                                         .font(.system(size: 14))
-                                        .foregroundColor(.white)
+                                        .foregroundStyle(.white)
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 10)
                                         .background(
@@ -381,7 +381,7 @@ struct ImageGenerationView: View {
 
                                     Text(item.style)
                                         .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(.secondary.opacity(0.6))
+                                        .foregroundStyle(.secondary.opacity(0.6))
                                 }
                             }
 
@@ -474,16 +474,16 @@ struct ImageGenerationView: View {
                                         if let text = item.responseText, !text.isEmpty {
                                             Text(text)
                                                 .font(.system(size: 13))
-                                                .foregroundColor(.primary)
+                                                .foregroundStyle(.primary)
                                                 .textSelection(.enabled)
                                         }
                                     } else if let error = item.error {
                                         HStack(spacing: 6) {
                                             Image(systemName: "exclamationmark.triangle.fill")
-                                                .foregroundColor(.orange)
+                                                .foregroundStyle(.orange)
                                             Text(error)
                                                 .font(.system(size: 12))
-                                                .foregroundColor(.red)
+                                                .foregroundStyle(.red)
                                         }
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 10)
@@ -530,8 +530,8 @@ struct ImageGenerationView: View {
                                 Button(action: { selectedStyle = item.value }) {
                                     if selectedStyle == item.value {
                                         Label(item.label, systemImage: "checkmark")
-                                            .foregroundColor(
-                                                colorScheme == .dark ? .white : .primary)
+                                            .foregroundStyle(
+                                                colorScheme == .dark ? Color.white : Color.primary)
                                     } else {
                                         Text(item.label)
                                     }
@@ -567,7 +567,7 @@ struct ImageGenerationView: View {
                     if prompt.isEmpty && !isInputFocused {
                         Text("Describe the image to generate...")
                             .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary.opacity(0.6))
                             .allowsHitTesting(false)
                             .padding(.leading, 4)
                     }
@@ -575,7 +575,7 @@ struct ImageGenerationView: View {
                     TextField("", text: $prompt)
                         .textFieldStyle(.plain)
                         .font(.system(size: 15))
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                         .focused($isInputFocused)
                         .onSubmit { generate() }
                 }
@@ -618,10 +618,10 @@ struct ImageGenerationView: View {
 
                         Image(systemName: isGenerating ? "stop.fill" : "arrow.up")
                             .font(.system(size: isGenerating ? 12 : 14, weight: .bold))
-                            .foregroundColor(
+                            .foregroundStyle(
                                 isGenerating
-                                    ? .white
-                                    : (colorScheme == .dark ? .black : .white)
+                                    ? Color.white
+                                    : (colorScheme == .dark ? Color.black : Color.white)
                             )
                     }
                 }
@@ -806,7 +806,7 @@ struct ImagePreviewOverlay: View {
                         Button(action: dismiss) {
                             Image(systemName: "xmark")
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundStyle(.white)
                                 .frame(width: 28, height: 28)
                                 .background(
                                     Circle()

@@ -32,7 +32,7 @@ struct PrismApp: App {
         Settings {
             SettingsView()
                 .environmentObject(ChatManager.shared)
-                .frame(minWidth: 500, minHeight: 400)
+                .frame(minWidth: 420, minHeight: 500)
         }
     }
 }

@@ -2538,7 +2538,7 @@ struct SidebarView: View {
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                         TextField("Search chats...", text: $searchText)
                             .textFieldStyle(.plain)
                             .font(.system(size: 14))
@@ -2546,7 +2546,7 @@ struct SidebarView: View {
                             Button(action: { searchText = "" }) {
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.system(size: 13))
-                                    .foregroundColor(.secondary.opacity(0.5))
+                                    .foregroundStyle(.secondary.opacity(0.5))
                             }
                             .buttonStyle(.plain)
                         }
@@ -2571,10 +2571,10 @@ struct SidebarView: View {
                             Spacer()
                             Image(systemName: "text.magnifyingglass")
                                 .font(.system(size: 28))
-                                .foregroundColor(.secondary.opacity(0.2))
+                                .foregroundStyle(.secondary.opacity(0.2))
                             Text("Search by title or message content")
                                 .font(.system(size: 12))
-                                .foregroundColor(.secondary.opacity(0.5))
+                                .foregroundStyle(.secondary.opacity(0.5))
                             Spacer()
                         }
                         .frame(maxWidth: .infinity)
@@ -2584,10 +2584,10 @@ struct SidebarView: View {
                             Spacer()
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 24))
-                                .foregroundColor(.secondary.opacity(0.2))
+                                .foregroundStyle(.secondary.opacity(0.2))
                             Text("No chats found for \"\(searchText)\"")
                                 .font(.system(size: 12))
-                                .foregroundColor(.secondary.opacity(0.5))
+                                .foregroundStyle(.secondary.opacity(0.5))
                             Spacer()
                         }
                         .frame(maxWidth: .infinity)
@@ -2599,7 +2599,7 @@ struct SidebarView: View {
                                 "\(filteredSessions.count) result\(filteredSessions.count == 1 ? "" : "s")"
                             )
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary.opacity(0.6))
                             Spacer()
                         }
                         .padding(.horizontal, 16)
@@ -2626,18 +2626,18 @@ struct SidebarView: View {
                                                 )
                                                 .lineLimit(1)
                                                 .font(.system(size: 13, weight: .medium))
-                                                .foregroundColor(.primary)
+                                                .foregroundStyle(.primary)
                                                 HStack(spacing: 6) {
                                                     Text(session.date, style: .date)
                                                         .font(.system(size: 10))
-                                                        .foregroundColor(.secondary.opacity(0.6))
+                                                        .foregroundStyle(.secondary.opacity(0.6))
                                                     if !session.messages.isEmpty {
                                                         Text("·")
-                                                            .foregroundColor(
+                                                            .foregroundStyle(
                                                                 .secondary.opacity(0.4))
                                                         Text("\(session.messages.count) messages")
                                                             .font(.system(size: 10))
-                                                            .foregroundColor(
+                                                            .foregroundStyle(
                                                                 .secondary.opacity(0.6))
                                                     }
                                                 }
@@ -2645,7 +2645,7 @@ struct SidebarView: View {
                                             Spacer()
                                             Image(systemName: "chevron.right")
                                                 .font(.system(size: 9, weight: .bold))
-                                                .foregroundColor(.secondary.opacity(0.3))
+                                                .foregroundStyle(.secondary.opacity(0.3))
                                         }
                                         .padding(.horizontal, 12)
                                         .padding(.vertical, 10)
@@ -2690,7 +2690,7 @@ struct SidebarView: View {
                     .frame(maxWidth: 12)
                 Text("Tools")
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundColor(.secondary.opacity(0.6))
+                    .foregroundStyle(.secondary.opacity(0.6))
                     .textCase(.uppercase)
                     .tracking(1.2)
                 Rectangle()
@@ -2763,7 +2763,7 @@ struct SidebarView: View {
                     Text("Customize")
                         .font(.system(size: 10, weight: .medium))
                 }
-                .foregroundColor(.secondary.opacity(0.5))
+                .foregroundStyle(.secondary.opacity(0.5))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
             }
@@ -2772,7 +2772,7 @@ struct SidebarView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Visible Tools")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                     Toggle(isOn: $showCompareTool) {
                         Label("Compare", systemImage: "square.split.2x1")
                             .font(.system(size: 12))
@@ -2802,13 +2802,13 @@ struct SidebarView: View {
 
                     Text("Drag to reorder")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
 
                     ForEach(toolOrder, id: \.self) { toolId in
                         HStack(spacing: 8) {
                             Image(systemName: "line.3.horizontal")
                                 .font(.system(size: 10))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                             Image(systemName: toolIcon(for: toolId))
                                 .font(.system(size: 11))
                                 .frame(width: 16)
@@ -2820,7 +2820,7 @@ struct SidebarView: View {
                                 Button(action: { moveToolUp(toolId) }) {
                                     Image(systemName: "chevron.up")
                                         .font(.system(size: 9, weight: .bold))
-                                        .foregroundColor(.secondary)
+                                        .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2829,7 +2829,7 @@ struct SidebarView: View {
                                 Button(action: { moveToolDown(toolId) }) {
                                     Image(systemName: "chevron.down")
                                         .font(.system(size: 9, weight: .bold))
-                                        .foregroundColor(.secondary)
+                                        .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -2943,7 +2943,7 @@ struct SidebarView: View {
     var sectionHeader: some View {
         Text("Your chats")
             .font(.caption)
-            .foregroundColor(.secondary)
+            .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
             .padding(.top, 12)
             .padding(.bottom, 8)
@@ -3023,10 +3023,10 @@ struct SidebarView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 9))
-                            .foregroundColor(.secondary.opacity(0.5))
+                            .foregroundStyle(.secondary.opacity(0.5))
                         Text("Pinned")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary.opacity(0.6))
                             .textCase(.uppercase)
                             .tracking(1.0)
                         Spacer()
@@ -3125,11 +3125,11 @@ struct SidebarItem: View {
             .background(
                 isSelected ? Color.primary.opacity(0.1) : Color.clear
             )
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundColor(isSelected ? .primary : .primary.opacity(0.8))
+        .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.8))
     }
 }
 
@@ -3175,20 +3175,22 @@ struct SidebarRow: View {
                     } else {
                         Text(session.title.isEmpty ? "New Chat" : session.title)
                             .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                            .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
+                            .foregroundStyle(
+                                isSelected ? Color.primary : Color.primary.opacity(0.9)
+                            )
                             .lineLimit(1)
                     }
                     if session.isPinned {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 8))
-                            .foregroundColor(.secondary.opacity(0.5))
+                            .foregroundStyle(.secondary.opacity(0.5))
                             .rotationEffect(.degrees(45))
                     }
                 }
 
                 Text(session.date, style: .date)
                     .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -3196,7 +3198,7 @@ struct SidebarRow: View {
             if !session.messages.isEmpty {
                 Text("\(session.messages.count)")
                     .font(.caption2)
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .foregroundStyle(.secondary.opacity(0.5))
             }
         }
         .padding(.horizontal, 12)
@@ -3277,10 +3279,10 @@ struct HeaderView: View {
                                 endPoint: .bottomTrailing))
                     Text(selectedProvider)
                         .font(.headline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.primary)
                     Image(systemName: "chevron.down")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -3296,7 +3298,7 @@ struct HeaderView: View {
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        .background(Color.clear)
+        .glassEffect(.regular, in: .rect(cornerRadius: 0))
     }
     func getProviderIcon(_ provider: String) -> String {
         switch provider {
@@ -3331,10 +3333,10 @@ struct AttachmentPreview: View {
                     VStack(spacing: 2) {
                         Image(systemName: "doc.text.fill")
                             .font(.system(size: 24))
-                            .foregroundColor(.red)
+                            .foregroundStyle(.red)
                         Text("PDF")
                             .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.primary)
                     }
                     .frame(width: 60, height: 60)
                     .background(Color.secondary.opacity(0.1))
@@ -3343,13 +3345,13 @@ struct AttachmentPreview: View {
                     VStack(spacing: 2) {
                         Image(systemName: "doc.plaintext")
                             .font(.system(size: 24))
-                            .foregroundColor(.blue)
+                            .foregroundStyle(.blue)
                         Text(
                             attachment.fileName?.components(separatedBy: ".").last?.uppercased()
                                 .prefix(4).map(String.init).joined() ?? "TXT"
                         )
                         .font(.system(size: 7, weight: .bold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                     }
                     .frame(width: 60, height: 60)
@@ -3364,7 +3366,7 @@ struct AttachmentPreview: View {
 
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(.gray)
+                    .foregroundStyle(.gray)
                     .background(Color.white.clipShape(Circle()))
             }
             .buttonStyle(.plain)
@@ -3571,7 +3573,7 @@ struct InputView: View {
                 Button(action: onSelectAttachment) {
                     Image(systemName: "plus")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .frame(width: 34, height: 34)
                         .background(
                             Circle()
@@ -3638,7 +3640,7 @@ struct InputView: View {
                     } label: {
                         Image(systemName: "server.rack")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .frame(width: 34, height: 34)
                             .background(
                                 Circle()
@@ -3720,7 +3722,7 @@ struct InputView: View {
                     } label: {
                         Image(systemName: "sparkles")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .frame(width: 34, height: 34)
                             .background(
                                 Circle()
@@ -3854,7 +3856,7 @@ struct InputView: View {
                     } label: {
                         Image(systemName: "brain")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .frame(width: 34, height: 34)
                             .background(
                                 Circle()
@@ -3875,7 +3877,7 @@ struct InputView: View {
                     }) {
                         Image(systemName: webSearchEnabled ? "globe" : "globe")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(webSearchEnabled ? .blue : .secondary)
+                            .foregroundStyle(webSearchEnabled ? Color.blue : Color.secondary)
                             .frame(width: 34, height: 34)
                             .background(
                                 Circle()
@@ -3937,10 +3939,10 @@ struct InputView: View {
 
                         Image(systemName: isLoading ? "stop.fill" : "arrow.up")
                             .font(.system(size: isLoading ? 12 : 14, weight: .bold))
-                            .foregroundColor(
+                            .foregroundStyle(
                                 isLoading
-                                    ? .white
-                                    : (colorScheme == .dark ? .black : .white)
+                                    ? Color.white
+                                    : (colorScheme == .dark ? Color.black : Color.white)
                             )
                     }
                 }
@@ -3979,7 +3981,7 @@ struct InputView: View {
                     "Ask AI anything... (type / for commands)"
                 )
                 .font(.system(size: 15, weight: .regular))
-                .foregroundColor(.secondary.opacity(0.6))
+                .foregroundStyle(.secondary.opacity(0.6))
                 .allowsHitTesting(false)
                 .padding(.leading, 4)
             }
@@ -3988,7 +3990,7 @@ struct InputView: View {
                 .focused($isFocused)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .lineLimit(1...10)
                 .onKeyPress(.upArrow) {
                     if showSlashAutocomplete && !slashMatches.isEmpty {
@@ -4143,7 +4145,7 @@ struct ThumbnailView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: maxWidth, maxHeight: maxHeight)
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .background(
                         GeometryReader { g in
                             Color.clear.preference(
@@ -4172,7 +4174,7 @@ struct ThumbnailView: View {
                 Rectangle()
                     .fill(Color.gray.opacity(0.2))
                     .frame(width: 200, height: 200)
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .onAppear {
                         generateThumbnail()
                     }
@@ -4607,13 +4609,13 @@ struct TextBlockView: View {
             if let cached = cachedAttributedText {
                 Text(cached)
                     .font(.system(size: 15))
-                    .foregroundColor(textColor)
+                    .foregroundStyle(textColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(MarkdownParser.shared.parse(text))
                     .font(.system(size: 15))
-                    .foregroundColor(textColor)
+                    .foregroundStyle(textColor)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -4663,7 +4665,7 @@ struct CodeBlockView: View {
                 if !language.isEmpty {
                     Text(language.lowercased())
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundColor(langColor)
+                        .foregroundStyle(langColor)
                 }
                 Spacer()
                 Button(action: {
@@ -4700,7 +4702,7 @@ struct CodeBlockView: View {
                             .opacity(copyHovered ? 1 : 0)
                     }
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(copied ? .green : langColor)
+                    .foregroundStyle(copied ? Color.green : langColor)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
                     .background(
@@ -4759,7 +4761,7 @@ struct TableCellView: View {
         } else {
             Text(MarkdownParser.shared.parse(text))
                 .font(.system(size: 14, weight: isHeader ? .semibold : .regular))
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                 .multilineTextAlignment(.leading)
                 .lineLimit(nil)
                 .fixedSize(horizontal: false, vertical: true)
@@ -4807,7 +4809,7 @@ struct MarkdownView: View, Equatable {
                                 weight: .bold)
                         )
                         .padding(.top, 8)
-                        .foregroundColor(textColor)
+                        .foregroundStyle(textColor)
 
                         .fixedSize(horizontal: false, vertical: true)
                 case .divider:
@@ -4817,7 +4819,7 @@ struct MarkdownView: View, Equatable {
                     HStack(alignment: .top, spacing: 8) {
                         Text("•")
                             .font(.system(size: 15))
-                            .foregroundColor(textColor)
+                            .foregroundStyle(textColor)
                         TextBlockView(
                             text: text,
                             cachedAttributedText: block.attributedText,
@@ -4829,7 +4831,7 @@ struct MarkdownView: View, Equatable {
                     HStack(alignment: .top, spacing: 8) {
                         Text("\(number).")
                             .font(.system(size: 15))
-                            .foregroundColor(textColor)
+                            .foregroundStyle(textColor)
                         TextBlockView(
                             text: text,
                             cachedAttributedText: block.attributedText,
@@ -4844,7 +4846,7 @@ struct MarkdownView: View, Equatable {
                             .frame(width: 4)
                         renderRichText(text, cached: block.attributedText)
                             .font(.system(size: 15))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
 
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -4895,7 +4897,7 @@ struct MarkdownView: View, Equatable {
                         }
                     }
                     .background(Color.primary.opacity(0.02))
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.gray.opacity(0.2), lineWidth: 1)
@@ -5013,7 +5015,7 @@ struct EmptyStateView: View {
 
                     Text("How can I help you today?")
                         .font(.system(size: 16, weight: .regular, design: .rounded))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .foregroundStyle(.secondary.opacity(0.7))
                 }
 
                 // Suggestion chips
@@ -5021,7 +5023,7 @@ struct EmptyStateView: View {
                     ForEach(["Write", "Analyze", "Create", "Explain"], id: \.self) { suggestion in
                         Text(suggestion)
                             .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary.opacity(0.6))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
                             .glassEffect(.regular, in: .capsule)
@@ -5105,7 +5107,7 @@ struct ExpandingActionButton: View {
                     .opacity(isHovered ? 1 : 0)
             }
             .font(font)
-            .foregroundColor(color)
+            .foregroundStyle(color)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -5135,6 +5137,7 @@ struct MessageView: View, Equatable {
     @State private var isEditing = false
     @State private var editText = ""
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @Environment(\.colorScheme) private var colorScheme
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -5161,18 +5164,13 @@ struct MessageView: View, Equatable {
                         HStack(spacing: 8) {
                             Image(systemName: "doc.text.fill")
                                 .font(.title2)
-                                .foregroundColor(.red)
+                                .foregroundStyle(.red)
                             Text("PDF Document")
                                 .font(.callout)
-                                .foregroundColor(.primary)
+                                .foregroundStyle(.primary)
                         }
                         .padding(10)
-                        .background(Material.ultraThin)
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                        )
+                        .glassEffect(.regular, in: .rect(cornerRadius: 12))
                         .padding(.bottom, 4)
                     }
 
@@ -5183,10 +5181,10 @@ struct MessageView: View, Equatable {
                             HStack(spacing: 6) {
                                 Image(systemName: "pencil.circle.fill")
                                     .font(.system(size: 14))
-                                    .foregroundColor(.blue)
+                                    .foregroundStyle(.blue)
                                 Text("Editing message")
                                     .font(.caption.weight(.medium))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                 Spacer()
                             }
 
@@ -5222,7 +5220,7 @@ struct MessageView: View, Equatable {
                                         Text("Cancel")
                                             .font(.system(size: 12, weight: .medium))
                                     }
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
                                     .background(
@@ -5250,7 +5248,7 @@ struct MessageView: View, Equatable {
                                         Text("Save & Send")
                                             .font(.system(size: 12, weight: .semibold))
                                     }
-                                    .foregroundColor(.white)
+                                    .foregroundStyle(.white)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
                                     .background(
@@ -5278,9 +5276,16 @@ struct MessageView: View, Equatable {
                     } else {
                         // Normal display mode
                         Text(message.content)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                            .padding(12)
-                            .background(Color.blue.opacity(0.2))
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                LinearGradient(
+                                    colors: appTheme.colors.map { $0.opacity(0.25) },
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
                             .glassEffect(.regular, in: .rect(cornerRadius: 16))
 
                         // Action Buttons for user messages
@@ -5326,10 +5331,10 @@ struct MessageView: View, Equatable {
                             DisclosureGroup(isExpanded: $isThinkingExpanded) {
                                 Text(thinking)
                                     .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                     .padding(8)
                                     .background(Color.gray.opacity(0.1))
-                                    .cornerRadius(8)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             } label: {
                                 HStack(spacing: 4) {
@@ -5338,7 +5343,7 @@ struct MessageView: View, Equatable {
                                     Text("Reasoning Process")
                                         .font(.caption)
                                 }
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .contentShape(Rectangle())
                             }
                             .animation(
@@ -5368,11 +5373,13 @@ struct MessageView: View, Equatable {
                             if message.isStreaming {
                                 let displayContent = activeContent + (isCursorVisible ? " ▋" : "")
                                 MarkdownView(blocks: Message.parseMarkdown(displayContent))
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundStyle(
+                                        colorScheme == .dark ? Color.white : Color.black)
                             } else {
                                 MarkdownView(blocks: message.blocks)
                                     .equatable()
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundStyle(
+                                        colorScheme == .dark ? Color.white : Color.black)
                             }
                         }
                     }
@@ -5430,15 +5437,16 @@ struct MessageView: View, Equatable {
                                 }) {
                                     Image(systemName: "chevron.left")
                                         .font(.system(size: 10, weight: .semibold))
-                                        .foregroundColor(
-                                            currentIdx > 0 ? .primary : .secondary.opacity(0.3))
+                                        .foregroundStyle(
+                                            currentIdx > 0
+                                                ? Color.primary : Color.secondary.opacity(0.3))
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(currentIdx <= 0)
 
                                 Text("\(currentIdx + 1)/\(versions.count)")
                                     .font(.system(size: 11, weight: .medium, design: .rounded))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                     .monospacedDigit()
 
                                 Button(action: {
@@ -5448,9 +5456,9 @@ struct MessageView: View, Equatable {
                                 }) {
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 10, weight: .semibold))
-                                        .foregroundColor(
+                                        .foregroundStyle(
                                             currentIdx < versions.count - 1
-                                                ? .primary : .secondary.opacity(0.3))
+                                                ? Color.primary : Color.secondary.opacity(0.3))
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(currentIdx >= versions.count - 1)
@@ -5471,7 +5479,7 @@ struct MessageView: View, Equatable {
                         let displayModel = GeminiModelManager.displayNames[model] ?? model
                         Text("Model used: \(displayModel). Information could be inaccurate.")
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary.opacity(0.8))
+                            .foregroundStyle(.secondary.opacity(0.8))
                             .padding(.top, 2)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
@@ -5605,7 +5613,9 @@ struct SettingsView: View {
 
                                     Text(theme.rawValue)
                                         .font(.caption2)
-                                        .foregroundColor(appTheme == theme ? .secondary : .clear)
+                                        .foregroundStyle(
+                                            appTheme == theme ? Color.secondary : Color.clear
+                                        )
                                         .fixedSize()
                                 }
                             }
@@ -5708,7 +5718,7 @@ struct SettingsView: View {
                         if !imageDownloadPath.isEmpty {
                             Button(action: { imageDownloadPath = "" }) {
                                 Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
                         }
@@ -5718,7 +5728,7 @@ struct SettingsView: View {
                     "Generated images will be instantly saved to this folder. Leave empty to disable."
                 )
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             }
 
             Section(header: Text("Gemini API")) {
@@ -5740,7 +5750,7 @@ struct SettingsView: View {
                             Color.gray.opacity(0.2), lineWidth: 1))
                 Text("Instructions for how the AI should behave.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
 
             Section(header: Text("Ollama")) {
@@ -5751,7 +5761,7 @@ struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
                 Text("Get a key at ollama.com/settings/keys — enables the web search button.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 Text("Custom Models").font(.headline)
                     .padding(.top, 8)
@@ -5779,7 +5789,7 @@ struct SettingsView: View {
                     }
                     .padding(8)
                     .background(Color.gray.opacity(0.1))
-                    .cornerRadius(6)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
             }
 
@@ -5813,7 +5823,9 @@ struct SettingsView: View {
             .listRowBackground(Color.clear)
         }
         .formStyle(.grouped)
-        .frame(minWidth: 500, minHeight: 600)
+        .scrollContentBackground(.hidden)
+        .frame(minWidth: 420, idealWidth: 450, minHeight: 650, idealHeight: 750)
+        .background(.ultraThinMaterial)
         .padding()
     }
 }
@@ -5886,16 +5898,16 @@ struct WelcomeView: View {
 
                     Text("Your All-in-One AI Assistant")
                         .font(.title2)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
 
                 Button(action: onDismiss) {
                     Text("Get Started")
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .frame(width: 200, height: 50)
                         .background(Color.blue)
-                        .cornerRadius(25)
+                        .clipShape(RoundedRectangle(cornerRadius: 25))
                 }
                 .buttonStyle(.plain)
             }
@@ -6310,7 +6322,7 @@ struct ImageGalleryView: View {
                             Image(nsImage: item.2)
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
-                                .cornerRadius(8)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                                 .shadow(radius: 2)
                                 .background(
                                     GeometryReader { imgGeo in
@@ -6327,7 +6339,7 @@ struct ImageGalleryView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .aspectRatio(1, contentMode: .fit)
                         .background(Color.white.opacity(0.05))
-                        .cornerRadius(16)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
                         .onTapGesture {
                             previewSourceRect = imageFrames[item.1] ?? .zero
                             selectedImageForPreview = item.2

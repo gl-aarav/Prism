@@ -137,7 +137,7 @@ struct QuizMeView: View {
                     )
                 Text("Quiz Me")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -150,7 +150,7 @@ struct QuizMeView: View {
                 HStack(spacing: 4) {
                     Text("\(min(currentQuestionIndex + 1, questions.count))/\(questions.count)")
                         .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -160,10 +160,10 @@ struct QuizMeView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "star.fill")
                         .font(.system(size: 11))
-                        .foregroundColor(.yellow)
+                        .foregroundStyle(.yellow)
                     Text("\(score)")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -173,7 +173,7 @@ struct QuizMeView: View {
                 Button(action: resetQuiz) {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(8)
                         .glassEffect(.regular, in: .circle)
                 }
@@ -184,10 +184,10 @@ struct QuizMeView: View {
                 HStack(spacing: 4) {
                     Image(systemName: difficultyIcon)
                         .font(.system(size: 10))
-                        .foregroundColor(difficultyColor)
+                        .foregroundStyle(difficultyColor)
                     Text(difficulty.capitalized)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(difficultyColor)
+                        .foregroundStyle(difficultyColor)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
@@ -232,17 +232,17 @@ struct QuizMeView: View {
                 VStack(spacing: 6) {
                     Text("Test Your Knowledge")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                     Text("Enter a topic and AI will generate a quiz for you")
                         .font(.system(size: 14))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
 
                 // Topic input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Topic")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     TextField(
                         "e.g. Quantum Physics, World History, Swift Programming...", text: $topic
                     )
@@ -268,7 +268,7 @@ struct QuizMeView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Questions")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     HStack(spacing: 12) {
                         Stepper(value: $numberOfQuestions, in: 1...30) {
                             Text("\(numberOfQuestions)")
@@ -284,7 +284,7 @@ struct QuizMeView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Difficulty")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                     Picker("", selection: $difficulty) {
                         Text("Easy").tag("easy")
                         Text("Medium").tag("medium")
@@ -299,7 +299,7 @@ struct QuizMeView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("AI Provider")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
 
                     Menu {
                         Button(action: {
@@ -338,9 +338,9 @@ struct QuizMeView: View {
                             Spacer()
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                         }
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .padding(12)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -393,7 +393,7 @@ struct QuizMeView: View {
                                     Text("Thinking: \(quizThinkingLevel.capitalized)")
                                         .font(.system(size: 11, weight: .medium))
                                 }
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                                 .background(
@@ -415,7 +415,9 @@ struct QuizMeView: View {
                                     )
                                     .font(.system(size: 11, weight: .medium))
                                 }
-                                .foregroundColor(quizWebSearchEnabled ? .blue : .secondary)
+                                .foregroundStyle(
+                                    quizWebSearchEnabled ? Color.blue : Color.secondary
+                                )
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                                 .background(
@@ -437,20 +439,20 @@ struct QuizMeView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 10))
-                        .foregroundColor(.orange)
+                        .foregroundStyle(.orange)
                     Text("Results may be less accurate when using small or local models.")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .foregroundStyle(.secondary.opacity(0.7))
                 }
                 .frame(maxWidth: 400, alignment: .leading)
 
                 if let error = generationError {
                     Text(error)
                         .font(.system(size: 12))
-                        .foregroundColor(.red)
+                        .foregroundStyle(.red)
                         .padding(10)
                         .background(Color.red.opacity(0.08))
-                        .cornerRadius(8)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
                         .frame(maxWidth: 400)
                 }
 
@@ -462,7 +464,7 @@ struct QuizMeView: View {
                         Text("Start Quiz")
                             .font(.system(size: 15, weight: .semibold))
                     }
-                    .foregroundColor(colorScheme == .dark ? .black : .white)
+                    .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 12)
                     .background(
@@ -495,17 +497,17 @@ struct QuizMeView: View {
                 .controlSize(.large)
             Text("Generating quiz on \"\(topic)\"...")
                 .font(.system(size: 15, weight: .medium))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Text("Using \(quizProvider) — \(quizModel)")
                 .font(.system(size: 12))
-                .foregroundColor(.secondary.opacity(0.6))
+                .foregroundStyle(.secondary.opacity(0.6))
             Button("Cancel") {
                 generateTask?.cancel()
                 generateTask = nil
                 isGenerating = false
             }
             .buttonStyle(.plain)
-            .foregroundColor(.red)
+            .foregroundStyle(.red)
             Spacer()
         }
     }
@@ -548,7 +550,7 @@ struct QuizMeView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Question \(currentQuestionIndex + 1)")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .textCase(.uppercase)
                         .tracking(0.8)
 
@@ -582,14 +584,14 @@ struct QuizMeView: View {
                                         .frame(width: 32, height: 32)
                                     Text(String(Character(UnicodeScalar(65 + index)!)))
                                         .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(
+                                        .foregroundStyle(
                                             optionTextColor(
                                                 for: index, correct: question.correctIndex))
                                 }
 
                                 Text(option)
                                     .font(.system(size: 14))
-                                    .foregroundColor(.primary)
+                                    .foregroundStyle(.primary)
                                     .multilineTextAlignment(.leading)
 
                                 Spacer()
@@ -597,10 +599,10 @@ struct QuizMeView: View {
                                 if let selected = selectedAnswer {
                                     if index == question.correctIndex {
                                         Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.green)
+                                            .foregroundStyle(.green)
                                     } else if index == selected {
                                         Image(systemName: "xmark.circle.fill")
-                                            .foregroundColor(.red)
+                                            .foregroundStyle(.red)
                                     }
                                 }
                             }
@@ -633,12 +635,14 @@ struct QuizMeView: View {
                                 systemName: selectedAnswer == question.correctIndex
                                     ? "lightbulb.fill" : "exclamationmark.circle"
                             )
-                            .foregroundColor(
-                                selectedAnswer == question.correctIndex ? .yellow : .orange)
+                            .foregroundStyle(
+                                selectedAnswer == question.correctIndex
+                                    ? Color.yellow : Color.orange)
                             Text(selectedAnswer == question.correctIndex ? "Correct!" : "Not quite")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(
-                                    selectedAnswer == question.correctIndex ? .green : .red)
+                                .foregroundStyle(
+                                    selectedAnswer == question.correctIndex
+                                        ? Color.green : Color.red)
                         }
                         MarkdownView(blocks: Message.parseMarkdown(question.explanation))
                             .fixedSize(horizontal: false, vertical: true)
@@ -666,7 +670,7 @@ struct QuizMeView: View {
                             Image(systemName: "arrow.right")
                                 .font(.system(size: 12, weight: .semibold))
                         }
-                        .foregroundColor(colorScheme == .dark ? .black : .white)
+                        .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 10)
                         .background(
@@ -688,7 +692,7 @@ struct QuizMeView: View {
                         HStack(spacing: 8) {
                             Text("Adjust difficulty?")
                                 .font(.system(size: 11))
-                                .foregroundColor(.secondary.opacity(0.6))
+                                .foregroundStyle(.secondary.opacity(0.6))
 
                             if difficulty != "easy" {
                                 Button(action: {
@@ -700,7 +704,7 @@ struct QuizMeView: View {
                                         Text("Easier")
                                             .font(.system(size: 11, weight: .medium))
                                     }
-                                    .foregroundColor(.green)
+                                    .foregroundStyle(.green)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
                                     .background(Capsule().fill(Color.green.opacity(0.1)))
@@ -719,7 +723,7 @@ struct QuizMeView: View {
                                         Text("Harder")
                                             .font(.system(size: 11, weight: .medium))
                                     }
-                                    .foregroundColor(.red)
+                                    .foregroundStyle(.red)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
                                     .background(Capsule().fill(Color.red.opacity(0.1)))
@@ -772,26 +776,26 @@ struct QuizMeView: View {
                             )
                         Text("/ \(questions.count)")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 Text(scoreMessage)
                     .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
 
                 Text("Topic: \(topic)")
                     .font(.system(size: 13))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
 
                 // Small model warning
                 HStack(spacing: 6) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 10))
-                        .foregroundColor(.orange)
+                        .foregroundStyle(.orange)
                     Text("Results may be less accurate when using small or local models.")
                         .font(.system(size: 11))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .foregroundStyle(.secondary.opacity(0.7))
                 }
 
                 HStack(spacing: 12) {
@@ -801,7 +805,7 @@ struct QuizMeView: View {
                             Text("New Quiz")
                         }
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
                         .glassEffect(.regular, in: .capsule)
@@ -814,7 +818,7 @@ struct QuizMeView: View {
                             Text("Retry Same Topic")
                         }
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(colorScheme == .dark ? .black : .white)
+                        .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
                         .background(

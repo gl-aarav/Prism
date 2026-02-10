@@ -240,7 +240,7 @@ struct ModelComparisonView: View {
                     )
                 Text("Model Comparison")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -276,7 +276,7 @@ struct ModelComparisonView: View {
                         Text("Add Model")
                             .font(.system(size: 13, weight: .medium))
                     }
-                    .foregroundColor(.primary.opacity(0.8))
+                    .foregroundStyle(.primary.opacity(0.8))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .glassEffect(.regular, in: .capsule)
@@ -289,7 +289,7 @@ struct ModelComparisonView: View {
                 Button(action: clearAll) {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(8)
                         .glassEffect(.regular, in: .circle)
                 }
@@ -313,7 +313,7 @@ struct ModelComparisonView: View {
                     if prompt.isEmpty && !isInputFocused {
                         Text("Enter a prompt to compare models...")
                             .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary.opacity(0.6))
                             .allowsHitTesting(false)
                             .padding(.leading, 4)
                     }
@@ -321,7 +321,7 @@ struct ModelComparisonView: View {
                         .focused($isInputFocused)
                         .textFieldStyle(.plain)
                         .font(.system(size: 15))
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                         .lineLimit(1...5)
                         .onKeyPress(.return) {
                             if NSEvent.modifierFlags.contains(.shift) {
@@ -376,10 +376,10 @@ struct ModelComparisonView: View {
 
                         Image(systemName: isComparing ? "stop.fill" : "arrow.up")
                             .font(.system(size: isComparing ? 12 : 14, weight: .bold))
-                            .foregroundColor(
+                            .foregroundStyle(
                                 isComparing
-                                    ? .white
-                                    : (colorScheme == .dark ? .black : .white)
+                                    ? Color.white
+                                    : (colorScheme == .dark ? Color.black : Color.white)
                             )
                     }
                 }
@@ -473,9 +473,9 @@ struct ModelComparisonView: View {
                             .font(.system(size: 12, weight: .medium))
                         Image(systemName: "chevron.down")
                             .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .glassEffect(.regular, in: .capsule)
@@ -493,7 +493,7 @@ struct ModelComparisonView: View {
                             Text("Generate")
                                 .font(.system(size: 12, weight: .semibold))
                         }
-                        .foregroundColor(colorScheme == .dark ? .black : .white)
+                        .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 7)
                         .background(
@@ -521,7 +521,7 @@ struct ModelComparisonView: View {
                             Text("Stop")
                                 .font(.system(size: 12, weight: .medium))
                         }
-                        .foregroundColor(.red)
+                        .foregroundStyle(.red)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(
@@ -542,7 +542,7 @@ struct ModelComparisonView: View {
                                 Text("Retry")
                                     .font(.system(size: 11, weight: .medium))
                             }
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(Capsule().fill(Color.secondary.opacity(0.08)))
@@ -559,7 +559,7 @@ struct ModelComparisonView: View {
                                 Text("Copy")
                                     .font(.system(size: 11, weight: .medium))
                             }
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(Capsule().fill(Color.secondary.opacity(0.08)))
@@ -587,7 +587,7 @@ struct ModelComparisonView: View {
                                 Text("Thinking: \(synthesizeThinkingLevel.capitalized)")
                                     .font(.system(size: 11, weight: .medium))
                             }
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(
@@ -611,7 +611,9 @@ struct ModelComparisonView: View {
                                 )
                                 .font(.system(size: 11, weight: .medium))
                             }
-                            .foregroundColor(synthesizeWebSearchEnabled ? .blue : .secondary)
+                            .foregroundStyle(
+                                synthesizeWebSearchEnabled ? Color.blue : Color.secondary
+                            )
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(
@@ -638,10 +640,10 @@ struct ModelComparisonView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "wand.and.stars")
                             .font(.system(size: 28))
-                            .foregroundColor(.secondary.opacity(0.2))
+                            .foregroundStyle(.secondary.opacity(0.2))
                         Text("Select a model and tap Generate")
                             .font(.system(size: 12))
-                            .foregroundColor(.secondary.opacity(0.4))
+                            .foregroundStyle(.secondary.opacity(0.4))
                     }
                     .padding(.vertical, 24)
                     Spacer()
@@ -655,7 +657,7 @@ struct ModelComparisonView: View {
                             DisclosureGroup {
                                 Text(state.synthesizedThinking)
                                     .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
                                     .lineSpacing(3)
                             } label: {
@@ -665,7 +667,7 @@ struct ModelComparisonView: View {
                                     Text("Thinking")
                                         .font(.system(size: 11, weight: .medium))
                                 }
-                                .foregroundColor(.purple)
+                                .foregroundStyle(.purple)
                             }
                             .padding(.bottom, 4)
                         }
@@ -684,7 +686,7 @@ struct ModelComparisonView: View {
                     HStack {
                         Text("Synthesized by \(synthesizeProvider) — \(synthesizeModel)")
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary.opacity(0.6))
                         Spacer()
                     }
                     .padding(.horizontal, 16)
@@ -1227,7 +1229,7 @@ struct ComparisonCard: View {
                     .frame(width: 32, height: 32)
                 Image(systemName: providerIcon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(accentColor)
+                    .foregroundStyle(accentColor)
             }
 
             // Provider & Model selector
@@ -1359,7 +1361,7 @@ struct ComparisonCard: View {
                     } label: {
                         Image(systemName: "brain")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(accentColor.opacity(0.8))
+                            .foregroundStyle(accentColor.opacity(0.8))
                             .padding(5)
                             .background(
                                 Circle()
@@ -1375,8 +1377,8 @@ struct ComparisonCard: View {
                     Button(action: { onChangeWebSearch(!slot.webSearchEnabled) }) {
                         Image(systemName: "globe")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(
-                                slot.webSearchEnabled ? .blue : .secondary.opacity(0.6)
+                            .foregroundStyle(
+                                slot.webSearchEnabled ? Color.blue : Color.secondary.opacity(0.6)
                             )
                             .padding(5)
                             .background(
@@ -1401,7 +1403,7 @@ struct ComparisonCard: View {
                 } else if let elapsed = slot.elapsedTime {
                     Text(String(format: "%.1fs", elapsed))
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(
@@ -1413,7 +1415,7 @@ struct ComparisonCard: View {
                     Button(action: onRemove) {
                         Image(systemName: "xmark")
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.secondary.opacity(0.6))
+                            .foregroundStyle(.secondary.opacity(0.6))
                             .padding(6)
                             .background(Circle().fill(Color.secondary.opacity(0.08)))
                     }
@@ -1465,10 +1467,10 @@ struct ComparisonCard: View {
             HStack(spacing: 4) {
                 Text(slot.provider)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.primary.opacity(0.9))
+                    .foregroundStyle(.primary.opacity(0.9))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
         }
         .menuStyle(.borderlessButton)
@@ -1480,7 +1482,7 @@ struct ComparisonCard: View {
     private var modelLabel: some View {
         Text(slot.model)
             .font(.system(size: 11, weight: .medium))
-            .foregroundColor(.secondary)
+            .foregroundStyle(.secondary)
             .lineLimit(1)
     }
 
@@ -1493,10 +1495,10 @@ struct ComparisonCard: View {
             VStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 24))
-                    .foregroundColor(.orange)
+                    .foregroundStyle(.orange)
                 Text(error)
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
             }
@@ -1507,10 +1509,10 @@ struct ComparisonCard: View {
             VStack(spacing: 10) {
                 Image(systemName: "text.bubble")
                     .font(.system(size: 28))
-                    .foregroundColor(.secondary.opacity(0.3))
+                    .foregroundStyle(.secondary.opacity(0.3))
                 Text("Response will appear here")
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .foregroundStyle(.secondary.opacity(0.5))
             }
             .frame(maxWidth: .infinity, minHeight: 120)
             .padding(16)
@@ -1533,7 +1535,7 @@ struct ComparisonCard: View {
                 }
                 Text("Generating...")
                     .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, minHeight: 120)
             .padding(16)
@@ -1545,7 +1547,7 @@ struct ComparisonCard: View {
                         DisclosureGroup {
                             Text(thinking)
                                 .font(.system(size: 12, design: .monospaced))
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .textSelection(.enabled)
                                 .lineSpacing(3)
                         } label: {
@@ -1555,7 +1557,7 @@ struct ComparisonCard: View {
                                 Text("Thinking")
                                     .font(.system(size: 11, weight: .medium))
                             }
-                            .foregroundColor(.purple)
+                            .foregroundStyle(.purple)
                         }
                         .padding(.bottom, 4)
                     }
@@ -1573,10 +1575,10 @@ struct ComparisonCard: View {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 9))
-                        .foregroundColor(.orange.opacity(0.7))
+                        .foregroundStyle(.orange.opacity(0.7))
                     Text("Information could be inaccurate")
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.6))
+                        .foregroundStyle(.secondary.opacity(0.6))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
@@ -1597,7 +1599,7 @@ struct ComparisonCard: View {
                             Text(showCopied ? "Copied" : "Copy")
                                 .font(.system(size: 11, weight: .medium))
                         }
-                        .foregroundColor(showCopied ? .green : .secondary)
+                        .foregroundStyle(showCopied ? Color.green : Color.secondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(

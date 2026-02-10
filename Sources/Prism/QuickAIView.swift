@@ -83,10 +83,10 @@ struct QuickAIView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "wrench.and.screwdriver")
                                     .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.orange)
+                                    .foregroundStyle(.orange)
                                 Text("Currently viewing **\(activeToolName)** tool")
                                     .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                                 Spacer()
                                 Button(action: {
                                     activeToolName = ""
@@ -97,7 +97,7 @@ struct QuickAIView: View {
                                 }) {
                                     Text("New Chat")
                                         .font(.system(size: 11, weight: .semibold))
-                                        .foregroundColor(.primary.opacity(0.8))
+                                        .foregroundStyle(.primary.opacity(0.8))
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 4)
                                         .background(
@@ -602,7 +602,7 @@ extension QuickAIView {
                 Spacer()
                 if thinkingLevel == value {
                     Image(systemName: "checkmark")
-                        .foregroundColor(colorScheme == .dark ? .white : .accentColor)
+                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.accentColor)
                 }
             }
         }
@@ -615,7 +615,7 @@ extension QuickAIView {
                 Spacer()
                 if geminiThinkingLevel == value {
                     Image(systemName: "checkmark")
-                        .foregroundColor(colorScheme == .dark ? .white : .accentColor)
+                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.accentColor)
                 }
             }
         }
@@ -630,6 +630,7 @@ struct QuickAIMessageView: View, Equatable {
     @State private var isPasted = false
     @State private var isCursorVisible = true
     @State private var isThinkingExpanded = false
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @Environment(\.colorScheme) private var colorScheme
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -664,14 +665,17 @@ struct QuickAIMessageView: View, Equatable {
                     if !message.content.isEmpty {
                         Text(message.content)
                             .font(.system(size: 14))
-                            .padding(12)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
                             .background(
                                 LinearGradient(
-                                    colors: [Color.blue.opacity(0.92), Color.cyan.opacity(0.7)],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing)
+                                    colors: appTheme.colors.map { $0.opacity(0.25) },
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .glassEffect(.regular, in: .rect(cornerRadius: 12))
                     }
                 }
             } else {
@@ -695,7 +699,7 @@ struct QuickAIMessageView: View, Equatable {
                                     Text("Reasoning Process")
                                         .font(.caption)
                                 }
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                                 .contentShape(Rectangle())
                             }
                             .animation(
@@ -778,7 +782,7 @@ struct QuickAIMessageView: View, Equatable {
                             let displayModel = GeminiModelManager.displayNames[model] ?? model
                             Text("Model used: \(displayModel). Information could be inaccurate.")
                                 .font(.system(size: 10))
-                                .foregroundColor(.secondary.opacity(0.8))
+                                .foregroundStyle(.secondary.opacity(0.8))
                                 .padding(.top, 2)
                                 .frame(maxWidth: .infinity, alignment: .trailing)
                         }
@@ -1256,13 +1260,13 @@ extension QuickAIView {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: getProviderIcon(selectedProvider))
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                     Text(selectedProvider)
                         .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                     Image(systemName: "chevron.down")
                         .font(.caption)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -1295,7 +1299,7 @@ extension QuickAIView {
                 }
             }) {
                 Image(systemName: "square.and.pencil")
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(
@@ -1376,14 +1380,14 @@ extension QuickAIView {
             if let pdfData = selectedPDF {
                 HStack {
                     Image(systemName: "doc.text.fill")
-                        .foregroundColor(.red)
+                        .foregroundStyle(.red)
                     Text("PDF attached (\(pdfData.count / 1024) KB)")
                         .font(.caption)
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                     Spacer()
                     Button(action: { selectedPDF = nil }) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1395,15 +1399,16 @@ extension QuickAIView {
                     if inputText.isEmpty {
                         Text("Request... (type / for commands)")
                             .font(.system(size: 16))
-                            .foregroundColor(
-                                colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.4)
+                            .foregroundStyle(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.4) : Color.black.opacity(0.4)
                             )
                             .allowsHitTesting(false)
                     }
                     TextField("", text: $inputText, axis: .vertical)
                         .textFieldStyle(.plain)
                         .font(.system(size: 16))
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                         .lineLimit(1...6)
                         .multilineTextAlignment(.leading)
                         .focused($isFocused)
@@ -1495,8 +1500,8 @@ extension QuickAIView {
                                 Button(action: { selectedOllamaModel = model }) {
                                     if selectedOllamaModel == model {
                                         Label(model, systemImage: "checkmark")
-                                            .foregroundColor(
-                                                colorScheme == .dark ? .white : .primary)
+                                            .foregroundStyle(
+                                                colorScheme == .dark ? Color.white : Color.primary)
                                     } else {
                                         Text(model)
                                     }
@@ -1515,8 +1520,9 @@ extension QuickAIView {
                                         Button(action: { selectedOllamaModel = model }) {
                                             if selectedOllamaModel == model {
                                                 Label(model, systemImage: "checkmark")
-                                                    .foregroundColor(
-                                                        colorScheme == .dark ? .white : .primary)
+                                                    .foregroundStyle(
+                                                        colorScheme == .dark
+                                                            ? Color.white : Color.primary)
                                             } else {
                                                 Text(model)
                                             }
@@ -1546,7 +1552,7 @@ extension QuickAIView {
                     } label: {
                         Image(systemName: "server.rack")
                             .font(.system(size: 16))
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(6)
                             .background(Color.white.opacity(0.10))
                             .clipShape(Circle())
@@ -1582,8 +1588,8 @@ extension QuickAIView {
                                 } label: {
                                     if thinkingLevel == "high" {
                                         Label("Reasoning: On", systemImage: "checkmark")
-                                            .foregroundColor(
-                                                colorScheme == .dark ? .white : .primary)
+                                            .foregroundStyle(
+                                                colorScheme == .dark ? Color.white : Color.primary)
                                     } else {
                                         Text("Reasoning: On")
                                     }
@@ -1593,8 +1599,8 @@ extension QuickAIView {
                                 } label: {
                                     if thinkingLevel != "high" {
                                         Label("Reasoning: Off", systemImage: "checkmark")
-                                            .foregroundColor(
-                                                colorScheme == .dark ? .white : .primary)
+                                            .foregroundStyle(
+                                                colorScheme == .dark ? Color.white : Color.primary)
                                     } else {
                                         Text("Reasoning: Off")
                                     }
@@ -1607,7 +1613,7 @@ extension QuickAIView {
                         } label: {
                             Image(systemName: "brain")
                                 .font(.system(size: 16))
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                                 .padding(6)
                                 .background(Color.white.opacity(0.10))
                                 .clipShape(Circle())
@@ -1623,8 +1629,8 @@ extension QuickAIView {
                                 Button(action: { geminiModel = model }) {
                                     if geminiModel == model {
                                         Label(model, systemImage: "checkmark")
-                                            .foregroundColor(
-                                                colorScheme == .dark ? .white : .primary)
+                                            .foregroundStyle(
+                                                colorScheme == .dark ? Color.white : Color.primary)
                                     } else {
                                         Text(model)
                                     }
@@ -1640,8 +1646,9 @@ extension QuickAIView {
                                         Button(action: { geminiModel = model }) {
                                             if geminiModel == model {
                                                 Label(model, systemImage: "checkmark")
-                                                    .foregroundColor(
-                                                        colorScheme == .dark ? .white : .primary)
+                                                    .foregroundStyle(
+                                                        colorScheme == .dark
+                                                            ? Color.white : Color.primary)
                                             } else {
                                                 Text(model)
                                             }
@@ -1667,7 +1674,7 @@ extension QuickAIView {
                     } label: {
                         Image(systemName: "sparkles")
                             .font(.system(size: 16))
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(6)
                             .background(Color.white.opacity(0.10))
                             .clipShape(Circle())
@@ -1687,7 +1694,8 @@ extension QuickAIView {
                             } label: {
                                 if geminiThinkingLevel == "auto" {
                                     Label("Auto", systemImage: "checkmark")
-                                        .foregroundColor(colorScheme == .dark ? .white : .primary)
+                                        .foregroundStyle(
+                                            colorScheme == .dark ? Color.white : Color.primary)
                                 } else {
                                     Text("Auto")
                                 }
@@ -1700,7 +1708,7 @@ extension QuickAIView {
                         } label: {
                             Image(systemName: "brain")
                                 .font(.system(size: 16))
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                                 .padding(6)
                                 .background(Color.white.opacity(0.10))
                                 .clipShape(Circle())
@@ -1716,7 +1724,7 @@ extension QuickAIView {
                     Button(action: { webSearchEnabled.toggle() }) {
                         Image(systemName: "globe")
                             .font(.system(size: 16))
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(6)
                             .background(
                                 webSearchEnabled
@@ -1733,7 +1741,7 @@ extension QuickAIView {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 28))
                         .symbolRenderingMode(.monochrome)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                 }
                 .buttonStyle(.plain)
                 .disabled(inputText.isEmpty || isLoading)
