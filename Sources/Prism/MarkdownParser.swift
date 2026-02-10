@@ -563,9 +563,24 @@ struct MarkdownParser {
         content = content.replacingOccurrences(of: "\\dag", with: "\\dagger")
         content = content.replacingOccurrences(of: "\\ddag", with: "\\ddagger")
 
-        // Remove sizing commands
-        let sizingCommands = ["\\big", "\\Big", "\\bigg", "\\Bigg"]
+        // Remove sizing commands (longest first to avoid partial matches,
+        // e.g. stripping \Big from \Bigl leaving a stray "l")
+        let sizingCommands = [
+            "\\Biggl", "\\Biggr", "\\Biggm", "\\Bigg",
+            "\\biggl", "\\biggr", "\\biggm", "\\bigg",
+            "\\Bigl", "\\Bigr", "\\Bigm", "\\Big",
+            "\\bigl", "\\bigr", "\\bigm", "\\big",
+        ]
         for cmd in sizingCommands {
+            content = content.replacingOccurrences(of: cmd, with: "")
+        }
+
+        // Remove style commands that don't affect layout in display mode
+        let styleCommands = [
+            "\\displaystyle", "\\textstyle",
+            "\\scriptstyle", "\\scriptscriptstyle",
+        ]
+        for cmd in styleCommands {
             content = content.replacingOccurrences(of: cmd, with: "")
         }
 
