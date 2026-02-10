@@ -4710,6 +4710,8 @@ struct CodeBlockView: View {
     let language: String
     @Environment(\.colorScheme) private var colorScheme
     @State private var copied = false
+    @State private var copyHovered = false
+    @State private var copyTextWidth: CGFloat = 0
 
     private var isDark: Bool { colorScheme == .dark }
 
@@ -4760,19 +4762,43 @@ struct CodeBlockView: View {
                         }
                     }
                 }) {
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(copied ? .green : langColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 5)
-                                .fill(
-                                    isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06))
-                        )
+                    HStack(spacing: 4) {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .frame(width: 12)
+                        Text(copied ? "Copied!" : "Copy")
+                            .lineLimit(1)
+                            .fixedSize()
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.onAppear {
+                                        copyTextWidth = max(copyTextWidth, geo.size.width)
+                                    }
+                                    .onChange(of: geo.size.width) { _, w in
+                                        copyTextWidth = max(copyTextWidth, w)
+                                    }
+                                }
+                            )
+                            .frame(width: copyHovered ? copyTextWidth : 0, alignment: .leading)
+                            .clipped()
+                            .opacity(copyHovered ? 1 : 0)
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(copied ? .green : langColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(
+                                isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06))
+                    )
                 }
                 .buttonStyle(.plain)
-                .help(copied ? "Copied!" : "Copy Code")
+                .background(PointingHandCursor())
+                .onHover { hovering in
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                        copyHovered = hovering
+                    }
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -5144,6 +5170,75 @@ struct EmptyStateView: View {
     }
 }
 
+struct PointingHandCursor: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = Impl()
+        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        view.setContentHuggingPriority(.defaultLow, for: .vertical)
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+    private class Impl: NSView {
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            trackingAreas.forEach { removeTrackingArea($0) }
+            addTrackingArea(
+                NSTrackingArea(
+                    rect: bounds,
+                    options: [.cursorUpdate, .activeAlways],
+                    owner: self,
+                    userInfo: nil
+                ))
+        }
+        override func cursorUpdate(with event: NSEvent) {
+            NSCursor.pointingHand.set()
+        }
+    }
+}
+
+struct ExpandingActionButton: View {
+    let title: String
+    let icon: String
+    var color: Color = .secondary
+    var font: Font = .caption
+    let action: () -> Void
+    @State private var isHovered = false
+    @State private var textWidth: CGFloat = 0
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .frame(width: 14)
+                Text(title)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { textWidth = max(textWidth, geo.size.width) }
+                                .onChange(of: geo.size.width) { _, w in
+                                    textWidth = max(textWidth, w)
+                                }
+                        }
+                    )
+                    .frame(width: isHovered ? textWidth : 0, alignment: .leading)
+                    .clipped()
+                    .opacity(isHovered ? 1 : 0)
+            }
+            .font(font)
+            .foregroundColor(color)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(PointingHandCursor())
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isHovered)
+    }
+}
+
 struct MessageView: View, Equatable {
     let message: Message
     var liveContent: String? = nil
@@ -5317,35 +5412,32 @@ struct MessageView: View, Equatable {
                         // Action Buttons for user messages
                         HStack(spacing: 12) {
                             if canEdit {
-                                Button(action: {
-                                    editText = message.content
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        isEditing = true
+                                ExpandingActionButton(
+                                    title: "Edit",
+                                    icon: "pencil",
+                                    action: {
+                                        editText = message.content
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            isEditing = true
+                                        }
                                     }
-                                }) {
-                                    Image(systemName: "pencil")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                                .help("Edit")
+                                )
                             }
 
-                            Button(action: {
-                                let pasteboard = NSPasteboard.general
-                                pasteboard.clearContents()
-                                pasteboard.setString(message.content, forType: .string)
-                                isCopied = true
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                    isCopied = false
+                            ExpandingActionButton(
+                                title: isCopied ? "Copied!" : "Copy",
+                                icon: isCopied ? "checkmark" : "doc.on.doc",
+                                color: isCopied ? .green : .secondary,
+                                action: {
+                                    let pasteboard = NSPasteboard.general
+                                    pasteboard.clearContents()
+                                    pasteboard.setString(message.content, forType: .string)
+                                    isCopied = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                        isCopied = false
+                                    }
                                 }
-                            }) {
-                                Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                                    .font(.caption)
-                                    .foregroundColor(isCopied ? .green : .secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .help(isCopied ? "Copied!" : "Copy")
+                            )
                         }
                         .padding(.top, 4)
                     }
@@ -5413,48 +5505,44 @@ struct MessageView: View, Equatable {
 
                     // Action Buttons
                     HStack(spacing: 12) {
-                        Button(action: {
-                            let pasteboard = NSPasteboard.general
-                            pasteboard.clearContents()
-                            if let image = message.image {
-                                pasteboard.writeObjects([image])
-                            } else {
-                                pasteboard.setString(message.content, forType: .string)
+                        ExpandingActionButton(
+                            title: isCopied ? "Copied!" : "Copy",
+                            icon: isCopied ? "checkmark" : "doc.on.doc",
+                            color: isCopied ? .green : .secondary,
+                            action: {
+                                let pasteboard = NSPasteboard.general
+                                pasteboard.clearContents()
+                                if let image = message.image {
+                                    pasteboard.writeObjects([image])
+                                } else {
+                                    pasteboard.setString(message.content, forType: .string)
+                                }
+                                isCopied = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                    isCopied = false
+                                }
                             }
-                            isCopied = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                isCopied = false
-                            }
-                        }) {
-                            Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                                .font(.caption)
-                                .foregroundColor(isCopied ? .green : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help(isCopied ? "Copied!" : "Copy")
+                        )
 
                         if message.image != nil && !imageDownloadPath.isEmpty {
-                            Button(action: {
-                                if let image = message.image {
-                                    downloadImage(image, prompt: message.content)
+                            ExpandingActionButton(
+                                title: isSaved ? "Downloaded!" : "Download",
+                                icon: isSaved ? "checkmark" : "arrow.down.circle",
+                                color: isSaved ? .green : .secondary,
+                                action: {
+                                    if let image = message.image {
+                                        downloadImage(image, prompt: message.content)
+                                    }
                                 }
-                            }) {
-                                Image(systemName: isSaved ? "checkmark" : "arrow.down.circle")
-                                    .font(.caption)
-                                    .foregroundColor(isSaved ? .green : .secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .help(isSaved ? "Downloaded!" : "Download")
+                            )
                         }
 
                         if let onRegenerate = onRegenerate {
-                            Button(action: onRegenerate) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Regenerate")
+                            ExpandingActionButton(
+                                title: "Regenerate",
+                                icon: "arrow.counterclockwise",
+                                action: onRegenerate
+                            )
                         }
 
                         // Version navigator

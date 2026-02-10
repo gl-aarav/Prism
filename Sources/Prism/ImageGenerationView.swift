@@ -462,50 +462,47 @@ struct ImageGenerationView: View {
 
                                         // Copy & Download buttons below image
                                         HStack(spacing: 12) {
-                                            Button(action: {
-                                                let pb = NSPasteboard.general
-                                                pb.clearContents()
-                                                pb.writeObjects([img])
-                                                copiedItemIds.insert(item.id)
-                                                DispatchQueue.main.asyncAfter(deadline: .now() + 2)
-                                                {
-                                                    copiedItemIds.remove(item.id)
-                                                }
-                                            }) {
-                                                let isCopied = copiedItemIds.contains(item.id)
-                                                Label(
-                                                    isCopied ? "Copied" : "Copy",
-                                                    systemImage: isCopied
-                                                        ? "checkmark" : "doc.on.doc"
-                                                )
-                                                .font(.system(size: 12))
-                                                .foregroundColor(isCopied ? .green : .secondary)
-                                            }
-                                            .buttonStyle(.plain)
-
-                                            if !imageDownloadPath.isEmpty {
-                                                Button(action: {
-                                                    saveImageToConfiguredPath(
-                                                        img, prompt: item.prompt)
-                                                    downloadedItemIds.insert(item.id)
+                                            ExpandingActionButton(
+                                                title: copiedItemIds.contains(item.id)
+                                                    ? "Copied!" : "Copy",
+                                                icon: copiedItemIds.contains(item.id)
+                                                    ? "checkmark" : "doc.on.doc",
+                                                color: copiedItemIds.contains(item.id)
+                                                    ? .green : .secondary,
+                                                font: .system(size: 12),
+                                                action: {
+                                                    let pb = NSPasteboard.general
+                                                    pb.clearContents()
+                                                    pb.writeObjects([img])
+                                                    copiedItemIds.insert(item.id)
                                                     DispatchQueue.main.asyncAfter(
                                                         deadline: .now() + 2
                                                     ) {
-                                                        downloadedItemIds.remove(item.id)
+                                                        copiedItemIds.remove(item.id)
                                                     }
-                                                }) {
-                                                    let isDownloaded = downloadedItemIds.contains(
-                                                        item.id)
-                                                    Label(
-                                                        isDownloaded ? "Downloaded" : "Download",
-                                                        systemImage: isDownloaded
-                                                            ? "checkmark" : "arrow.down.circle"
-                                                    )
-                                                    .font(.system(size: 12))
-                                                    .foregroundColor(
-                                                        isDownloaded ? .green : .secondary)
                                                 }
-                                                .buttonStyle(.plain)
+                                            )
+
+                                            if !imageDownloadPath.isEmpty {
+                                                ExpandingActionButton(
+                                                    title: downloadedItemIds.contains(item.id)
+                                                        ? "Downloaded!" : "Download",
+                                                    icon: downloadedItemIds.contains(item.id)
+                                                        ? "checkmark" : "arrow.down.circle",
+                                                    color: downloadedItemIds.contains(item.id)
+                                                        ? .green : .secondary,
+                                                    font: .system(size: 12),
+                                                    action: {
+                                                        saveImageToConfiguredPath(
+                                                            img, prompt: item.prompt)
+                                                        downloadedItemIds.insert(item.id)
+                                                        DispatchQueue.main.asyncAfter(
+                                                            deadline: .now() + 2
+                                                        ) {
+                                                            downloadedItemIds.remove(item.id)
+                                                        }
+                                                    }
+                                                )
                                             }
                                         }
                                         .padding(.top, 4)

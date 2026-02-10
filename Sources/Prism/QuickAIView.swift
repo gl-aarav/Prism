@@ -737,43 +737,37 @@ struct QuickAIMessageView: View, Equatable {
 
                         // Copy Button
                         HStack(spacing: 8) {
-                            Button(action: {
-                                let pasteboard = NSPasteboard.general
-                                pasteboard.clearContents()
-                                if let image = message.image {
-                                    pasteboard.writeObjects([image])
-                                } else {
-                                    pasteboard.setString(message.content, forType: .string)
+                            ExpandingActionButton(
+                                title: isCopied ? "Copied!" : "Copy",
+                                icon: isCopied ? "checkmark" : "doc.on.doc",
+                                color: isCopied ? .green : .secondary,
+                                font: .caption2,
+                                action: {
+                                    let pasteboard = NSPasteboard.general
+                                    pasteboard.clearContents()
+                                    if let image = message.image {
+                                        pasteboard.writeObjects([image])
+                                    } else {
+                                        pasteboard.setString(message.content, forType: .string)
+                                    }
+                                    isCopied = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                        isCopied = false
+                                    }
                                 }
-                                isCopied = true
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                                    isCopied = false
-                                }
-                            }) {
-                                Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                                    .font(.caption2)
-                                    .foregroundColor(isCopied ? .green : .secondary)
-                                    .padding(4)
-                                    .background(Color.black.opacity(0.05))
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                            }
-                            .buttonStyle(.plain)
-                            .help(isCopied ? "Copied!" : "Copy")
+                            )
 
                             // Paste to App button (only for text content)
                             if message.image == nil && !message.content.isEmpty {
-                                Button(action: {
-                                    QuickAIManager.shared.pasteToActiveApp(text: message.content)
-                                }) {
-                                    Image(systemName: "arrow.up.doc")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                        .padding(4)
-                                        .background(Color.black.opacity(0.05))
-                                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                                }
-                                .buttonStyle(.plain)
-                                .help("Paste to App")
+                                ExpandingActionButton(
+                                    title: "Paste to App",
+                                    icon: "arrow.up.doc",
+                                    font: .caption2,
+                                    action: {
+                                        QuickAIManager.shared.pasteToActiveApp(
+                                            text: message.content)
+                                    }
+                                )
                             }
 
                             Spacer()
