@@ -141,14 +141,7 @@ struct QuizMeView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                    )
-            )
+            .glassEffect(.regular, in: .capsule)
 
             Spacer()
 
@@ -161,7 +154,7 @@ struct QuizMeView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(.ultraThinMaterial))
+                .glassEffect(.regular, in: .capsule)
 
                 // Score
                 HStack(spacing: 4) {
@@ -174,7 +167,7 @@ struct QuizMeView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(Capsule().fill(.ultraThinMaterial))
+                .glassEffect(.regular, in: .capsule)
 
                 // Reset
                 Button(action: resetQuiz) {
@@ -182,7 +175,7 @@ struct QuizMeView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                         .padding(8)
-                        .background(Circle().fill(.ultraThinMaterial))
+                        .glassEffect(.regular, in: .circle)
                 }
                 .buttonStyle(.plain)
                 .help("New Quiz")
@@ -564,19 +557,7 @@ struct QuizMeView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(
-                            colorScheme == .dark
-                                ? Color.white.opacity(0.04) : Color.white.opacity(0.6)
-                        )
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.secondary.opacity(0.1), lineWidth: 0.8)
-                )
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
                 .padding(.horizontal, 20)
 
                 // Options
@@ -823,7 +804,7 @@ struct QuizMeView: View {
                         .foregroundColor(.primary)
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(.ultraThinMaterial))
+                        .glassEffect(.regular, in: .capsule)
                     }
                     .buttonStyle(.plain)
 

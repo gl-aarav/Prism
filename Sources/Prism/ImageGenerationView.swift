@@ -224,14 +224,7 @@ struct ImageGenerationView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                    )
-            )
+            .glassEffect(.regular, in: .capsule)
 
             Spacer()
 
@@ -245,14 +238,7 @@ struct ImageGenerationView: View {
             .foregroundColor(.secondary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                    )
-            )
+            .glassEffect(.regular, in: .capsule)
 
             if !store.items.isEmpty {
                 Button(action: { showResetConfirmation = true }) {
@@ -265,14 +251,7 @@ struct ImageGenerationView: View {
                     .foregroundColor(.red.opacity(0.8))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                Capsule(style: .continuous)
-                                    .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                            )
-                    )
+                    .glassEffect(.regular, in: .capsule)
                 }
                 .buttonStyle(.plain)
             }
@@ -319,37 +298,9 @@ struct ImageGenerationView: View {
 
                 ZStack {
                     Circle()
-                        .fill(.ultraThinMaterial)
+                        .fill(Color.clear)
                         .frame(width: 82, height: 82)
-                        .overlay(
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            colorScheme == .dark
-                                                ? Color.white.opacity(0.1)
-                                                : Color.white.opacity(0.5),
-                                            Color.clear,
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(colorScheme == .dark ? 0.15 : 0.4),
-                                            Color.white.opacity(colorScheme == .dark ? 0.03 : 0.1),
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 0.8
-                                )
-                        )
+                        .glassEffect(.regular, in: .circle)
                         .shadow(color: startColor.opacity(0.12), radius: 16, x: 0, y: 8)
 
                     Image(systemName: "paintbrush.pointed.fill")
@@ -386,18 +337,7 @@ struct ImageGenerationView: View {
                             .foregroundColor(.secondary.opacity(0.6))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(
-                                                Color.primary.opacity(
-                                                    colorScheme == .dark ? 0.08 : 0.06),
-                                                lineWidth: 0.5
-                                            )
-                                    )
-                            )
+                            .glassEffect(.regular, in: .capsule)
                     }
                 }
                 .padding(.top, 2)
@@ -577,14 +517,6 @@ struct ImageGenerationView: View {
         }
     }
 
-    // Liquid Glass palette (matching main InputView)
-    private var innerGlowTop: Color {
-        colorScheme == .dark ? .white.opacity(0.18) : .white.opacity(0.7)
-    }
-    private var innerGlowBottom: Color {
-        colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.15)
-    }
-
     // MARK: - Input Bar (matches main chat window)
 
     private var inputBar: some View {
@@ -701,48 +633,7 @@ struct ImageGenerationView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             // Liquid Glass container
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.06) : Color.white.opacity(0.4),
-                                    Color.clear,
-                                    colorScheme == .dark
-                                        ? Color.black.opacity(0.08) : Color.black.opacity(0.02),
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: isInputFocused
-                                ? [
-                                    innerGlowTop,
-                                    Color(hue: 0.6, saturation: 0.3, brightness: 1.0).opacity(0.3),
-                                    innerGlowBottom,
-                                    Color(hue: 0.8, saturation: 0.3, brightness: 1.0).opacity(0.2),
-                                    innerGlowTop.opacity(0.5),
-                                ]
-                                : [innerGlowTop, innerGlowBottom],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: isInputFocused ? 1.2 : 0.8
-                    )
-                    .animation(.easeInOut(duration: 0.35), value: isInputFocused)
-            )
+            .glassEffect(.regular, in: .rect(cornerRadius: 26))
             .shadow(
                 color: colorScheme == .dark
                     ? Color.black.opacity(isInputFocused ? 0.5 : 0.3)

@@ -785,8 +785,7 @@ struct QuickAIMessageView: View, Equatable {
                     }
                 }
                 .padding(12)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
 
                 Spacer()
             }
@@ -1082,8 +1081,9 @@ struct GeneratingImagePlaceholder: View {
             VStack(spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(.ultraThinMaterial)
+                        .fill(Color.clear)
                         .frame(width: 48, height: 48)
+                        .glassEffect(.regular, in: .circle)
                         .shadow(
                             color: startColor.opacity(0.3),
                             radius: 12, x: 0, y: 4

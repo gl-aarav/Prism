@@ -107,14 +107,6 @@ struct ModelComparisonView: View {
         state.saveSlotConfigurations()
     }
 
-    // Liquid Glass palette (matching main InputView)
-    private var innerGlowTop: Color {
-        colorScheme == .dark ? .white.opacity(0.18) : .white.opacity(0.7)
-    }
-    private var innerGlowBottom: Color {
-        colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.15)
-    }
-
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
@@ -187,21 +179,7 @@ struct ModelComparisonView: View {
                         )
                         .padding(.horizontal, 20)
                         .padding(.vertical, 10)
-                        .background(
-                            Capsule()
-                                .fill(.ultraThinMaterial)
-                                .overlay(
-                                    Capsule()
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: appTheme.colors.map { $0.opacity(0.4) },
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 0.8
-                                        )
-                                )
-                        )
+                        .glassEffect(.regular, in: .capsule)
                     }
                     .buttonStyle(.plain)
                     .help("Combine all responses into one using AI")
@@ -266,14 +244,7 @@ struct ModelComparisonView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                    )
-            )
+            .glassEffect(.regular, in: .capsule)
 
             Spacer()
 
@@ -294,10 +265,7 @@ struct ModelComparisonView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-            )
+            .glassEffect(.regular, in: .capsule)
 
             // Add model button
             if slots.count < 4 {
@@ -311,14 +279,7 @@ struct ModelComparisonView: View {
                     .foregroundColor(.primary.opacity(0.8))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-                            )
-                    )
+                    .glassEffect(.regular, in: .capsule)
                 }
                 .buttonStyle(.plain)
             }
@@ -330,7 +291,7 @@ struct ModelComparisonView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                         .padding(8)
-                        .background(Circle().fill(.ultraThinMaterial))
+                        .glassEffect(.regular, in: .circle)
                 }
                 .buttonStyle(.plain)
                 .help("Clear all responses")
@@ -428,48 +389,7 @@ struct ModelComparisonView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             // Liquid Glass container
-            .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.06) : Color.white.opacity(0.4),
-                                    Color.clear,
-                                    colorScheme == .dark
-                                        ? Color.black.opacity(0.08) : Color.black.opacity(0.02),
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: isInputFocused
-                                ? [
-                                    innerGlowTop,
-                                    Color(hue: 0.6, saturation: 0.3, brightness: 1.0).opacity(0.3),
-                                    innerGlowBottom,
-                                    Color(hue: 0.8, saturation: 0.3, brightness: 1.0).opacity(0.2),
-                                    innerGlowTop.opacity(0.5),
-                                ]
-                                : [innerGlowTop, innerGlowBottom],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: isInputFocused ? 1.2 : 0.8
-                    )
-                    .animation(.easeInOut(duration: 0.35), value: isInputFocused)
-            )
+            .glassEffect(.regular, in: .rect(cornerRadius: 26))
             .shadow(
                 color: colorScheme == .dark
                     ? Color.black.opacity(isInputFocused ? 0.5 : 0.3)
@@ -558,14 +478,7 @@ struct ModelComparisonView: View {
                     .foregroundColor(.primary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
-                            )
-                    )
+                    .glassEffect(.regular, in: .capsule)
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
@@ -779,27 +692,7 @@ struct ModelComparisonView: View {
                 }
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    colorScheme == .dark
-                        ? Color.white.opacity(0.04)
-                        : Color.white.opacity(0.6)
-                )
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: appTheme.colors.map { $0.opacity(0.3) },
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 0.8
-                )
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
         .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
         .padding(.horizontal, 20)
         .padding(.top, 12)
@@ -1310,26 +1203,7 @@ struct ComparisonCard: View {
             // Card Body
             cardBody
         }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    colorScheme == .dark
-                        ? Color.white.opacity(0.04)
-                        : Color.white.opacity(0.6)
-                )
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(
-                    isHovered
-                        ? accentColor.opacity(0.4)
-                        : (colorScheme == .dark
-                            ? Color.white.opacity(0.1) : Color.black.opacity(0.06)),
-                    lineWidth: isHovered ? 1.5 : 0.8
-                )
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
         .shadow(
             color: Color.black.opacity(isHovered ? 0.12 : 0.06), radius: isHovered ? 16 : 8, x: 0,
             y: 4

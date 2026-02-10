@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "Prism",
     platforms: [
-        .macOS(.v14)
+        .macOS("26.0")
     ],
     products: [
         .executable(name: "Prism", targets: ["Prism"])

@@ -57,21 +57,8 @@ struct SlashCommandAutocomplete: View {
                 }
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(
-                    colorScheme == .dark
-                        ? Color.white.opacity(0.12)
-                        : Color.black.opacity(0.08),
-                    lineWidth: 0.5
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
     }
 }
 
@@ -387,14 +374,7 @@ struct CommandsManagementView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
-                        )
-                )
+                .glassEffect(.regular, in: .capsule)
                 Spacer()
             }
             .padding(.horizontal, 16)

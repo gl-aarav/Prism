@@ -3284,17 +3284,7 @@ struct HeaderView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(
-                                    Color.white.opacity(0.18),
-                                    lineWidth: 0.8
-                                )
-                        )
-                )
+                .glassEffect(.regular, in: .capsule)
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
@@ -3497,26 +3487,6 @@ struct InputView: View {
     @State private var showSlashAutocomplete: Bool = false
     @Environment(\.colorScheme) private var colorScheme
 
-    // Liquid Glass palette
-    private var glassBackground: some ShapeStyle {
-        .ultraThinMaterial
-    }
-    private var innerGlowTop: Color {
-        colorScheme == .dark ? .white.opacity(0.18) : .white.opacity(0.7)
-    }
-    private var innerGlowBottom: Color {
-        colorScheme == .dark ? .white.opacity(0.04) : .white.opacity(0.15)
-    }
-    private var spectralColors: [Color] {
-        [
-            Color(hue: 0.55, saturation: 0.4, brightness: 1.0).opacity(0.3),
-            Color(hue: 0.75, saturation: 0.35, brightness: 1.0).opacity(0.25),
-            Color(hue: 0.95, saturation: 0.3, brightness: 1.0).opacity(0.2),
-            Color(hue: 0.15, saturation: 0.35, brightness: 1.0).opacity(0.25),
-            Color(hue: 0.35, saturation: 0.4, brightness: 1.0).opacity(0.3),
-        ]
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Slash command autocomplete dropdown
@@ -3587,14 +3557,7 @@ struct InputView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
-                        )
-                )
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
                 .padding(.bottom, 6)
             }
         }
@@ -3987,52 +3950,7 @@ struct InputView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             // Liquid Glass container
-            .background(
-                ZStack {
-                    // Base glass layer
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .fill(.ultraThinMaterial)
-
-                    // Inner depth - subtle dark edge at bottom
-                    RoundedRectangle(cornerRadius: 26, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.06) : Color.white.opacity(0.4),
-                                    Color.clear,
-                                    colorScheme == .dark
-                                        ? Color.black.opacity(0.08) : Color.black.opacity(0.02),
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-
-                }
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .overlay(
-                // Outer glass border with spectral edges
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: isFocused
-                                ? [
-                                    innerGlowTop,
-                                    Color(hue: 0.6, saturation: 0.3, brightness: 1.0).opacity(0.3),
-                                    innerGlowBottom,
-                                    Color(hue: 0.8, saturation: 0.3, brightness: 1.0).opacity(0.2),
-                                    innerGlowTop.opacity(0.5),
-                                ]
-                                : [innerGlowTop, innerGlowBottom],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: isFocused ? 1.2 : 0.8
-                    )
-                    .animation(.easeInOut(duration: 0.35), value: isFocused)
-            )
+            .glassEffect(.regular, in: .rect(cornerRadius: 26))
             // Floating shadow system
             .shadow(
                 color: colorScheme == .dark
@@ -5065,40 +4983,9 @@ struct EmptyStateView: View {
 
                     // Glass circle
                     Circle()
-                        .fill(.ultraThinMaterial)
+                        .fill(Color.clear)
                         .frame(width: 90, height: 90)
-                        .overlay(
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            colorScheme == .dark
-                                                ? Color.white.opacity(0.12)
-                                                : Color.white.opacity(0.6),
-                                            Color.clear,
-                                            colorScheme == .dark
-                                                ? Color.white.opacity(0.04)
-                                                : Color.white.opacity(0.1),
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(colorScheme == .dark ? 0.2 : 0.5),
-                                            Color.white.opacity(colorScheme == .dark ? 0.05 : 0.15),
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 0.8
-                                )
-                        )
+                        .glassEffect(.regular, in: .circle)
                         .shadow(color: startColor.opacity(0.15), radius: 20, x: 0, y: 10)
 
                     Image(systemName: "sparkles")
@@ -5137,18 +5024,7 @@ struct EmptyStateView: View {
                             .foregroundColor(.secondary.opacity(0.6))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
-                            .background(
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(
-                                                Color.primary.opacity(
-                                                    colorScheme == .dark ? 0.08 : 0.06),
-                                                lineWidth: 0.5
-                                            )
-                                    )
-                            )
+                            .glassEffect(.regular, in: .capsule)
                     }
                 }
                 .padding(.top, 4)
@@ -5393,10 +5269,7 @@ struct MessageView: View, Equatable {
                             }
                         }
                         .padding(14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(.ultraThinMaterial)
-                        )
+                        .glassEffect(.regular, in: .rect(cornerRadius: 16))
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(Color.blue.opacity(0.2), lineWidth: 1)
@@ -5408,8 +5281,7 @@ struct MessageView: View, Equatable {
                             .foregroundColor(colorScheme == .dark ? .white : .black)
                             .padding(12)
                             .background(Color.blue.opacity(0.2))
-                            .background(.ultraThinMaterial)
-                            .cornerRadius(16)
+                            .glassEffect(.regular, in: .rect(cornerRadius: 16))
 
                         // Action Buttons for user messages
                         HStack(spacing: 12) {
@@ -6028,8 +5900,7 @@ struct WelcomeView: View {
                 .buttonStyle(.plain)
             }
             .padding(50)
-            .background(.ultraThinMaterial)
-            .cornerRadius(30)
+            .glassEffect(.regular, in: .rect(cornerRadius: 30))
             .shadow(radius: 20)
         }
     }
