@@ -46,9 +46,6 @@ struct QuickAIView: View {
     private var clampedBackgroundOpacity: Double {
         min(max(backgroundOpacity, 0.05), 0.55)
     }
-    private var clampedCommandBarVibrancy: Double {
-        min(max(commandBarVibrancy, 0.05), 0.9)
-    }
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
@@ -864,30 +861,28 @@ struct CommandBarBackground: View {
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
+    private var clampedVibrancy: Double {
+        min(max(commandBarVibrancy, 0.05), 0.9)
+    }
+
     var body: some View {
         let colors = appTheme.colors
 
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
 
-        return ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        stops: [
-                            .init(
-                                color: startColor.opacity(colorScheme == .dark ? 0.20 : 0.28),
-                                location: 0.0),
-                            .init(
-                                color: endColor.opacity(colorScheme == .dark ? 0.16 : 0.22),
-                                location: 1.0),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        startColor.opacity(clampedVibrancy * 0.3),
+                        endColor.opacity(clampedVibrancy * 0.25),
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-        }
+            )
+            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
     }
 }
 
