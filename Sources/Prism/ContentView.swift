@@ -1176,6 +1176,45 @@ class GeminiService {
                     body["generationConfig"] = [
                         "responseModalities": ["TEXT", "IMAGE"]
                     ]
+                } else {
+                    // Add thinking config for models that support it
+                    let lowerModel = modelName.lowercased()
+                    let supportsThinking =
+                        lowerModel.hasPrefix("gemini-3") || lowerModel.hasPrefix("gemini-2.5")
+                    if supportsThinking {
+                        var thinkingConfig: [String: Any] = ["includeThoughts": true]
+                        let isGemini3 = lowerModel.hasPrefix("gemini-3")
+                        if isGemini3 {
+                            // Gemini 3 uses thinkingLevel
+                            switch thinkingLevel.lowercased() {
+                            case "low":
+                                thinkingConfig["thinkingLevel"] = "LOW"
+                            case "medium":
+                                thinkingConfig["thinkingLevel"] = "MEDIUM"
+                            case "high":
+                                thinkingConfig["thinkingLevel"] = "HIGH"
+                            default:
+                                // Auto / dynamic
+                                thinkingConfig["thinkingLevel"] = "HIGH"
+                            }
+                        } else {
+                            // Gemini 2.5 uses thinkingBudget
+                            switch thinkingLevel.lowercased() {
+                            case "low":
+                                thinkingConfig["thinkingBudget"] = 1024
+                            case "medium":
+                                thinkingConfig["thinkingBudget"] = 8192
+                            case "high":
+                                thinkingConfig["thinkingBudget"] = 24576
+                            default:
+                                // Auto / dynamic
+                                thinkingConfig["thinkingBudget"] = -1
+                            }
+                        }
+                        body["generationConfig"] = [
+                            "thinkingConfig": thinkingConfig
+                        ]
+                    }
                 }
 
                 do {
@@ -1213,7 +1252,12 @@ class GeminiService {
                         }
 
                         for part in parts {
-                            if part["thought"] as? Bool == true { continue }
+                            if part["thought"] as? Bool == true {
+                                if let text = part["text"] as? String {
+                                    continuation.yield(("", text, nil))
+                                }
+                                continue
+                            }
 
                             if let text = part["text"] as? String {
                                 continuation.yield((text, nil, nil))
@@ -1266,7 +1310,12 @@ class GeminiService {
                                 else { continue }
 
                                 for part in parts {
-                                    if part["thought"] as? Bool == true { continue }
+                                    if part["thought"] as? Bool == true {
+                                        if let text = part["text"] as? String {
+                                            continuation.yield(("", text, nil))
+                                        }
+                                        continue
+                                    }
 
                                     if let text = part["text"] as? String {
                                         continuation.yield((text, nil, nil))
@@ -1501,6 +1550,7 @@ enum ThinkingMode {
     case none
     case binary  // On/Off (e.g. DeepSeek)
     case threeState  // Low/Med/High (Standard)
+    case fourState  // Auto/Low/Med/High (Gemini)
 }
 
 struct ContentView: View {
@@ -1555,7 +1605,10 @@ struct ContentView: View {
 
     var thinkingMode: ThinkingMode {
         if selectedProvider == "Gemini API" {
-            // Remove thinking for Gemini
+            let lower = geminiModel.lowercased()
+            if lower.hasPrefix("gemini-3") || lower.hasPrefix("gemini-2.5") {
+                return .fourState
+            }
             return .none
         } else if selectedProvider.contains("Ollama") {
             let lower = selectedOllamaModel.lowercased()
@@ -3714,6 +3767,43 @@ struct InputView: View {
                                     Label("Reasoning: Off", systemImage: "checkmark")
                                 } else {
                                     Text("Reasoning: Off")
+                                }
+                            }
+                        } else if thinkingMode == .fourState {
+                            Button {
+                                thinkingLevel = "auto"
+                            } label: {
+                                if thinkingLevel == "auto" {
+                                    Label("Auto", systemImage: "checkmark")
+                                } else {
+                                    Text("Auto")
+                                }
+                            }
+                            Button {
+                                thinkingLevel = "low"
+                            } label: {
+                                if thinkingLevel == "low" {
+                                    Label("Low", systemImage: "checkmark")
+                                } else {
+                                    Text("Low")
+                                }
+                            }
+                            Button {
+                                thinkingLevel = "medium"
+                            } label: {
+                                if thinkingLevel == "medium" {
+                                    Label("Medium", systemImage: "checkmark")
+                                } else {
+                                    Text("Medium")
+                                }
+                            }
+                            Button {
+                                thinkingLevel = "high"
+                            } label: {
+                                if thinkingLevel == "high" {
+                                    Label("High", systemImage: "checkmark")
+                                } else {
+                                    Text("High")
                                 }
                             }
                         } else {

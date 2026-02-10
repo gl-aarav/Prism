@@ -1665,6 +1665,37 @@ extension QuickAIView {
                     .menuStyle(.borderlessButton)
                     .tint(colorScheme == .dark ? .white : .black)
                     .help("Select Gemini Model")
+
+                    // Gemini thinking menu
+                    if geminiModel.lowercased().hasPrefix("gemini-3")
+                        || geminiModel.lowercased().hasPrefix("gemini-2.5")
+                    {
+                        Menu {
+                            Button {
+                                thinkingLevel = "auto"
+                            } label: {
+                                if thinkingLevel == "auto" {
+                                    Label("Auto", systemImage: "checkmark")
+                                        .foregroundColor(colorScheme == .dark ? .white : .primary)
+                                } else {
+                                    Text("Auto")
+                                }
+                            }
+                            thinkingOption(title: "Low", value: "low")
+                            thinkingOption(title: "Medium", value: "medium")
+                            thinkingOption(title: "High", value: "high")
+                        } label: {
+                            Image(systemName: "brain")
+                                .font(.system(size: 16))
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .padding(6)
+                                .background(Color.white.opacity(0.10))
+                                .clipShape(Circle())
+                        }
+                        .menuStyle(.borderlessButton)
+                        .tint(colorScheme == .dark ? .white : .black)
+                        .help("Reasoning Effort")
+                    }
                 }
 
                 // Web Search Toggle (Ollama only)
