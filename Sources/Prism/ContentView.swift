@@ -36,6 +36,7 @@ struct ChatSession: Identifiable, Codable, Equatable {
     var title: String
     var date = Date()
     var messages: [Message]
+    var isPinned: Bool = false
 }
 
 enum AttachmentType {
@@ -608,9 +609,14 @@ class ChatManager: ObservableObject {
         session.messages.append(message)
         session.date = Date()
 
-        // Update title if it's the first user message
+        // Auto-rename with Apple Foundation Model on first user message
         if session.messages.filter({ $0.isUser }).count == 1 && message.isUser {
             session.title = String(message.content.prefix(30))
+            let sessionId = session.id
+            let sessionMessages = session.messages
+            Task {
+                await self.autoRenameSession(id: sessionId, messages: sessionMessages)
+            }
         }
 
         sessions.remove(at: index)
@@ -723,6 +729,38 @@ class ChatManager: ObservableObject {
         msg.currentVersionIndex = allVersions.count - 1
         sessions[sessionIndex].messages[msgIndex] = msg
         saveSessions()
+    }
+
+    func togglePin(id: UUID) {
+        if let index = sessions.firstIndex(where: { $0.id == id }) {
+            sessions[index].isPinned.toggle()
+            saveSessions()
+        }
+    }
+
+    private func autoRenameSession(id: UUID, messages: [Message]) async {
+        let summarizer = AppleFoundationService()
+        let prompt = """
+            Analyze the following conversation and provide a short, concise title (3-5 words max).
+            Return ONLY the title, no quotes or explanation.
+            """
+        do {
+            var newTitle = ""
+            for try await chunk in summarizer.sendMessageStream(
+                history: messages, systemPrompt: prompt)
+            {
+                newTitle += chunk
+            }
+            let cleaned = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\"", with: "")
+            await MainActor.run {
+                if !cleaned.isEmpty {
+                    self.renameSession(id: id, newTitle: cleaned)
+                }
+            }
+        } catch {
+            // Silently fail — the fallback title (first 30 chars) is already set
+        }
     }
 
     func saveSessions() {
@@ -2362,10 +2400,8 @@ struct SidebarView: View {
     @State private var isSearchVisible: Bool = false
     @State private var renamingSessionId: UUID?
     @State private var renameText: String = ""
+    @State private var draggedSession: ChatSession? = nil
     @Environment(\.colorScheme) private var colorScheme
-
-    // Service for summarization
-    private let summarizer = AppleFoundationService()
 
     var filteredSessions: [ChatSession] {
         if searchText.isEmpty {
@@ -2820,68 +2856,101 @@ struct SidebarView: View {
         }
     }
 
+    private var pinnedSessions: [ChatSession] {
+        visibleSessions.filter { $0.isPinned }
+    }
+
+    private var unpinnedSessions: [ChatSession] {
+        visibleSessions.filter { !$0.isPinned }
+    }
+
+    private func chatRow(for session: ChatSession) -> some View {
+        SidebarRow(
+            session: session,
+            isSelected: !showImageGallery && !showModelComparison && !showCommands
+                && !showQuizMe
+                && chatManager.currentSessionId == session.id,
+            isRenaming: renamingSessionId == session.id,
+            renameText: $renameText,
+            animation: animation,
+            onSelect: {
+                showImageGallery = false
+                showModelComparison = false
+                showCommands = false
+                showQuizMe = false
+                showImageGen = false
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    chatManager.currentSessionId = session.id
+                }
+            },
+            onDelete: {
+                withAnimation {
+                    chatManager.deleteSession(id: session.id)
+                }
+            },
+            onRename: {
+                renameText = session.title
+                renamingSessionId = session.id
+            },
+            onCommitRename: {
+                chatManager.renameSession(id: session.id, newTitle: renameText)
+                renamingSessionId = nil
+            },
+            onPin: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    chatManager.togglePin(id: session.id)
+                }
+            }
+        )
+        .opacity(draggedSession?.id == session.id ? 0.4 : 1.0)
+        .onDrag {
+            draggedSession = session
+            return NSItemProvider(object: session.id.uuidString as NSString)
+        }
+        .onDrop(
+            of: [.text],
+            delegate: ChatDropDelegate(
+                item: session,
+                draggedItem: $draggedSession,
+                sessions: $chatManager.sessions,
+                onSave: { chatManager.saveSessions() }
+            ))
+    }
+
     var chatList: some View {
         ScrollView {
             VStack(spacing: 2) {
-                ForEach(Array(visibleSessions.enumerated()), id: \.element.id) {
-                    listIndex, session in
-                    SidebarRow(
-                        session: session,
-                        isSelected: !showImageGallery && !showModelComparison && !showCommands
-                            && !showQuizMe
-                            && chatManager.currentSessionId == session.id,
-                        isRenaming: renamingSessionId == session.id,
-                        renameText: $renameText,
-                        animation: animation,
-                        onSelect: {
-                            showImageGallery = false
-                            showModelComparison = false
-                            showCommands = false
-                            showQuizMe = false
-                            showImageGen = false
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                chatManager.currentSessionId = session.id
-                            }
-                        },
-                        onDelete: {
-                            withAnimation {
-                                chatManager.deleteSession(id: session.id)
-                            }
-                        },
-                        onRename: {
-                            renameText = session.title
-                            renamingSessionId = session.id
-                        },
-                        onCommitRename: {
-                            chatManager.renameSession(id: session.id, newTitle: renameText)
-                            renamingSessionId = nil
-                        },
-                        onSummarize: {
-                            summarize(session: session)
-                        },
-                        onMoveUp: listIndex > 0
-                            ? {
-                                if let realIdx = chatManager.sessions.firstIndex(where: {
-                                    $0.id == session.id
-                                }), realIdx > 0 {
-                                    withAnimation(.spring(response: 0.3)) {
-                                        chatManager.sessions.swapAt(realIdx, realIdx - 1)
-                                        chatManager.saveSessions()
-                                    }
-                                }
-                            } : nil,
-                        onMoveDown: listIndex < visibleSessions.count - 1
-                            ? {
-                                if let realIdx = chatManager.sessions.firstIndex(where: {
-                                    $0.id == session.id
-                                }), realIdx < chatManager.sessions.count - 1 {
-                                    withAnimation(.spring(response: 0.3)) {
-                                        chatManager.sessions.swapAt(realIdx, realIdx + 1)
-                                        chatManager.saveSessions()
-                                    }
-                                }
-                            } : nil
-                    )
+                if !pinnedSessions.isEmpty {
+                    HStack(spacing: 6) {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary.opacity(0.5))
+                        Text("Pinned")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundColor(.secondary.opacity(0.6))
+                            .textCase(.uppercase)
+                            .tracking(1.0)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 4)
+                    .padding(.bottom, 2)
+
+                    ForEach(pinnedSessions) { session in
+                        chatRow(for: session)
+                    }
+
+                    HStack(spacing: 6) {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.15))
+                            .frame(height: 1)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                }
+
+                ForEach(unpinnedSessions) { session in
+                    chatRow(for: session)
                 }
             }
             .padding(.horizontal, 10)
@@ -2899,37 +2968,41 @@ struct SidebarView: View {
         }
     }
 
-    private func summarize(session: ChatSession) {
-        guard !session.messages.isEmpty else { return }
+}
 
-        let prompt = """
-            Analyze the following conversation and provide a short, concise title (3-5 words max).
-            Return ONLY the title, no quotes or explanation.
-            """
+// MARK: - Chat Drag & Drop
 
-        Task {
-            do {
-                var newTitle = ""
-                for try await chunk in summarizer.sendMessageStream(
-                    history: session.messages, systemPrompt: prompt)
-                {
-                    newTitle += chunk
-                }
+struct ChatDropDelegate: DropDelegate {
+    let item: ChatSession
+    @Binding var draggedItem: ChatSession?
+    @Binding var sessions: [ChatSession]
+    var onSave: () -> Void
 
-                let cleaned = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-                    .replacingOccurrences(of: "\"", with: "")
+    func performDrop(info: DropInfo) -> Bool {
+        draggedItem = nil
+        return true
+    }
 
-                DispatchQueue.main.async {
-                    if !cleaned.isEmpty {
-                        chatManager.renameSession(id: session.id, newTitle: cleaned)
-                    }
-                }
-            } catch {
-                print("Summarization failed: \(error)")
-            }
+    func dropEntered(info: DropInfo) {
+        guard let dragged = draggedItem, dragged.id != item.id else { return }
+        guard let fromIndex = sessions.firstIndex(where: { $0.id == dragged.id }),
+            let toIndex = sessions.firstIndex(where: { $0.id == item.id })
+        else { return }
+
+        // Only allow reorder within the same pinned/unpinned group
+        guard sessions[fromIndex].isPinned == sessions[toIndex].isPinned else { return }
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            sessions.move(
+                fromOffsets: IndexSet(integer: fromIndex),
+                toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+            onSave()
         }
     }
 
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        return DropProposal(operation: .move)
+    }
 }
 
 struct SidebarItem: View {
@@ -2971,9 +3044,7 @@ struct SidebarRow: View {
     var onDelete: () -> Void
     var onRename: () -> Void
     var onCommitRename: () -> Void
-    var onSummarize: () -> Void
-    var onMoveUp: (() -> Void)?
-    var onMoveDown: (() -> Void)?
+    var onPin: () -> Void
 
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @State private var offset: CGFloat = 0
@@ -3046,18 +3117,26 @@ struct SidebarRow: View {
                     .opacity(isSelected ? 1 : 0)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    if isRenaming {
-                        TextField("Title", text: $renameText)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 13, weight: .medium))
-                            .focused($isFocused)
-                            .onSubmit(onCommitRename)
-                            .onAppear { isFocused = true }
-                    } else {
-                        Text(session.title.isEmpty ? "New Chat" : session.title)
-                            .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                            .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
-                            .lineLimit(1)
+                    HStack(spacing: 4) {
+                        if isRenaming {
+                            TextField("Title", text: $renameText)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 13, weight: .medium))
+                                .focused($isFocused)
+                                .onSubmit(onCommitRename)
+                                .onAppear { isFocused = true }
+                        } else {
+                            Text(session.title.isEmpty ? "New Chat" : session.title)
+                                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                                .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
+                                .lineLimit(1)
+                        }
+                        if session.isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 8))
+                                .foregroundColor(.secondary.opacity(0.5))
+                                .rotationEffect(.degrees(45))
+                        }
                     }
 
                     Text(session.date, style: .date)
@@ -3120,23 +3199,13 @@ struct SidebarRow: View {
                 Button("Rename") {
                     onRename()
                 }
-                Button("Rename with Apple Intelligence") {
-                    onSummarize()
-                }
                 Divider()
-                if let moveUp = onMoveUp {
-                    Button {
-                        moveUp()
-                    } label: {
-                        Label("Move Up", systemImage: "arrow.up")
-                    }
-                }
-                if let moveDown = onMoveDown {
-                    Button {
-                        moveDown()
-                    } label: {
-                        Label("Move Down", systemImage: "arrow.down")
-                    }
+                Button {
+                    onPin()
+                } label: {
+                    Label(
+                        session.isPinned ? "Unpin" : "Pin",
+                        systemImage: session.isPinned ? "pin.slash" : "pin")
                 }
                 Divider()
                 Button("Delete", role: .destructive) {
@@ -4517,11 +4586,46 @@ func containsInlineMath(_ text: String) -> Bool {
 }
 
 // MARK: - TextBlockView (conditionally uses RichTextView for inline math)
+struct LinkCursorView: NSViewRepresentable {
+    let content: AttributedString
+    let font: NSFont
+    let textColor: NSColor
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField(wrappingLabelWithString: "")
+        field.isEditable = false
+        field.isSelectable = true
+        field.drawsBackground = false
+        field.isBordered = false
+        field.allowsEditingTextAttributes = true
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        let ns = NSMutableAttributedString(content)
+        let fullRange = NSRange(location: 0, length: ns.length)
+        ns.addAttribute(.font, value: font, range: fullRange)
+        ns.addAttribute(.foregroundColor, value: textColor, range: fullRange)
+        nsView.attributedStringValue = ns
+    }
+}
+
 struct TextBlockView: View {
     let text: String
     let cachedAttributedText: AttributedString?
     let textColor: Color
     @State private var webViewHeight: CGFloat = 20
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var hasLinks: Bool {
+        if let cached = cachedAttributedText {
+            for run in cached.runs where run.link != nil {
+                return true
+            }
+        }
+        return text.contains("](http")
+    }
 
     var body: some View {
         if containsInlineMath(text) {
@@ -4529,20 +4633,26 @@ struct TextBlockView: View {
                 .textSelection(.disabled)
                 .frame(height: webViewHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        } else if hasLinks {
+            let attrText = cachedAttributedText ?? MarkdownParser.shared.parse(text)
+            LinkCursorView(
+                content: attrText,
+                font: .systemFont(ofSize: 15),
+                textColor: colorScheme == .dark ? .white : .black
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
         } else {
-            // Use native Text for performance when no inline math
             if let cached = cachedAttributedText {
                 Text(cached)
                     .font(.system(size: 15))
                     .foregroundColor(textColor)
-
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(MarkdownParser.shared.parse(text))
                     .font(.system(size: 15))
                     .foregroundColor(textColor)
-
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
