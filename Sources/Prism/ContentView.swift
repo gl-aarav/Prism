@@ -5360,7 +5360,10 @@ struct MessageView: View, Equatable {
                                 .foregroundColor(.secondary)
                                 .contentShape(Rectangle())
                             }
-                            .animation(.spring(response: 0.35, dampingFraction: 0.86), value: isThinkingExpanded)
+                            .animation(
+                                .spring(response: 0.35, dampingFraction: 0.86),
+                                value: isThinkingExpanded
+                            )
                             .padding(.bottom, 4)
                         }
 
