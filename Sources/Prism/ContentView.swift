@@ -3286,6 +3286,10 @@ struct HeaderView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.primary.opacity(0.04))
+                )
                 .glassEffect(.regular, in: .capsule)
             }
             .menuStyle(.borderlessButton)
@@ -3298,7 +3302,6 @@ struct HeaderView: View {
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        .glassEffect(.regular, in: .rect(cornerRadius: 0))
     }
     func getProviderIcon(_ provider: String) -> String {
         switch provider {
@@ -5279,13 +5282,17 @@ struct MessageView: View, Equatable {
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
-                            .background(
-                                LinearGradient(
-                                    colors: appTheme.colors.map { $0.opacity(0.25) },
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .background {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: appTheme.colors.map { $0.opacity(0.18) },
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .glassEffect(.regular, in: .rect(cornerRadius: 16))
 
                         // Action Buttons for user messages
@@ -5825,7 +5832,11 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .frame(minWidth: 420, idealWidth: 450, minHeight: 650, idealHeight: 750)
-        .background(.ultraThinMaterial)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.clear)
+                .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        }
         .padding()
     }
 }

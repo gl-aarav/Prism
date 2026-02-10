@@ -363,21 +363,27 @@ struct ImageGenerationView: View {
                                 VStack(alignment: .trailing, spacing: 4) {
                                     Text(item.prompt)
                                         .font(.system(size: 14))
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 10)
-                                        .background(
-                                            LinearGradient(
-                                                colors: appTheme.colors.isEmpty
-                                                    ? [.blue, .blue.opacity(0.8)]
-                                                    : appTheme.colors,
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
+                                        .foregroundStyle(
+                                            colorScheme == .dark ? Color.white : Color.black
                                         )
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 10)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .fill(
+                                                    LinearGradient(
+                                                        colors: appTheme.colors.map {
+                                                            $0.opacity(0.18)
+                                                        },
+                                                        startPoint: .topLeading,
+                                                        endPoint: .bottomTrailing
+                                                    )
+                                                )
+                                        }
                                         .clipShape(
                                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                         )
+                                        .glassEffect(.regular, in: .rect(cornerRadius: 16))
 
                                     Text(item.style)
                                         .font(.system(size: 10, weight: .medium))

@@ -667,14 +667,18 @@ struct QuickAIMessageView: View, Equatable {
                             .font(.system(size: 14))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 10)
-                            .background(
-                                LinearGradient(
-                                    colors: appTheme.colors.map { $0.opacity(0.25) },
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .background {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: appTheme.colors.map { $0.opacity(0.18) },
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .glassEffect(.regular, in: .rect(cornerRadius: 12))
                     }
                 }
@@ -866,29 +870,23 @@ struct CommandBarBackground: View {
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
 
-        let gradient = LinearGradient(
-            stops: [
-                .init(
-                    color: startColor.opacity(colorScheme == .dark ? 0.34 : 0.44),
-                    location: 0.0),
-                .init(
-                    color: endColor.opacity(colorScheme == .dark ? 0.30 : 0.38),
-                    location: 1.0),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-
         return ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(min(max(commandBarVibrancy, 0.05), 0.9)))
-
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(gradient)
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(
-                    colorScheme == .dark
-                        ? Color.white.opacity(0.12) : Color.black.opacity(0.08), lineWidth: 0.5)
+                .fill(
+                    LinearGradient(
+                        stops: [
+                            .init(
+                                color: startColor.opacity(colorScheme == .dark ? 0.20 : 0.28),
+                                location: 0.0),
+                            .init(
+                                color: endColor.opacity(colorScheme == .dark ? 0.16 : 0.22),
+                                location: 1.0),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
         }
     }
 }
@@ -924,28 +922,18 @@ struct ExpandedPanelBackground: View {
         )
 
         return ZStack {
-            // Base layer - adaptive fill
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(
-                    (colorScheme == .dark ? Color.black : Color.white).opacity(
-                        colorScheme == .dark
-                            ? clampedBackgroundOpacity + 0.08
-                            : clampedBackgroundOpacity
-                    )
-                )
-
             // Gradient tint
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(gradient)
 
-            // Material blur
+            // Liquid glass
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(
-                    .ultraThinMaterial.opacity(
-                        colorScheme == .dark
-                            ? clampedBackgroundOpacity + 0.16
-                            : clampedBackgroundOpacity + 0.12
-                    )
+                .fill(Color.clear)
+                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                .opacity(
+                    colorScheme == .dark
+                        ? clampedBackgroundOpacity + 0.16
+                        : clampedBackgroundOpacity + 0.12
                 )
         }
     }
