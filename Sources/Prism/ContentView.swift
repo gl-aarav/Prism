@@ -773,7 +773,7 @@ class ChatManager: ObservableObject {
         if let data = try? Data(contentsOf: savePath),
             let loaded = try? JSONDecoder().decode([ChatSession].self, from: data)
         {
-            sessions = loaded.sorted(by: { $0.date > $1.date })
+            sessions = loaded
             currentSessionId = sessions.first?.id
         }
     }
