@@ -75,7 +75,14 @@ struct Message: Identifiable, Codable, Equatable {
     var thinkingContent: String?
     var thinkingDuration: TimeInterval?
     var model: String?
-    var imageData: Data?
+    var imageData: Data? {
+        didSet {
+            // Invalidate cached image whenever imageData changes (e.g. version switch)
+            if imageData != oldValue {
+                _cachedImage = imageData.flatMap { NSImage(data: $0) }
+            }
+        }
+    }
     var pdfData: Data?
     var attachments: [MessageAttachment]?
     var isUser: Bool
@@ -5023,6 +5030,7 @@ struct MessageView: View, Equatable {
                             messageId: message.id,
                             coordinateSpaceName: "detailContainer",
                             onImageTap: onImageTap)
+                        .id(message.currentVersionIndex ?? -1)
                     }
                     if message.pdfData != nil {
                         HStack(spacing: 8) {
@@ -5225,6 +5233,7 @@ struct MessageView: View, Equatable {
                                 coordinateSpaceName: "detailContainer",
                                 onImageTap: onImageTap
                             )
+                            .id(message.currentVersionIndex ?? -1)
                             .padding(.bottom, 4)
                         }
                         let activeContent = liveContent ?? message.content
