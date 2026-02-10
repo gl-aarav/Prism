@@ -1703,117 +1703,116 @@ struct ContentView: View {
                     ZStack {
                         // Chat or Web view (always in tree to prevent rebuild flash)
                         if isWebViewProvider(selectedProvider) {
-                            VStack(spacing: 0) {
-                                HeaderView(
-                                    selectedProvider: $selectedProvider,
-                                    onNewChat: chatManager.createNewSession
-                                )
-
+                            ZStack(alignment: .top) {
                                 if let url = getWebURL(for: selectedProvider) {
                                     WebView(url: url)
                                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 }
-                            }
-                        } else {
-                            VStack(spacing: 0) {
+
                                 HeaderView(
                                     selectedProvider: $selectedProvider,
                                     onNewChat: chatManager.createNewSession
                                 )
-
-                                ScrollViewReader { proxy in
-                                    ScrollView {
-                                        LazyVStack(spacing: 24) {
-                                            let messages = chatManager.getCurrentMessages()
-                                            if messages.isEmpty {
-                                                EmptyStateView(appTheme: appTheme)
-                                            } else {
-                                                ForEach(messages) { message in
-                                                    let isLast = message.id == messages.last?.id
-                                                    let isLastUserMessage =
-                                                        message.isUser
-                                                        && messages.last(where: { $0.isUser })?.id
-                                                            == message.id
-                                                    MessageView(
-                                                        message: message,
-                                                        liveContent: streamBuffer[message.id]
-                                                            ?? nil,
-                                                        liveThinking: streamThinkingBuffer[
-                                                            message.id]
-                                                            ?? nil,
-                                                        onRegenerate: (!message.isUser
-                                                            && !isLoading
-                                                            && isLast)
-                                                            ? {
-                                                                regenerateResponse(
-                                                                    for: message.id)
-                                                            }
-                                                            : nil,
-                                                        onEdit: (isLastUserMessage && !isLoading)
-                                                            ? { newContent in
-                                                                editAndResend(
-                                                                    message: message,
-                                                                    newContent: newContent)
-                                                            }
-                                                            : nil,
-                                                        canEdit: isLastUserMessage && !isLoading,
-                                                        onImageTap: { img, rect in
-                                                            chatPreviewImage = img
-                                                            chatPreviewSourceRect = rect
-                                                            chatPreviewVisible = true
-                                                        },
-                                                        onSwitchVersion: (!message.isUser
-                                                            && message.versions != nil
-                                                            && (message.versions?.count ?? 0) > 1)
-                                                            ? { versionIndex in
-                                                                chatManager.switchVersion(
-                                                                    messageId: message.id,
-                                                                    to: versionIndex)
-                                                            }
-                                                            : nil
-                                                    )
-                                                    .equatable()
-                                                }
+                            }
+                        } else {
+                            ScrollViewReader { proxy in
+                                ScrollView {
+                                    LazyVStack(spacing: 24) {
+                                        let messages = chatManager.getCurrentMessages()
+                                        if messages.isEmpty {
+                                            EmptyStateView(appTheme: appTheme)
+                                        } else {
+                                            ForEach(messages) { message in
+                                                let isLast = message.id == messages.last?.id
+                                                let isLastUserMessage =
+                                                    message.isUser
+                                                    && messages.last(where: { $0.isUser })?.id
+                                                        == message.id
+                                                MessageView(
+                                                    message: message,
+                                                    liveContent: streamBuffer[message.id]
+                                                        ?? nil,
+                                                    liveThinking: streamThinkingBuffer[
+                                                        message.id]
+                                                        ?? nil,
+                                                    onRegenerate: (!message.isUser
+                                                        && !isLoading
+                                                        && isLast)
+                                                        ? {
+                                                            regenerateResponse(
+                                                                for: message.id)
+                                                        }
+                                                        : nil,
+                                                    onEdit: (isLastUserMessage && !isLoading)
+                                                        ? { newContent in
+                                                            editAndResend(
+                                                                message: message,
+                                                                newContent: newContent)
+                                                        }
+                                                        : nil,
+                                                    canEdit: isLastUserMessage && !isLoading,
+                                                    onImageTap: { img, rect in
+                                                        chatPreviewImage = img
+                                                        chatPreviewSourceRect = rect
+                                                        chatPreviewVisible = true
+                                                    },
+                                                    onSwitchVersion: (!message.isUser
+                                                        && message.versions != nil
+                                                        && (message.versions?.count ?? 0) > 1)
+                                                        ? { versionIndex in
+                                                            chatManager.switchVersion(
+                                                                messageId: message.id,
+                                                                to: versionIndex)
+                                                        }
+                                                        : nil
+                                                )
+                                                .equatable()
                                             }
                                         }
-                                        .padding()
                                     }
-                                    .safeAreaInset(edge: .bottom) {
-                                        InputView(
-                                            inputText: $inputText,
-                                            selectedAttachments: $selectedAttachments,
-                                            thinkingLevel: activeThinkingLevel,
-                                            isLoading: isLoading,
-                                            onSend: sendMessage,
-                                            onStop: stopGeneration,
-                                            onSelectAttachment: selectAttachment,
-                                            thinkingMode: thinkingMode,
-                                            isOllama: selectedProvider.contains("Ollama"),
-                                            isGemini: selectedProvider == "Gemini API",
-                                            webSearchEnabled: $webSearchEnabled,
-                                            hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
-                                            onSlashAction: handleSlashAction
-                                        )
+                                    .padding()
+                                }
+                                .safeAreaInset(edge: .top) {
+                                    HeaderView(
+                                        selectedProvider: $selectedProvider,
+                                        onNewChat: chatManager.createNewSession
+                                    )
+                                }
+                                .safeAreaInset(edge: .bottom) {
+                                    InputView(
+                                        inputText: $inputText,
+                                        selectedAttachments: $selectedAttachments,
+                                        thinkingLevel: activeThinkingLevel,
+                                        isLoading: isLoading,
+                                        onSend: sendMessage,
+                                        onStop: stopGeneration,
+                                        onSelectAttachment: selectAttachment,
+                                        thinkingMode: thinkingMode,
+                                        isOllama: selectedProvider.contains("Ollama"),
+                                        isGemini: selectedProvider == "Gemini API",
+                                        webSearchEnabled: $webSearchEnabled,
+                                        hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
+                                        onSlashAction: handleSlashAction
+                                    )
+                                }
+                                .onChange(of: chatManager.getCurrentMessages().count) {
+                                    _, count in
+                                    handleScroll(proxy: proxy, newCount: count)
+                                }
+                                .onChange(of: chatManager.currentSessionId) { _, _ in
+                                    handleScroll(proxy: proxy)
+                                }
+                                .onChange(of: streamBuffer) { _, _ in
+                                    if isLoading,
+                                        let lastId = chatManager.getCurrentMessages().last?.id
+                                    {
+                                        proxy.scrollTo(lastId, anchor: .bottom)
                                     }
-                                    .onChange(of: chatManager.getCurrentMessages().count) {
-                                        _, count in
-                                        handleScroll(proxy: proxy, newCount: count)
-                                    }
-                                    .onChange(of: chatManager.currentSessionId) { _, _ in
-                                        handleScroll(proxy: proxy)
-                                    }
-                                    .onChange(of: streamBuffer) { _, _ in
-                                        if isLoading,
-                                            let lastId = chatManager.getCurrentMessages().last?.id
-                                        {
-                                            proxy.scrollTo(lastId, anchor: .bottom)
-                                        }
-                                    }
-                                    .onChange(of: isLoading) { _, loading in
-                                        if loading {
-                                            withAnimation {
-                                                proxy.scrollTo("typingIndicator", anchor: .bottom)
-                                            }
+                                }
+                                .onChange(of: isLoading) { _, loading in
+                                    if loading {
+                                        withAnimation {
+                                            proxy.scrollTo("typingIndicator", anchor: .bottom)
                                         }
                                     }
                                 }
@@ -3287,9 +3286,7 @@ struct HeaderView: View {
                 .padding(.vertical, 8)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(
-                            Color.gray.opacity(0.14)
-                        )
+                        .fill(.ultraThinMaterial)
                         .overlay(
                             Capsule(style: .continuous)
                                 .stroke(
@@ -3302,12 +3299,14 @@ struct HeaderView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .focusEffectDisabled()
-            .padding(.horizontal, 4)  // Padding around the menu for click area
+            .padding(.horizontal, 4)
 
             Spacer()
         }
-        .padding()
-        // Transparent background
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(Color.clear)
     }
     func getProviderIcon(_ provider: String) -> String {
         switch provider {

@@ -116,120 +116,117 @@ struct ModelComparisonView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            headerBar
+        ScrollView {
+            VStack(spacing: 16) {
+                ForEach(Array(slots.enumerated()), id: \.element.id) { index, slot in
+                    let slotId = slot.id
+                    ComparisonCard(
+                        slot: slot,
+                        index: index,
+                        appTheme: appTheme,
+                        onRemove: slots.count > 2
+                            ? {
+                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                    removeSlot(at: idx)
+                                }
+                            } : nil,
+                        onChangeProvider: { provider, model in
+                            if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                state.slots[idx].provider = provider
+                                state.slots[idx].model = model
+                                saveSlots()
+                            }
+                        },
+                        onChangeThinkingLevel: { level in
+                            if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                state.slots[idx].thinkingLevel = level
+                                saveSlots()
+                            }
+                        },
+                        onChangeWebSearch: { enabled in
+                            if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                state.slots[idx].webSearchEnabled = enabled
+                                saveSlots()
+                            }
+                        },
+                        ollamaManager: ollamaManager,
+                        geminiManager: geminiManager,
+                        hasOllamaAPIKey: !ollamaAPIKey.isEmpty
+                    )
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
 
-            // Model Slots — stacked vertically for more space
-            ScrollView {
-                VStack(spacing: 16) {
-                    ForEach(Array(slots.enumerated()), id: \.element.id) { index, slot in
-                        let slotId = slot.id
-                        ComparisonCard(
-                            slot: slot,
-                            index: index,
-                            appTheme: appTheme,
-                            onRemove: slots.count > 2
-                                ? {
-                                    if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                        removeSlot(at: idx)
-                                    }
-                                } : nil,
-                            onChangeProvider: { provider, model in
-                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    state.slots[idx].provider = provider
-                                    state.slots[idx].model = model
-                                    saveSlots()
-                                }
-                            },
-                            onChangeThinkingLevel: { level in
-                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    state.slots[idx].thinkingLevel = level
-                                    saveSlots()
-                                }
-                            },
-                            onChangeWebSearch: { enabled in
-                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    state.slots[idx].webSearchEnabled = enabled
-                                    saveSlots()
-                                }
-                            },
-                            ollamaManager: ollamaManager,
-                            geminiManager: geminiManager,
-                            hasOllamaAPIKey: !ollamaAPIKey.isEmpty
+                // Synthesize button
+                if slots.filter({ !$0.response.isEmpty && !$0.isLoading }).count >= 2 {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            state.showSynthesizePanel.toggle()
+                            if !state.showSynthesizePanel {
+                                synthesizeTask?.cancel()
+                                synthesizeTask = nil
+                                isSynthesizing = false
+                            }
+                        }
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "wand.and.stars")
+                                .font(.system(size: 15, weight: .semibold))
+                            Text(
+                                state.showSynthesizePanel
+                                    ? "Hide Synthesis" : "Synthesize All Responses"
+                            )
+                            .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: appTheme.colors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule()
+                                .fill(.ultraThinMaterial)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: appTheme.colors.map { $0.opacity(0.4) },
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 0.8
+                                        )
+                                )
                         )
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-
-                    // Synthesize button
-                    if slots.filter({ !$0.response.isEmpty && !$0.isLoading }).count >= 2 {
-                        Button(action: {
-                            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                                state.showSynthesizePanel.toggle()
-                                if !state.showSynthesizePanel {
-                                    synthesizeTask?.cancel()
-                                    synthesizeTask = nil
-                                    isSynthesizing = false
-                                }
-                            }
-                        }) {
-                            HStack(spacing: 8) {
-                                Image(systemName: "wand.and.stars")
-                                    .font(.system(size: 15, weight: .semibold))
-                                Text(
-                                    state.showSynthesizePanel
-                                        ? "Hide Synthesis" : "Synthesize All Responses"
-                                )
-                                .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: appTheme.colors,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
-                            .background(
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: appTheme.colors.map { $0.opacity(0.4) },
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ),
-                                                lineWidth: 0.8
-                                            )
-                                    )
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .help("Combine all responses into one using AI")
-                        .padding(.top, 8)
-                    }
-
-                    // Inline synthesis panel
-                    if state.showSynthesizePanel {
-                        synthesizeInlinePanel
-                            .transition(
-                                .asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .top)).combined(
-                                        with: .scale(scale: 0.95, anchor: .top)),
-                                    removal: .opacity.combined(
-                                        with: .scale(scale: 0.95, anchor: .top))
-                                ))
-                    }
+                    .buttonStyle(.plain)
+                    .help("Combine all responses into one using AI")
+                    .padding(.top, 8)
                 }
-                .padding(.bottom, 20)
+
+                // Inline synthesis panel
+                if state.showSynthesizePanel {
+                    synthesizeInlinePanel
+                        .transition(
+                            .asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .top)).combined(
+                                    with: .scale(scale: 0.95, anchor: .top)),
+                                removal: .opacity.combined(
+                                    with: .scale(scale: 0.95, anchor: .top))
+                            ))
+                }
             }
-            .safeAreaInset(edge: .bottom) {
-                comparisonInputBar
-            }
+            .padding(.bottom, 20)
+        }
+        .safeAreaInset(edge: .top) {
+            headerBar
+        }
+        .safeAreaInset(edge: .bottom) {
+            comparisonInputBar
         }
         .background(Color.clear)
         .onDisappear {
@@ -251,11 +248,11 @@ struct ModelComparisonView: View {
     // MARK: - Header
 
     private var headerBar: some View {
-        HStack(spacing: 12) {
-            // Title
+        HStack(spacing: 10) {
+            // Title pill
             HStack(spacing: 8) {
                 Image(systemName: "square.split.2x1")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(
                         LinearGradient(
                             colors: appTheme.colors,
@@ -264,9 +261,19 @@ struct ModelComparisonView: View {
                         )
                     )
                 Text("Model Comparison")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                    )
+            )
 
             Spacer()
 
@@ -329,8 +336,10 @@ struct ModelComparisonView: View {
                 .help("Clear all responses")
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(Color.clear)
     }
 
     // MARK: - Input Bar

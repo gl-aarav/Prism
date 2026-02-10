@@ -75,10 +75,7 @@ struct QuizMeView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            quizHeader
-
+        Group {
             if questions.isEmpty && !isGenerating {
                 // Setup screen
                 quizSetup
@@ -89,6 +86,9 @@ struct QuizMeView: View {
             } else {
                 quizQuestionView
             }
+        }
+        .safeAreaInset(edge: .top) {
+            quizHeader
         }
         .background(Color.clear)
         .onAppear { loadQuestions() }
@@ -123,10 +123,11 @@ struct QuizMeView: View {
     // MARK: - Header
 
     private var quizHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
+            // Title pill
             HStack(spacing: 8) {
                 Image(systemName: "questionmark.bubble")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(
                         LinearGradient(
                             colors: appTheme.colors,
@@ -135,9 +136,19 @@ struct QuizMeView: View {
                         )
                     )
                 Text("Quiz Me")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                    )
+            )
 
             Spacer()
 
@@ -190,8 +201,10 @@ struct QuizMeView: View {
                 .background(Capsule().fill(difficultyColor.opacity(0.1)))
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(Color.clear)
     }
 
     // MARK: - Setup Screen

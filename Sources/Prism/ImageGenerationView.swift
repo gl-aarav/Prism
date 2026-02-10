@@ -156,21 +156,19 @@ struct ImageGenerationView: View {
 
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                header
-
+            Group {
                 // Content area
                 if store.items.isEmpty && !isGenerating {
                     emptyState
-                        .safeAreaInset(edge: .bottom) {
-                            inputBar
-                        }
                 } else {
                     messagesView
-                        .safeAreaInset(edge: .bottom) {
-                            inputBar
-                        }
                 }
+            }
+            .safeAreaInset(edge: .top) {
+                header
+            }
+            .safeAreaInset(edge: .bottom) {
+                inputBar
             }
             .allowsHitTesting(!previewVisible)
 
@@ -210,17 +208,30 @@ struct ImageGenerationView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: "paintbrush.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: appTheme.colors.isEmpty ? [.orange, .pink] : appTheme.colors,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+            // Title pill
+            HStack(spacing: 8) {
+                Image(systemName: "paintbrush.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: appTheme.colors.isEmpty ? [.orange, .pink] : appTheme.colors,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
-            Text("Image Generation")
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                Text("Image Generation")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                    )
+            )
 
             Spacer()
 
@@ -232,9 +243,16 @@ struct ImageGenerationView: View {
                     .font(.system(size: 11, weight: .medium))
             }
             .foregroundColor(.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(Color.secondary.opacity(0.1)))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                    )
+            )
 
             if !store.items.isEmpty {
                 Button(action: { showResetConfirmation = true }) {
@@ -246,17 +264,23 @@ struct ImageGenerationView: View {
                     }
                     .foregroundColor(.red.opacity(0.8))
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 6)
                     .background(
-                        Capsule()
-                            .fill(Color.red.opacity(0.08))
+                        Capsule(style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(Color.white.opacity(0.18), lineWidth: 0.8)
+                            )
                     )
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(Color.clear)
     }
 
     // MARK: - Empty State
