@@ -5029,7 +5029,8 @@ struct MessageView: View, Equatable {
                             image: image, maxWidth: 200, maxHeight: 300,
                             messageId: message.id,
                             coordinateSpaceName: "detailContainer",
-                            onImageTap: onImageTap)
+                            onImageTap: onImageTap
+                        )
                         .id(message.currentVersionIndex ?? -1)
                     }
                     if message.pdfData != nil {
@@ -5575,7 +5576,7 @@ struct SettingsView: View {
             Section(header: Text("Image Downloads")) {
                 LabeledContent("Image save path") {
                     HStack {
-                         TextField("", text: $imageDownloadPath)
+                        TextField("", text: $imageDownloadPath)
                             .textFieldStyle(.roundedBorder)
                         Button("Browse") {
                             let panel = NSOpenPanel()
