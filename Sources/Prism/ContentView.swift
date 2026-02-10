@@ -3956,24 +3956,6 @@ struct InputView: View {
             .padding(.vertical, 10)
             // Liquid Glass container
             .glassEffect(.regular, in: .rect(cornerRadius: 26))
-            // Floating shadow system
-            .shadow(
-                color: colorScheme == .dark
-                    ? Color.black.opacity(isFocused ? 0.5 : 0.3)
-                    : Color.black.opacity(isFocused ? 0.12 : 0.06),
-                radius: isFocused ? 30 : 16,
-                x: 0,
-                y: isFocused ? 12 : 6
-            )
-            .shadow(
-                color: colorScheme == .dark
-                    ? Color.blue.opacity(isFocused ? 0.08 : 0.0)
-                    : Color.blue.opacity(isFocused ? 0.04 : 0.0),
-                radius: 40,
-                x: 0,
-                y: 0
-            )
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isFocused)
         }
     }
 
@@ -3984,7 +3966,11 @@ struct InputView: View {
                     "Ask AI anything... (type / for commands)"
                 )
                 .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(.secondary.opacity(0.6))
+                .foregroundStyle(
+                    colorScheme == .dark
+                        ? Color.black.opacity(0.55)
+                        : Color.secondary.opacity(0.6)
+                )
                 .allowsHitTesting(false)
                 .padding(.leading, 4)
             }
@@ -3993,7 +3979,7 @@ struct InputView: View {
                 .focused($isFocused)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15))
-                .foregroundStyle(.primary)
+                .foregroundStyle(colorScheme == .dark ? Color.black : Color.primary)
                 .lineLimit(1...10)
                 .onKeyPress(.upArrow) {
                     if showSlashAutocomplete && !slashMatches.isEmpty {

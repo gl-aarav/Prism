@@ -859,11 +859,38 @@ struct QuickAIMessageView: View, Equatable {
 
 struct CommandBarBackground: View {
     var cornerRadius: CGFloat = 20
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+    @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
+
+    private var clampedVibrancy: Double {
+        min(max(commandBarVibrancy, 0.05), 0.9)
+    }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.clear)
-            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+        let colors = appTheme.colors
+        let startColor = colors.first ?? .blue
+        let endColor = colors.last ?? .green
+
+        ZStack {
+            // Theme tint layer
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            startColor.opacity(clampedVibrancy * 0.25),
+                            endColor.opacity(clampedVibrancy * 0.18),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            // Ultra thin material — opacity driven by vibrancy slider
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .opacity(clampedVibrancy)
+        }
     }
 }
 
@@ -1346,7 +1373,8 @@ extension QuickAIView {
                             .font(.system(size: 16))
                             .foregroundStyle(
                                 colorScheme == .dark
-                                    ? Color.white.opacity(0.4) : Color.black.opacity(0.4)
+                                    ? Color.white.opacity(0.5)
+                                    : Color.black.opacity(0.45)
                             )
                             .allowsHitTesting(false)
                     }
