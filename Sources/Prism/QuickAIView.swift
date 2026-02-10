@@ -1670,6 +1670,7 @@ extension QuickAIView {
                     if geminiModel.lowercased().hasPrefix("gemini-3")
                         || geminiModel.lowercased().hasPrefix("gemini-2.5")
                     {
+                        let isGemini3Pro = geminiModel.lowercased().hasPrefix("gemini-3-pro")
                         Menu {
                             Button {
                                 thinkingLevel = "auto"
@@ -1682,7 +1683,9 @@ extension QuickAIView {
                                 }
                             }
                             thinkingOption(title: "Low", value: "low")
-                            thinkingOption(title: "Medium", value: "medium")
+                            if !isGemini3Pro {
+                                thinkingOption(title: "Medium", value: "medium")
+                            }
                             thinkingOption(title: "High", value: "high")
                         } label: {
                             Image(systemName: "brain")

@@ -1184,13 +1184,15 @@ class GeminiService {
                     if supportsThinking {
                         var thinkingConfig: [String: Any] = ["includeThoughts": true]
                         let isGemini3 = lowerModel.hasPrefix("gemini-3")
+                        let isGemini3Pro = lowerModel.hasPrefix("gemini-3-pro")
                         if isGemini3 {
                             // Gemini 3 uses thinkingLevel
+                            // Pro only supports LOW and HIGH; Flash supports all
                             switch thinkingLevel.lowercased() {
                             case "low":
                                 thinkingConfig["thinkingLevel"] = "LOW"
                             case "medium":
-                                thinkingConfig["thinkingLevel"] = "MEDIUM"
+                                thinkingConfig["thinkingLevel"] = isGemini3Pro ? "LOW" : "MEDIUM"
                             case "high":
                                 thinkingConfig["thinkingLevel"] = "HIGH"
                             default:
@@ -1550,7 +1552,8 @@ enum ThinkingMode {
     case none
     case binary  // On/Off (e.g. DeepSeek)
     case threeState  // Low/Med/High (Standard)
-    case fourState  // Auto/Low/Med/High (Gemini)
+    case geminiPro  // Auto/Low/High (Gemini 3 Pro)
+    case geminiFlash  // Auto/Low/Med/High (Gemini 3 Flash, 2.5)
 }
 
 struct ContentView: View {
@@ -1606,8 +1609,10 @@ struct ContentView: View {
     var thinkingMode: ThinkingMode {
         if selectedProvider == "Gemini API" {
             let lower = geminiModel.lowercased()
-            if lower.hasPrefix("gemini-3") || lower.hasPrefix("gemini-2.5") {
-                return .fourState
+            if lower.hasPrefix("gemini-3-pro") {
+                return .geminiPro  // Only Low/High supported
+            } else if lower.hasPrefix("gemini-3") || lower.hasPrefix("gemini-2.5") {
+                return .geminiFlash
             }
             return .none
         } else if selectedProvider.contains("Ollama") {
@@ -3769,7 +3774,37 @@ struct InputView: View {
                                     Text("Reasoning: Off")
                                 }
                             }
-                        } else if thinkingMode == .fourState {
+                        } else if thinkingMode == .geminiPro {
+                            // Gemini 3 Pro: Auto, Low, High only
+                            Button {
+                                thinkingLevel = "auto"
+                            } label: {
+                                if thinkingLevel == "auto" {
+                                    Label("Auto", systemImage: "checkmark")
+                                } else {
+                                    Text("Auto")
+                                }
+                            }
+                            Button {
+                                thinkingLevel = "low"
+                            } label: {
+                                if thinkingLevel == "low" {
+                                    Label("Low", systemImage: "checkmark")
+                                } else {
+                                    Text("Low")
+                                }
+                            }
+                            Button {
+                                thinkingLevel = "high"
+                            } label: {
+                                if thinkingLevel == "high" {
+                                    Label("High", systemImage: "checkmark")
+                                } else {
+                                    Text("High")
+                                }
+                            }
+                        } else if thinkingMode == .geminiFlash {
+                            // Gemini 3 Flash / 2.5: Auto, Low, Medium, High
                             Button {
                                 thinkingLevel = "auto"
                             } label: {
