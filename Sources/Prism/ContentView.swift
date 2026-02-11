@@ -308,7 +308,7 @@ struct Message: Identifiable, Codable, Equatable {
                 } else {
                     currentText += line + "\n"
                 }
-            } else if trimmedLine == "---" {
+            } else if trimmedLine == "---" || trimmedLine == "***" || trimmedLine == "___" {
                 if !currentText.isEmpty {
                     blocks.append(
                         MarkdownBlock(type: .text(currentText.trimmingCharacters(in: .newlines))))
