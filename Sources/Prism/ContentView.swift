@@ -5555,6 +5555,7 @@ struct SettingsView: View {
     @AppStorage("QuickAIBackgroundOpacity") private var quickAIBackgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var quickAICommandBarVibrancy: Double = 0.55
     @AppStorage("QuickAITintIntensity") private var quickAITintIntensity: Double = 0.5
+    @AppStorage("QuickAIChatBarTintIntensity") private var quickAIChatBarTintIntensity: Double = 0.5
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
@@ -5676,6 +5677,29 @@ struct SettingsView: View {
                             Text("Subtle").font(.caption).foregroundStyle(.secondary)
                             Spacer()
                             Text("Punchy").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                LabeledContent("Quick AI Chat Bar Tint Intensity") {
+                    VStack(spacing: 8) {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { quickAIChatBarTintIntensity },
+                                    set: { quickAIChatBarTintIntensity = min(max($0, 0.0), 1.0) }
+                                ),
+                                in: 0.0...1.0
+                            )
+                            Text("\(Int(min(max(quickAIChatBarTintIntensity, 0.0), 1.0) * 100))%")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 35, alignment: .trailing)
+                        }
+                        HStack {
+                            Text("None").font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Text("Full").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }

@@ -862,9 +862,14 @@ struct CommandBarBackground: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
+    @AppStorage("QuickAIChatBarTintIntensity") private var chatBarTintIntensity: Double = 0.5
 
     private var clampedVibrancy: Double {
         min(max(commandBarVibrancy, 0.05), 1.0)
+    }
+
+    private var clampedChatBarTint: Double {
+        min(max(chatBarTintIntensity, 0.0), 1.0)
     }
 
     var body: some View {
@@ -878,8 +883,8 @@ struct CommandBarBackground: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            startColor.opacity(clampedVibrancy * 0.25),
-                            endColor.opacity(clampedVibrancy * 0.18),
+                            startColor.opacity(clampedVibrancy * 0.25 * clampedChatBarTint * 2),
+                            endColor.opacity(clampedVibrancy * 0.18 * clampedChatBarTint * 2),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
