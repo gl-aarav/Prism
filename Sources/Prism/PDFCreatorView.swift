@@ -2070,21 +2070,6 @@ struct PDFCreatorView: View {
                 await MainActor.run {
                     store.addItem(item, fileData: fileData)
 
-                    // Auto-save to configured path
-                    if !fileDownloadPath.isEmpty {
-                        let dir = URL(fileURLWithPath: fileDownloadPath, isDirectory: true)
-                        if FileManager.default.fileExists(atPath: dir.path) {
-                            let sanitized =
-                                title.prefix(40)
-                                .replacingOccurrences(
-                                    of: "[^a-zA-Z0-9 ]", with: "", options: .regularExpression)
-                            let filename =
-                                "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).\(item.fileExtension)"
-                            let fileURL = dir.appendingPathComponent(filename)
-                            try? fileData.write(to: fileURL)
-                        }
-                    }
-
                     prompt = ""
                     isGenerating = false
                 }
