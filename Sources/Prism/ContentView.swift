@@ -3968,7 +3968,7 @@ struct InputView: View {
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(
                     colorScheme == .dark
-                        ? Color.black.opacity(0.55)
+                        ? Color.white.opacity(0.55)
                         : Color.secondary.opacity(0.6)
                 )
                 .allowsHitTesting(false)
@@ -3979,7 +3979,7 @@ struct InputView: View {
                 .focused($isFocused)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15))
-                .foregroundStyle(colorScheme == .dark ? Color.black : Color.primary)
+                .foregroundStyle(colorScheme == .dark ? Color.white : Color.primary)
                 .lineLimit(1...10)
                 .onKeyPress(.upArrow) {
                     if showSlashAutocomplete && !slashMatches.isEmpty {
