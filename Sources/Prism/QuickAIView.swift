@@ -898,10 +898,15 @@ struct ExpandedPanelBackground: View {
     var cornerRadius: CGFloat = 20
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
+    @AppStorage("QuickAITintIntensity") private var tintIntensity: Double = 0.5
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
     private var clampedBackgroundOpacity: Double {
         min(max(backgroundOpacity, 0.05), 1.0)
+    }
+
+    private var clampedTintIntensity: Double {
+        min(max(tintIntensity, 0.0), 1.0)
     }
 
     var body: some View {
@@ -910,14 +915,23 @@ struct ExpandedPanelBackground: View {
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
 
+        let baseDarkStart = 0.08
+        let baseDarkEnd = 0.05
+        let baseLightStart = 0.12
+        let baseLightEnd = 0.08
+
         // Much subtler gradient for the message area
         let gradient = LinearGradient(
             stops: [
                 .init(
-                    color: startColor.opacity(colorScheme == .dark ? 0.08 : 0.12),
+                    color: startColor.opacity(
+                        (colorScheme == .dark ? baseDarkStart : baseLightStart)
+                            * clampedTintIntensity * 2),
                     location: 0.0),
                 .init(
-                    color: endColor.opacity(colorScheme == .dark ? 0.05 : 0.08),
+                    color: endColor.opacity(
+                        (colorScheme == .dark ? baseDarkEnd : baseLightEnd) * clampedTintIntensity
+                            * 2),
                     location: 1.0),
             ],
             startPoint: .topLeading,
