@@ -12,6 +12,31 @@ struct PDFDocumentItem: Identifiable, Codable {
     var content: String
     var timestamp: Date
     var pageSize: String  // "Letter", "A4", "Legal"
+    var format: String?  // "pdf", "md", "docx" — nil defaults to "pdf"
+
+    var fileExtension: String {
+        switch format ?? "pdf" {
+        case "md": return "md"
+        case "docx": return "docx"
+        default: return "pdf"
+        }
+    }
+
+    var formatLabel: String {
+        switch format ?? "pdf" {
+        case "md": return "Markdown"
+        case "docx": return "DOCX"
+        default: return "PDF"
+        }
+    }
+
+    var formatIcon: String {
+        switch format ?? "pdf" {
+        case "md": return "doc.plaintext"
+        case "docx": return "doc.text"
+        default: return "doc.richtext.fill"
+        }
+    }
 }
 
 class PDFCreatorStore: ObservableObject {
@@ -34,44 +59,51 @@ class PDFCreatorStore: ObservableObject {
         loadItems()
     }
 
-    func addItem(_ item: PDFDocumentItem, pdfData: Data?) {
+    func addItem(_ item: PDFDocumentItem, fileData: Data?) {
         items.insert(item, at: 0)
-        if let data = pdfData {
-            savePDFData(data, for: item.id)
+        if let data = fileData {
+            saveFileData(data, for: item)
         }
         saveMetadata()
     }
 
-    func updateItem(id: UUID, pdfData: Data?) {
-        if let data = pdfData {
-            savePDFData(data, for: id)
+    func updateItem(_ item: PDFDocumentItem, fileData: Data?) {
+        if let data = fileData {
+            saveFileData(data, for: item)
         }
         saveMetadata()
     }
 
-    func pdfData(for id: UUID) -> Data? {
-        let path = saveDir.appendingPathComponent("\(id.uuidString).pdf")
-        return try? Data(contentsOf: path)
+    func fileData(for item: PDFDocumentItem) -> Data? {
+        let path = saveDir.appendingPathComponent("\(item.id.uuidString).\(item.fileExtension)")
+        if let data = try? Data(contentsOf: path) { return data }
+        // Backward compat: try .pdf
+        let pdfPath = saveDir.appendingPathComponent("\(item.id.uuidString).pdf")
+        return try? Data(contentsOf: pdfPath)
     }
 
-    func deleteItem(id: UUID) {
-        items.removeAll { $0.id == id }
-        let path = saveDir.appendingPathComponent("\(id.uuidString).pdf")
-        try? FileManager.default.removeItem(at: path)
+    func deleteItem(_ item: PDFDocumentItem) {
+        items.removeAll { $0.id == item.id }
+        for ext in ["pdf", "md", "docx"] {
+            let path = saveDir.appendingPathComponent("\(item.id.uuidString).\(ext)")
+            try? FileManager.default.removeItem(at: path)
+        }
         saveMetadata()
     }
 
     func clearAll() {
         for item in items {
-            let path = saveDir.appendingPathComponent("\(item.id.uuidString).pdf")
-            try? FileManager.default.removeItem(at: path)
+            for ext in ["pdf", "md", "docx"] {
+                let path = saveDir.appendingPathComponent("\(item.id.uuidString).\(ext)")
+                try? FileManager.default.removeItem(at: path)
+            }
         }
         items.removeAll()
         saveMetadata()
     }
 
-    private func savePDFData(_ data: Data, for id: UUID) {
-        let path = saveDir.appendingPathComponent("\(id.uuidString).pdf")
+    private func saveFileData(_ data: Data, for item: PDFDocumentItem) {
+        let path = saveDir.appendingPathComponent("\(item.id.uuidString).\(item.fileExtension)")
         try? data.write(to: path)
     }
 
@@ -737,99 +769,135 @@ struct PDFRenderer {
             .paragraphStyle: paragraphStyle,
         ]
 
-        // Process inline formatting: **bold**, *italic*, `code`, $math$
+        // Process inline formatting: **bold**, *italic*, `code`, $math$, \(math\)
+        // Uses position-based matching to handle earliest match first
         var remaining = text
         while !remaining.isEmpty {
-            // Bold: **text**
-            if let boldRange = remaining.range(of: "\\*\\*(.+?)\\*\\*", options: .regularExpression)
-            {
-                let prefix = String(remaining[remaining.startIndex..<boldRange.lowerBound])
-                if !prefix.isEmpty {
-                    result.append(NSAttributedString(string: prefix, attributes: baseAttrs))
-                }
-                let inner = String(remaining[boldRange]).dropFirst(2).dropLast(2)
-                var boldAttrs = baseAttrs
-                boldAttrs[.font] = NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold)
-                result.append(
-                    NSAttributedString(string: String(inner), attributes: boldAttrs))
-                remaining = String(remaining[boldRange.upperBound...])
-                continue
-            }
+            var earliestRange: Range<String.Index>?
+            var earliestType = ""
 
-            // Italic: *text*
-            if let italicRange = remaining.range(
+            // Find bold **text**
+            if let r = remaining.range(of: "\\*\\*(.+?)\\*\\*", options: .regularExpression) {
+                if earliestRange == nil || r.lowerBound < earliestRange!.lowerBound {
+                    earliestRange = r
+                    earliestType = "bold"
+                }
+            }
+            // Find italic *text*
+            if let r = remaining.range(
                 of: "(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)", options: .regularExpression)
             {
-                let prefix = String(remaining[remaining.startIndex..<italicRange.lowerBound])
-                if !prefix.isEmpty {
-                    result.append(NSAttributedString(string: prefix, attributes: baseAttrs))
+                if earliestRange == nil || r.lowerBound < earliestRange!.lowerBound {
+                    earliestRange = r
+                    earliestType = "italic"
                 }
-                let inner = String(remaining[italicRange]).dropFirst(1).dropLast(1)
-                var italicAttrs = baseAttrs
-                let italicFont =
-                    NSFontManager.shared.convert(baseFont, toHaveTrait: .italicFontMask)
-                italicAttrs[.font] = italicFont
-                result.append(
-                    NSAttributedString(string: String(inner), attributes: italicAttrs))
-                remaining = String(remaining[italicRange.upperBound...])
-                continue
             }
-
-            // Inline code: `text`
-            if let codeRange = remaining.range(of: "`(.+?)`", options: .regularExpression) {
-                let prefix = String(remaining[remaining.startIndex..<codeRange.lowerBound])
-                if !prefix.isEmpty {
-                    result.append(NSAttributedString(string: prefix, attributes: baseAttrs))
+            // Find code `text`
+            if let r = remaining.range(of: "`(.+?)`", options: .regularExpression) {
+                if earliestRange == nil || r.lowerBound < earliestRange!.lowerBound {
+                    earliestRange = r
+                    earliestType = "code"
                 }
-                let inner = String(remaining[codeRange]).dropFirst(1).dropLast(1)
-                var codeAttrs = baseAttrs
-                codeAttrs[.font] = NSFont.monospacedSystemFont(
-                    ofSize: baseFont.pointSize - 1, weight: .regular)
-                codeAttrs[.backgroundColor] = NSColor(white: 0.92, alpha: 1.0)
-                result.append(
-                    NSAttributedString(string: String(inner), attributes: codeAttrs))
-                remaining = String(remaining[codeRange.upperBound...])
-                continue
             }
-
-            // Inline math: $text$ — render with SwiftMath as inline image
-            if let mathRange = remaining.range(
+            // Find $math$
+            if let r = remaining.range(
                 of: "(?<!\\$)\\$(?!\\$)(.+?)(?<!\\$)\\$(?!\\$)", options: .regularExpression)
             {
-                let prefix = String(remaining[remaining.startIndex..<mathRange.lowerBound])
-                if !prefix.isEmpty {
-                    result.append(NSAttributedString(string: prefix, attributes: baseAttrs))
+                if earliestRange == nil || r.lowerBound < earliestRange!.lowerBound {
+                    earliestRange = r
+                    earliestType = "dollarmath"
                 }
-                let inner = String(String(remaining[mathRange]).dropFirst(1).dropLast(1))
+            }
+            // Find \(math\)
+            if let r = remaining.range(
+                of: "\\\\\\((.+?)\\\\\\)", options: .regularExpression)
+            {
+                if earliestRange == nil || r.lowerBound < earliestRange!.lowerBound {
+                    earliestRange = r
+                    earliestType = "parenmath"
+                }
+            }
 
-                // Try rendering with SwiftMath as an inline image
+            guard let matchRange = earliestRange else {
+                result.append(NSAttributedString(string: remaining, attributes: baseAttrs))
+                break
+            }
+
+            // Append text before the match
+            let prefix = String(remaining[remaining.startIndex..<matchRange.lowerBound])
+            if !prefix.isEmpty {
+                result.append(NSAttributedString(string: prefix, attributes: baseAttrs))
+            }
+
+            let matched = String(remaining[matchRange])
+
+            switch earliestType {
+            case "bold":
+                let inner = String(matched.dropFirst(2).dropLast(2))
+                var attrs = baseAttrs
+                attrs[.font] = NSFont.systemFont(ofSize: baseFont.pointSize, weight: .bold)
+                result.append(NSAttributedString(string: inner, attributes: attrs))
+
+            case "italic":
+                let inner = String(matched.dropFirst(1).dropLast(1))
+                var attrs = baseAttrs
+                attrs[.font] = NSFontManager.shared.convert(
+                    baseFont, toHaveTrait: .italicFontMask)
+                result.append(NSAttributedString(string: inner, attributes: attrs))
+
+            case "code":
+                let inner = String(matched.dropFirst(1).dropLast(1))
+                var attrs = baseAttrs
+                attrs[.font] = NSFont.monospacedSystemFont(
+                    ofSize: baseFont.pointSize - 1, weight: .regular)
+                attrs[.backgroundColor] = NSColor(white: 0.92, alpha: 1.0)
+                result.append(NSAttributedString(string: inner, attributes: attrs))
+
+            case "dollarmath":
+                let inner = String(matched.dropFirst(1).dropLast(1))
                 if let mathImage = renderLaTeXToImage(
                     inner, width: width, fontSize: baseFont.pointSize + 2)
                 {
                     let attachment = NSTextAttachment()
                     attachment.image = mathImage
-                    // Align baseline: offset downward by ~25% of height
                     let imgHeight = mathImage.size.height
                     attachment.bounds = CGRect(
                         x: 0, y: -(imgHeight * 0.25),
                         width: mathImage.size.width, height: imgHeight)
                     result.append(NSAttributedString(attachment: attachment))
                 } else {
-                    // Fallback: render as italic serif text
-                    var mathAttrs = baseAttrs
-                    mathAttrs[.font] = NSFont.monospacedSystemFont(
+                    var attrs = baseAttrs
+                    attrs[.font] = NSFont.monospacedSystemFont(
                         ofSize: baseFont.pointSize, weight: .regular)
-                    mathAttrs[.foregroundColor] = NSColor.darkGray
-                    result.append(
-                        NSAttributedString(string: inner, attributes: mathAttrs))
+                    attrs[.foregroundColor] = NSColor.darkGray
+                    result.append(NSAttributedString(string: inner, attributes: attrs))
                 }
-                remaining = String(remaining[mathRange.upperBound...])
-                continue
+
+            case "parenmath":
+                let inner = String(matched.dropFirst(2).dropLast(2))
+                if let mathImage = renderLaTeXToImage(
+                    inner, width: width, fontSize: baseFont.pointSize + 2)
+                {
+                    let attachment = NSTextAttachment()
+                    attachment.image = mathImage
+                    let imgHeight = mathImage.size.height
+                    attachment.bounds = CGRect(
+                        x: 0, y: -(imgHeight * 0.25),
+                        width: mathImage.size.width, height: imgHeight)
+                    result.append(NSAttributedString(attachment: attachment))
+                } else {
+                    var attrs = baseAttrs
+                    attrs[.font] = NSFont.monospacedSystemFont(
+                        ofSize: baseFont.pointSize, weight: .regular)
+                    attrs[.foregroundColor] = NSColor.darkGray
+                    result.append(NSAttributedString(string: inner, attributes: attrs))
+                }
+
+            default:
+                break
             }
 
-            // No inline formatting found, append rest
-            result.append(NSAttributedString(string: remaining, attributes: baseAttrs))
-            break
+            remaining = String(remaining[matchRange.upperBound...])
         }
 
         return result
@@ -883,11 +951,22 @@ struct PDFRenderer {
             content = content.replacingOccurrences(of: "\\end{\(env)}", with: "")
         }
 
-        // Replace \\ (LaTeX line break) with space for single-line rendering
-        content = content.replacingOccurrences(of: "\\\\", with: " ")
+        // Handle \boxed{...} → just the content
+        if let regex = try? NSRegularExpression(
+            pattern: "\\\\boxed\\{([^}]*)\\}", options: [])
+        {
+            let range = NSRange(content.startIndex..., in: content)
+            content = regex.stringByReplacingMatches(
+                in: content, options: [], range: range, withTemplate: "$1")
+        }
 
-        // Replace & (alignment char in environments) with space
-        content = content.replacingOccurrences(of: "&", with: " ")
+        // Normalize spacing commands
+        content = content.replacingOccurrences(of: "\\qquad", with: "\\quad")
+        content = content.replacingOccurrences(
+            of: "\\hspace{[^}]*}", with: " ", options: .regularExpression)
+
+        // NOTE: Do NOT remove \\ and & here — handled by renderLaTeXToImage
+        // for proper multi-line math support
 
         // Clean up excessive whitespace
         while content.contains("  ") {
@@ -903,12 +982,46 @@ struct PDFRenderer {
     private static func renderLaTeXToImage(
         _ latex: String, width: CGFloat, fontSize: CGFloat
     ) -> NSImage? {
+        // Handle multi-line math (aligned environments with \\ line breaks)
+        if latex.contains("\\\\") {
+            let lines = latex.components(separatedBy: "\\\\")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if lines.count > 1 {
+                var images: [NSImage] = []
+                for line in lines {
+                    var cleaned = cleanLatex(line)
+                    cleaned = cleaned.replacingOccurrences(of: "&", with: " ")
+                        .trimmingCharacters(in: .whitespaces)
+                    if cleaned.isEmpty { continue }
+                    let img = MTMathImage(
+                        latex: cleaned, fontSize: fontSize, textColor: .black,
+                        labelMode: .display)
+                    let (_, result) = img.asImage()
+                    if let r = result, r.size.width > 0, r.size.height > 0 {
+                        images.append(r)
+                    }
+                }
+                if !images.isEmpty {
+                    return composeVertically(images)
+                }
+            }
+        }
+
         let cleaned = cleanLatex(latex)
         guard !cleaned.isEmpty else { return nil }
 
-        // Use MTMathImage for high-quality vector rendering (same as MarkdownParser)
+        // For single-line, replace alignment chars
+        let finalCleaned =
+            cleaned
+            .replacingOccurrences(of: "\\\\", with: " ")
+            .replacingOccurrences(of: "&", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        guard !finalCleaned.isEmpty else { return nil }
+
+        // Use MTMathImage for high-quality vector rendering
         let mathImage = MTMathImage(
-            latex: cleaned, fontSize: fontSize, textColor: .black,
+            latex: finalCleaned, fontSize: fontSize, textColor: .black,
             labelMode: .display)
         let (_, generatedImage) = mathImage.asImage()
 
@@ -917,7 +1030,27 @@ struct PDFRenderer {
         }
 
         // If full expression fails, try progressively simplifying
-        return renderLaTeXWithSimplification(cleaned, width: width, fontSize: fontSize)
+        return renderLaTeXWithSimplification(finalCleaned, width: width, fontSize: fontSize)
+    }
+
+    /// Compose multiple images vertically (for multi-line math)
+    private static func composeVertically(_ images: [NSImage], spacing: CGFloat = 4) -> NSImage {
+        let maxWidth = images.map { $0.size.width }.max() ?? 0
+        let totalHeight =
+            images.map { $0.size.height }.reduce(0, +)
+            + CGFloat(images.count - 1) * spacing
+        let combined = NSImage(size: NSSize(width: maxWidth, height: totalHeight))
+        combined.lockFocus()
+        var y = totalHeight
+        for img in images {
+            y -= img.size.height
+            img.draw(
+                at: NSPoint(x: (maxWidth - img.size.width) / 2, y: y),
+                from: .zero, operation: .sourceOver, fraction: 1.0)
+            y -= spacing
+        }
+        combined.unlockFocus()
+        return combined
     }
 
     /// Progressively simplify LaTeX until SwiftMath can render it
@@ -1006,6 +1139,7 @@ struct PDFCreatorView: View {
     @State private var selectedPDFPreview: UUID? = nil
     @State private var pdfPreviewData: Data? = nil
     @State private var showPDFPreview: Bool = false
+    @State private var previewItem: PDFDocumentItem? = nil
     @State private var savedItemIds: Set<UUID> = []
     @State private var isInputExpanded: Bool = false
     @State private var isGenerating: Bool = false
@@ -1014,6 +1148,7 @@ struct PDFCreatorView: View {
     @State private var pdfThinkingLevel: String = "medium"
     @State private var pdfWebSearchEnabled: Bool = false
     @State private var isPromptFocused: Bool = false
+    @State private var selectedFormat: String = "pdf"
 
     private let pageSizes = ["Letter", "A4", "Legal"]
     private let geminiService = GeminiService()
@@ -1069,24 +1204,29 @@ struct PDFCreatorView: View {
             }
             .allowsHitTesting(!showPDFPreview)
 
-            // PDF Preview overlay
+            // Preview overlay
             if showPDFPreview, let data = pdfPreviewData {
-                PDFPreviewOverlay(pdfData: data) {
+                FilePreviewOverlay(
+                    data: data,
+                    format: previewItem?.format ?? "pdf",
+                    content: previewItem?.content ?? ""
+                ) {
                     showPDFPreview = false
                     pdfPreviewData = nil
                     selectedPDFPreview = nil
+                    previewItem = nil
                 }
                 .zIndex(100)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .alert("Clear All PDFs", isPresented: $showResetConfirmation) {
+        .alert("Clear All Files", isPresented: $showResetConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("Clear All", role: .destructive) {
                 store.clearAll()
             }
         } message: {
-            Text("This will permanently delete all created PDFs. This cannot be undone.")
+            Text("This will permanently delete all created files. This cannot be undone.")
         }
         .onDisappear {
             generateTask?.cancel()
@@ -1110,7 +1250,7 @@ struct PDFCreatorView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                Text("PDF Creator")
+                Text("File Creator")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
             }
             .padding(.horizontal, 14)
@@ -1205,7 +1345,7 @@ struct PDFCreatorView: View {
                 }
 
                 VStack(spacing: 8) {
-                    Text("AI PDF Creator")
+                    Text("AI File Creator")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundStyle(
                             LinearGradient(
@@ -1215,7 +1355,7 @@ struct PDFCreatorView: View {
                             )
                         )
                     Text(
-                        "Describe what you need and AI will generate a formatted PDF"
+                        "Describe what you need and AI will generate a formatted file"
                     )
                     .font(.system(size: 15, weight: .regular, design: .rounded))
                     .foregroundStyle(.secondary.opacity(0.7))
@@ -1265,7 +1405,7 @@ struct PDFCreatorView: View {
                 .scaleEffect(1.2)
                 .tint(startColor)
 
-            Text("Generating PDF…")
+            Text("Generating \(selectedFormat.uppercased())…")
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
                 .foregroundStyle(
                     LinearGradient(
@@ -1354,7 +1494,7 @@ struct PDFCreatorView: View {
                 }
                 Spacer()
 
-                Image(systemName: "doc.richtext.fill")
+                Image(systemName: item.formatIcon)
                     .font(.system(size: 24))
                     .foregroundStyle(
                         LinearGradient(
@@ -1379,9 +1519,10 @@ struct PDFCreatorView: View {
                     color: .secondary,
                     font: .system(size: 12),
                     action: {
-                        if let data = store.pdfData(for: item.id) {
+                        if let data = store.fileData(for: item) {
                             pdfPreviewData = data
                             selectedPDFPreview = item.id
+                            previewItem = item
                             showPDFPreview = true
                         }
                     }
@@ -1396,7 +1537,7 @@ struct PDFCreatorView: View {
                         color: savedItemIds.contains(item.id) ? .green : .secondary,
                         font: .system(size: 12),
                         action: {
-                            savePDFToConfiguredPath(item)
+                            saveFileToConfiguredPath(item)
                             savedItemIds.insert(item.id)
                             DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                                 savedItemIds.remove(item.id)
@@ -1411,7 +1552,7 @@ struct PDFCreatorView: View {
                     color: .secondary,
                     font: .system(size: 12),
                     action: {
-                        exportPDF(item)
+                        exportFile(item)
                     }
                 )
 
@@ -1419,7 +1560,7 @@ struct PDFCreatorView: View {
 
                 Button(action: {
                     withAnimation {
-                        store.deleteItem(id: item.id)
+                        store.deleteItem(item)
                     }
                 }) {
                     Image(systemName: "trash")
@@ -1434,16 +1575,17 @@ struct PDFCreatorView: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 16))
         .contextMenu {
             Button("Preview") {
-                if let data = store.pdfData(for: item.id) {
+                if let data = store.fileData(for: item) {
                     pdfPreviewData = data
                     selectedPDFPreview = item.id
+                    previewItem = item
                     showPDFPreview = true
                 }
             }
-            Button("Export...") { exportPDF(item) }
+            Button("Export...") { exportFile(item) }
             Divider()
             Button("Delete", role: .destructive) {
-                store.deleteItem(id: item.id)
+                store.deleteItem(item)
             }
         }
     }
@@ -1558,7 +1700,7 @@ struct PDFCreatorView: View {
                 // Text input
                 ZStack(alignment: .leading) {
                     if prompt.isEmpty && !isPromptFocused {
-                        Text("Instructions for content of pdf")
+                        Text("Describe what you want to create")
                             .font(.system(size: 15, weight: .regular))
                             .foregroundStyle(
                                 colorScheme == .dark
@@ -1586,6 +1728,55 @@ struct PDFCreatorView: View {
                     )
                     .fixedSize(horizontal: false, vertical: true)
                 }
+
+                // Format selector button
+                Menu {
+                    Button(action: { selectedFormat = "pdf" }) {
+                        if selectedFormat == "pdf" {
+                            Label("PDF", systemImage: "checkmark")
+                        } else {
+                            Text("PDF")
+                        }
+                    }
+                    Button(action: { selectedFormat = "md" }) {
+                        if selectedFormat == "md" {
+                            Label("Markdown", systemImage: "checkmark")
+                        } else {
+                            Text("Markdown")
+                        }
+                    }
+                    Button(action: { selectedFormat = "docx" }) {
+                        if selectedFormat == "docx" {
+                            Label("DOCX", systemImage: "checkmark")
+                        } else {
+                            Text("DOCX")
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(
+                            systemName: selectedFormat == "pdf"
+                                ? "doc.richtext"
+                                : selectedFormat == "md" ? "doc.plaintext" : "doc.text"
+                        )
+                        .font(.system(size: 12, weight: .medium))
+                        Text(selectedFormat.uppercased())
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundStyle(.secondary)
+                    .frame(height: 34)
+                    .padding(.horizontal, 6)
+                    .background(
+                        Capsule()
+                            .fill(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.08)
+                                    : Color.black.opacity(0.04))
+                    )
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Format: \(selectedFormat.uppercased())")
 
                 // Page size button
                 Menu {
@@ -1858,15 +2049,26 @@ struct PDFCreatorView: View {
                 // Extract title from first heading or use prompt excerpt
                 let title = extractTitle(from: content, fallback: trimmed)
                 let pageSize = selectedPageSize
+                let format = selectedFormat
 
-                let pdfData = PDFRenderer.renderPDF(from: content, title: title, pageSize: pageSize)
+                // Generate file data based on selected format
+                let fileData: Data
+                switch format {
+                case "md":
+                    fileData = Data(content.utf8)
+                case "docx":
+                    fileData = Self.renderDOCX(from: content, title: title)
+                default:
+                    fileData = PDFRenderer.renderPDF(
+                        from: content, title: title, pageSize: pageSize)
+                }
 
                 let item = PDFDocumentItem(
                     id: UUID(), title: title, content: content,
-                    timestamp: Date(), pageSize: pageSize)
+                    timestamp: Date(), pageSize: pageSize, format: format)
 
                 await MainActor.run {
-                    store.addItem(item, pdfData: pdfData)
+                    store.addItem(item, fileData: fileData)
 
                     // Auto-save to configured path
                     if !fileDownloadPath.isEmpty {
@@ -1877,9 +2079,9 @@ struct PDFCreatorView: View {
                                 .replacingOccurrences(
                                     of: "[^a-zA-Z0-9 ]", with: "", options: .regularExpression)
                             let filename =
-                                "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).pdf"
+                                "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).\(item.fileExtension)"
                             let fileURL = dir.appendingPathComponent(filename)
-                            try? pdfData.write(to: fileURL)
+                            try? fileData.write(to: fileURL)
                         }
                     }
 
@@ -1908,9 +2110,9 @@ struct PDFCreatorView: View {
         return String(fallback.prefix(50))
     }
 
-    private func savePDFToConfiguredPath(_ item: PDFDocumentItem) {
+    private func saveFileToConfiguredPath(_ item: PDFDocumentItem) {
         guard !fileDownloadPath.isEmpty,
-            let data = store.pdfData(for: item.id)
+            let data = store.fileData(for: item)
         else { return }
         let dir = URL(fileURLWithPath: fileDownloadPath, isDirectory: true)
         guard FileManager.default.fileExists(atPath: dir.path) else { return }
@@ -1919,27 +2121,67 @@ struct PDFCreatorView: View {
             .replacingOccurrences(
                 of: "[^a-zA-Z0-9 ]", with: "", options: .regularExpression)
         let filename =
-            "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).pdf"
+            "Prism_\(sanitized)_\(Int(Date().timeIntervalSince1970)).\(item.fileExtension)"
         let fileURL = dir.appendingPathComponent(filename)
         try? data.write(to: fileURL)
     }
 
-    private func exportPDF(_ item: PDFDocumentItem) {
-        guard let data = store.pdfData(for: item.id) else { return }
+    private func exportFile(_ item: PDFDocumentItem) {
+        guard let data = store.fileData(for: item) else { return }
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.pdf]
+        let ext = item.fileExtension
+        if let utType = UTType(filenameExtension: ext) {
+            panel.allowedContentTypes = [utType]
+        }
         panel.nameFieldStringValue =
-            (item.title.isEmpty ? "Untitled" : item.title) + ".pdf"
+            (item.title.isEmpty ? "Untitled" : item.title) + ".\(ext)"
         if panel.runModal() == .OK, let url = panel.url {
             try? data.write(to: url)
         }
     }
+
+    /// Render Markdown content to a simple DOCX using NSAttributedString
+    private static func renderDOCX(from content: String, title: String) -> Data {
+        let attrStr = NSMutableAttributedString()
+        let baseFont = NSFont.systemFont(ofSize: 12)
+
+        // Add title
+        if !title.isEmpty {
+            let titleFont = NSFont.systemFont(ofSize: 22, weight: .bold)
+            attrStr.append(
+                NSAttributedString(
+                    string: title + "\n\n",
+                    attributes: [.font: titleFont, .foregroundColor: NSColor.black]))
+        }
+
+        // Add body content
+        attrStr.append(
+            NSAttributedString(
+                string: content,
+                attributes: [.font: baseFont, .foregroundColor: NSColor.black]))
+
+        // Export as DOCX
+        let range = NSRange(location: 0, length: attrStr.length)
+        if let data = try? attrStr.data(
+            from: range,
+            documentAttributes: [
+                .documentType: NSAttributedString.DocumentType.officeOpenXML
+            ])
+        {
+            return data
+        }
+
+        // Fallback: plain text
+        return Data(content.utf8)
+    }
 }
 
-// MARK: - PDF Preview Overlay
+// MARK: - File Preview Overlay
 
-struct PDFPreviewOverlay: View {
-    let pdfData: Data
+struct FilePreviewOverlay: View {
+    let data: Data
+    let format: String
+    let content: String
     let onDismiss: () -> Void
 
     @State private var expanded = false
@@ -1967,13 +2209,28 @@ struct PDFPreviewOverlay: View {
                         .padding(16)
                     }
 
-                    PDFKitView(data: pdfData)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        .shadow(color: .black.opacity(0.35), radius: 30, y: 15)
-                        .padding(.horizontal, 40)
-                        .padding(.bottom, 40)
-                        .opacity(expanded ? 1 : 0)
-                        .scaleEffect(expanded ? 1 : 0.8)
+                    Group {
+                        if format == "pdf" {
+                            PDFKitView(data: data)
+                        } else {
+                            // Markdown or DOCX: show content as text
+                            ScrollView {
+                                Text(content)
+                                    .font(.system(size: 13, design: .monospaced))
+                                    .foregroundStyle(.primary)
+                                    .textSelection(.enabled)
+                                    .padding(20)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .background(Color(nsColor: .textBackgroundColor))
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .shadow(color: .black.opacity(0.35), radius: 30, y: 15)
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 40)
+                    .opacity(expanded ? 1 : 0)
+                    .scaleEffect(expanded ? 1 : 0.8)
                 }
             }
         }

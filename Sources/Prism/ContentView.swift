@@ -1930,7 +1930,7 @@ struct ContentView: View {
         } else if showImageGen {
             activeToolName = "Image Generation"
         } else if showPDFCreator {
-            activeToolName = "PDF Creator"
+            activeToolName = "File Creator"
         } else {
             activeToolName = ""
         }
@@ -2775,7 +2775,7 @@ struct SidebarView: View {
                     }
                 } else if toolId == "pdfcreator" && showPDFCreatorTool {
                     SidebarItem(
-                        icon: "doc.richtext", title: "PDF Creator", isSelected: showPDFCreator
+                        icon: "doc.richtext", title: "File Creator", isSelected: showPDFCreator
                     ) {
                         withAnimation {
                             showPDFCreator = true
@@ -2833,7 +2833,7 @@ struct SidebarView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
                     Toggle(isOn: $showPDFCreatorTool) {
-                        Label("PDF Creator", systemImage: "doc.richtext")
+                        Label("File Creator", systemImage: "doc.richtext")
                             .font(.system(size: 12))
                     }
                     .toggleStyle(.switch)
@@ -2932,7 +2932,7 @@ struct SidebarView: View {
         case "commands": return "Commands"
         case "quizme": return "Quiz Me"
         case "imagegen": return "Image Generation"
-        case "pdfcreator": return "PDF Creator"
+        case "pdfcreator": return "File Creator"
         default: return id
         }
     }
