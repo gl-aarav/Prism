@@ -368,17 +368,8 @@ struct PDFRenderer {
                     context.addPath(mathPath)
                     context.fillPath()
 
-                    // Save state, flip back for image drawing
-                    context.saveGState()
-                    context.translateBy(x: drawRect.origin.x, y: drawRect.origin.y + drawHeight)
-                    context.scaleBy(x: 1, y: -1)
-                    if let cgImage = mathImage.cgImage(
-                        forProposedRect: nil, context: nil, hints: nil)
-                    {
-                        context.draw(
-                            cgImage, in: CGRect(x: 0, y: 0, width: drawWidth, height: drawHeight))
-                    }
-                    context.restoreGState()
+                    // Draw math image directly via NSImage.draw for best quality
+                    mathImage.draw(in: drawRect)
                     yPosition += drawHeight + 12
                 } else {
                     // Fallback: render as monospaced text
@@ -592,7 +583,40 @@ struct PDFRenderer {
                 }
                 blocks.append(.bullet(String(trimmed.dropFirst(6))))
             } else if trimmed.hasPrefix("\\begin{") || trimmed.hasPrefix("\\end{") {
-                // Skip LaTeX environment markers
+                // Detect math environments and collect as math blocks
+                let mathEnvs = [
+                    "equation", "align", "aligned", "gather", "gathered",
+                    "multline", "eqnarray", "math", "displaymath", "split",
+                    "equation*", "align*", "gather*", "multline*", "eqnarray*",
+                ]
+                var isMathEnv = false
+                for env in mathEnvs {
+                    if trimmed == "\\begin{\(env)}" {
+                        isMathEnv = true
+                        break
+                    }
+                }
+                if isMathEnv && !inMathBlock {
+                    if !currentText.isEmpty {
+                        blocks.append(.text(currentText.trimmingCharacters(in: .newlines)))
+                        currentText = ""
+                    }
+                    // Find the env name for the end marker
+                    let envStart = trimmed.index(trimmed.startIndex, offsetBy: 7)
+                    let envEnd = trimmed.firstIndex(of: "}") ?? trimmed.endIndex
+                    let envName = String(trimmed[envStart..<envEnd])
+                    let endMarker = "\\end{\(envName)}"
+                    inMathBlock = true
+                    mathDelimiter = endMarker
+                } else if inMathBlock && trimmed == mathDelimiter {
+                    blocks.append(
+                        .math(mathContent.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    mathContent = ""
+                    inMathBlock = false
+                } else if inMathBlock {
+                    mathContent += line + "\n"
+                }
+                // Non-math environments: skip
             } else if trimmed.hasPrefix("* ") || trimmed.hasPrefix("- ") {
                 if !currentText.isEmpty {
                     blocks.append(.text(currentText.trimmingCharacters(in: .newlines)))
@@ -646,7 +670,47 @@ struct PDFRenderer {
                     currentText += line + "\n"
                 }
             } else {
-                currentText += line + "\n"
+                // Check for inline $$ math embedded in text (e.g., "The formula is $$x^2$$ here")
+                if trimmed.contains("$$") {
+                    var rest = trimmed
+                    var hasInlineMath = false
+                    while let openRange = rest.range(of: "$$") {
+                        let before = String(rest[rest.startIndex..<openRange.lowerBound])
+                        let afterOpen = String(rest[openRange.upperBound...])
+                        if let closeRange = afterOpen.range(of: "$$") {
+                            hasInlineMath = true
+                            if !before.trimmingCharacters(in: .whitespaces).isEmpty {
+                                if !currentText.isEmpty {
+                                    blocks.append(
+                                        .text(currentText.trimmingCharacters(in: .newlines)))
+                                    currentText = ""
+                                }
+                                blocks.append(
+                                    .text(before.trimmingCharacters(in: .whitespaces)))
+                            } else if !currentText.isEmpty {
+                                blocks.append(
+                                    .text(currentText.trimmingCharacters(in: .newlines)))
+                                currentText = ""
+                            }
+                            let mathStr = String(afterOpen[..<closeRange.lowerBound])
+                            blocks.append(
+                                .math(mathStr.trimmingCharacters(in: .whitespaces)))
+                            rest = String(afterOpen[closeRange.upperBound...])
+                        } else {
+                            break
+                        }
+                    }
+                    if hasInlineMath {
+                        let leftover = rest.trimmingCharacters(in: .whitespaces)
+                        if !leftover.isEmpty {
+                            currentText += leftover + "\n"
+                        }
+                    } else {
+                        currentText += line + "\n"
+                    }
+                } else {
+                    currentText += line + "\n"
+                }
             }
             i += 1
         }
@@ -728,7 +792,7 @@ struct PDFRenderer {
                 continue
             }
 
-            // Inline math: $text$
+            // Inline math: $text$ — render with SwiftMath as inline image
             if let mathRange = remaining.range(
                 of: "(?<!\\$)\\$(?!\\$)(.+?)(?<!\\$)\\$(?!\\$)", options: .regularExpression)
             {
@@ -736,14 +800,29 @@ struct PDFRenderer {
                 if !prefix.isEmpty {
                     result.append(NSAttributedString(string: prefix, attributes: baseAttrs))
                 }
-                let inner = String(remaining[mathRange]).dropFirst(1).dropLast(1)
-                // Render inline math as monospace fallback
-                var mathAttrs = baseAttrs
-                mathAttrs[.font] = NSFont.monospacedSystemFont(
-                    ofSize: baseFont.pointSize, weight: .regular)
-                mathAttrs[.foregroundColor] = NSColor.darkGray
-                result.append(
-                    NSAttributedString(string: String(inner), attributes: mathAttrs))
+                let inner = String(String(remaining[mathRange]).dropFirst(1).dropLast(1))
+
+                // Try rendering with SwiftMath as an inline image
+                if let mathImage = renderLaTeXToImage(
+                    inner, width: width, fontSize: baseFont.pointSize + 2)
+                {
+                    let attachment = NSTextAttachment()
+                    attachment.image = mathImage
+                    // Align baseline: offset downward by ~25% of height
+                    let imgHeight = mathImage.size.height
+                    attachment.bounds = CGRect(
+                        x: 0, y: -(imgHeight * 0.25),
+                        width: mathImage.size.width, height: imgHeight)
+                    result.append(NSAttributedString(attachment: attachment))
+                } else {
+                    // Fallback: render as italic serif text
+                    var mathAttrs = baseAttrs
+                    mathAttrs[.font] = NSFont.monospacedSystemFont(
+                        ofSize: baseFont.pointSize, weight: .regular)
+                    mathAttrs[.foregroundColor] = NSColor.darkGray
+                    result.append(
+                        NSAttributedString(string: inner, attributes: mathAttrs))
+                }
                 remaining = String(remaining[mathRange.upperBound...])
                 continue
             }
@@ -756,40 +835,152 @@ struct PDFRenderer {
         return result
     }
 
+    // MARK: - LaTeX Sanitization
+
+    /// Clean up LaTeX to improve SwiftMath compatibility
+    private static func cleanLatex(_ latex: String) -> String {
+        var content = latex
+
+        // Fix common typos and variants
+        content = content.replacingOccurrences(of: "\\dfrac", with: "\\frac")
+        content = content.replacingOccurrences(of: "\\tfrac", with: "\\frac")
+        content = content.replacingOccurrences(of: "\\trac", with: "\\frac")
+
+        // Fix legacy symbols
+        content = content.replacingOccurrences(of: "\\dag", with: "\\dagger")
+        content = content.replacingOccurrences(of: "\\ddag", with: "\\ddagger")
+
+        // Remove sizing commands (longest first to avoid partial matches)
+        let sizingCommands = [
+            "\\Biggl", "\\Biggr", "\\Biggm", "\\Bigg",
+            "\\biggl", "\\biggr", "\\biggm", "\\bigg",
+            "\\Bigl", "\\Bigr", "\\Bigm", "\\Big",
+            "\\bigl", "\\bigr", "\\bigm", "\\big",
+        ]
+        for cmd in sizingCommands {
+            content = content.replacingOccurrences(of: cmd, with: "")
+        }
+
+        // Remove style commands that don't affect layout in display mode
+        let styleCommands = [
+            "\\displaystyle", "\\textstyle",
+            "\\scriptstyle", "\\scriptscriptstyle",
+        ]
+        for cmd in styleCommands {
+            content = content.replacingOccurrences(of: cmd, with: "")
+        }
+
+        // Strip unsupported environment wrappers (aligned, equation, gather, etc.)
+        // but keep matrix, pmatrix, bmatrix, Bmatrix, vmatrix, Vmatrix, cases
+        // which SwiftMath supports natively
+        let unsupportedEnvs = [
+            "aligned", "equation", "equation*", "align", "align*",
+            "gather", "gather*", "gathered", "multline", "multline*",
+            "eqnarray", "eqnarray*", "split", "displaymath", "math",
+        ]
+        for env in unsupportedEnvs {
+            content = content.replacingOccurrences(of: "\\begin{\(env)}", with: "")
+            content = content.replacingOccurrences(of: "\\end{\(env)}", with: "")
+        }
+
+        // Replace \\ (LaTeX line break) with space for single-line rendering
+        content = content.replacingOccurrences(of: "\\\\", with: " ")
+
+        // Replace & (alignment char in environments) with space
+        content = content.replacingOccurrences(of: "&", with: " ")
+
+        // Clean up excessive whitespace
+        while content.contains("  ") {
+            content = content.replacingOccurrences(of: "  ", with: " ")
+        }
+        content = content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return content
+    }
+
     // MARK: - LaTeX to Image (SwiftMath)
 
     private static func renderLaTeXToImage(
         _ latex: String, width: CGFloat, fontSize: CGFloat
     ) -> NSImage? {
-        let label = MTMathUILabel()
-        label.latex = latex
-        label.fontSize = fontSize
-        label.textColor = .black
-        label.textAlignment = .center
+        let cleaned = cleanLatex(latex)
+        guard !cleaned.isEmpty else { return nil }
 
-        // Calculate intrinsic size
-        let intrinsicSize = label.fittingSize
-        guard intrinsicSize.width > 0, intrinsicSize.height > 0 else { return nil }
+        // Use MTMathImage for high-quality vector rendering (same as MarkdownParser)
+        let mathImage = MTMathImage(
+            latex: cleaned, fontSize: fontSize, textColor: .black,
+            labelMode: .display)
+        let (_, generatedImage) = mathImage.asImage()
 
-        let drawSize = CGSize(
-            width: min(intrinsicSize.width + 16, width),
-            height: intrinsicSize.height + 8
-        )
-
-        label.frame = CGRect(origin: .zero, size: drawSize)
-        label.wantsLayer = true
-        label.layout()
-
-        // Use bitmapImageRepForCachingDisplay for reliable off-screen rendering
-        guard let bitmapRep = label.bitmapImageRepForCachingDisplay(in: label.bounds) else {
-            return nil
+        if let img = generatedImage, img.size.width > 0, img.size.height > 0 {
+            return img
         }
-        label.cacheDisplay(in: label.bounds, to: bitmapRep)
 
-        let image = NSImage(size: drawSize)
-        image.addRepresentation(bitmapRep)
+        // If full expression fails, try progressively simplifying
+        return renderLaTeXWithSimplification(cleaned, width: width, fontSize: fontSize)
+    }
 
-        return image
+    /// Progressively simplify LaTeX until SwiftMath can render it
+    private static func renderLaTeXWithSimplification(
+        _ latex: String, width: CGFloat, fontSize: CGFloat
+    ) -> NSImage? {
+        var content = latex
+
+        // Step 1: Try stripping \left and \right (they require matched pairs)
+        let simplified1 =
+            content
+            .replacingOccurrences(of: "\\left", with: "")
+            .replacingOccurrences(of: "\\right", with: "")
+        let img1 = MTMathImage(
+            latex: simplified1, fontSize: fontSize, textColor: .black, labelMode: .display)
+        let (_, result1) = img1.asImage()
+        if let img = result1, img.size.width > 0, img.size.height > 0 {
+            return img
+        }
+
+        // Step 2: Also strip \text{...} → just inner content
+        content = simplified1
+        // Use NSRegularExpression to properly match \text{...}
+        if let regex = try? NSRegularExpression(
+            pattern: "\\\\text\\{([^}]*)\\}", options: [])
+        {
+            let range = NSRange(content.startIndex..., in: content)
+            content = regex.stringByReplacingMatches(
+                in: content, options: [], range: range, withTemplate: "$1")
+        }
+        // Also try \textbf, \textit, \mathrm, \mathit patterns
+        for cmd in [
+            "\\\\textbf", "\\\\textit", "\\\\mathrm", "\\\\mathit", "\\\\mathbb", "\\\\mathcal",
+        ] {
+            if let regex = try? NSRegularExpression(
+                pattern: cmd + "\\{([^}]*)\\}", options: [])
+            {
+                let range = NSRange(content.startIndex..., in: content)
+                content = regex.stringByReplacingMatches(
+                    in: content, options: [], range: range, withTemplate: "$1")
+            }
+        }
+
+        let img2 = MTMathImage(
+            latex: content, fontSize: fontSize, textColor: .black, labelMode: .display)
+        let (_, result2) = img2.asImage()
+        if let img = result2, img.size.width > 0, img.size.height > 0 {
+            return img
+        }
+
+        // Step 3: Try rendering as just the core expression without any wrappers
+        // Strip remaining braces and try
+        content = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !content.isEmpty {
+            let img3 = MTMathImage(
+                latex: content, fontSize: fontSize, textColor: .black, labelMode: .text)
+            let (_, result3) = img3.asImage()
+            if let img = result3, img.size.width > 0, img.size.height > 0 {
+                return img
+            }
+        }
+
+        return nil
     }
 }
 
