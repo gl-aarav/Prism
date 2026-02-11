@@ -44,7 +44,7 @@ struct QuickAIView: View {
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
     private var clampedBackgroundOpacity: Double {
-        min(max(backgroundOpacity, 0.05), 0.55)
+        min(max(backgroundOpacity, 0.05), 1.0)
     }
 
     private let geminiService = GeminiService()
@@ -864,7 +864,7 @@ struct CommandBarBackground: View {
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
 
     private var clampedVibrancy: Double {
-        min(max(commandBarVibrancy, 0.05), 0.9)
+        min(max(commandBarVibrancy, 0.05), 1.0)
     }
 
     var body: some View {
@@ -901,7 +901,7 @@ struct ExpandedPanelBackground: View {
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
     private var clampedBackgroundOpacity: Double {
-        min(max(backgroundOpacity, 0.05), 0.55)
+        min(max(backgroundOpacity, 0.05), 1.0)
     }
 
     var body: some View {

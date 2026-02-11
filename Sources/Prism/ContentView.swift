@@ -5637,11 +5637,11 @@ struct SettingsView: View {
                             Slider(
                                 value: Binding(
                                     get: { quickAIBackgroundOpacity },
-                                    set: { quickAIBackgroundOpacity = min(max($0, 0.05), 0.55) }
+                                    set: { quickAIBackgroundOpacity = min(max($0, 0.05), 1.0) }
                                 ),
-                                in: 0.05...0.55
+                                in: 0.05...1.0
                             )
-                            Text("\(Int(min(max(quickAIBackgroundOpacity, 0.05), 0.55) * 100))%")
+                            Text("\(Int(min(max(quickAIBackgroundOpacity, 0.05), 1.0) * 100))%")
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .frame(width: 35, alignment: .trailing)
@@ -5660,12 +5660,12 @@ struct SettingsView: View {
                             Slider(
                                 value: Binding(
                                     get: { quickAICommandBarVibrancy },
-                                    set: { quickAICommandBarVibrancy = min(max($0, 0.05), 0.9) }
+                                    set: { quickAICommandBarVibrancy = min(max($0, 0.05), 1.0) }
                                 ),
-                                in: 0.05...0.9
+                                in: 0.05...1.0
                             )
                             Text(
-                                "\(Int(min(max(quickAICommandBarVibrancy, 0.05), 0.9) * 100))%"
+                                "\(Int(min(max(quickAICommandBarVibrancy, 0.05), 1.0) * 100))%"
                             )
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
