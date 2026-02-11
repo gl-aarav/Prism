@@ -74,7 +74,7 @@ struct ModelComparisonView: View {
     @AppStorage("ComparePrompt") private var prompt: String = ""
     @State private var isComparing: Bool = false
     @State private var currentTasks: [UUID: Task<Void, Never>] = [:]
-    @FocusState private var isInputFocused: Bool
+    @State private var isInputFocused: Bool = false
     @Environment(\.colorScheme) private var colorScheme
 
     // Synthesize state
@@ -317,20 +317,17 @@ struct ModelComparisonView: View {
                             .allowsHitTesting(false)
                             .padding(.leading, 4)
                     }
-                    TextField("", text: $prompt, axis: .vertical)
-                        .focused($isInputFocused)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 15))
-                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                        .lineLimit(1...5)
-                        .onKeyPress(.return) {
-                            if NSEvent.modifierFlags.contains(.shift) {
-                                return .ignored
-                            } else {
-                                startComparison()
-                                return .handled
-                            }
+                    NativeTextInput(
+                        text: $prompt,
+                        isFocused: $isInputFocused,
+                        font: .systemFont(ofSize: 15),
+                        textColor: colorScheme == .dark ? .white : .black,
+                        maxLines: 5,
+                        onCommit: {
+                            startComparison()
                         }
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // Send/Stop Button — Liquid Glass orb

@@ -1594,6 +1594,7 @@ struct ContentView: View {
     @State private var showCommands: Bool = false
     @State private var showQuizMe: Bool = false
     @State private var showImageGen: Bool = false
+    @State private var showPDFCreator: Bool = false
     @AppStorage("ActiveToolName") private var activeToolName: String = ""
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
@@ -1655,7 +1656,8 @@ struct ContentView: View {
                     showModelComparison: $showModelComparison,
                     showCommands: $showCommands,
                     showQuizMe: $showQuizMe,
-                    showImageGen: $showImageGen)
+                    showImageGen: $showImageGen,
+                    showPDFCreator: $showPDFCreator)
             } detail: {
                 ZStack {
                     // Background Layer
@@ -1819,11 +1821,11 @@ struct ContentView: View {
                             }
                             .opacity(
                                 showCommands || showModelComparison || showQuizMe || showImageGen
-                                    || showImageGallery ? 0 : 1
+                                    || showPDFCreator || showImageGallery ? 0 : 1
                             )
                             .allowsHitTesting(
                                 !(showCommands || showModelComparison || showQuizMe || showImageGen
-                                    || showImageGallery)
+                                    || showPDFCreator || showImageGallery)
                             )
                             .transaction { t in t.animation = nil }
                         }
@@ -1843,6 +1845,10 @@ struct ContentView: View {
                         }
                         if showImageGen {
                             ImageGenerationView()
+                                .transition(.opacity)
+                        }
+                        if showPDFCreator {
+                            PDFCreatorView()
                                 .transition(.opacity)
                         }
                         if showImageGallery {
@@ -1877,6 +1883,9 @@ struct ContentView: View {
                 updateActiveToolName()
             }
             .onChange(of: showImageGen) { _, val in
+                updateActiveToolName()
+            }
+            .onChange(of: showPDFCreator) { _, val in
                 updateActiveToolName()
             }
             .onChange(of: showImageGallery) { _, val in
@@ -1920,6 +1929,8 @@ struct ContentView: View {
             activeToolName = "Quiz Me"
         } else if showImageGen {
             activeToolName = "Image Generation"
+        } else if showPDFCreator {
+            activeToolName = "PDF Creator"
         } else {
             activeToolName = ""
         }
@@ -2485,13 +2496,16 @@ struct SidebarView: View {
     @Binding var showCommands: Bool
     @Binding var showQuizMe: Bool
     @Binding var showImageGen: Bool
+    @Binding var showPDFCreator: Bool
     @Namespace private var animation
 
     @AppStorage("ShowCompare") private var showCompareTool: Bool = true
     @AppStorage("ShowCommands") private var showCommandsTool: Bool = true
     @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
     @AppStorage("ShowImageGen") private var showImageGenTool: Bool = true
-    @AppStorage("ToolOrder") private var toolOrderRaw: String = "compare,commands,quizme,imagegen"
+    @AppStorage("ShowPDFCreator") private var showPDFCreatorTool: Bool = true
+    @AppStorage("ToolOrder") private var toolOrderRaw: String =
+        "compare,commands,quizme,imagegen,pdfcreator"
     @State private var showCustomizeTools: Bool = false
     @State private var draggedTool: String? = nil
 
@@ -2524,6 +2538,7 @@ struct SidebarView: View {
                 showCommands = false
                 showQuizMe = false
                 showImageGen = false
+                showPDFCreator = false
                 chatManager.createNewSession()
             }
 
@@ -2615,6 +2630,7 @@ struct SidebarView: View {
                                         showCommands = false
                                         showQuizMe = false
                                         showImageGen = false
+                                        showPDFCreator = false
                                         chatManager.currentSessionId = session.id
                                         isSearchVisible = false
                                     }) {
@@ -2678,6 +2694,7 @@ struct SidebarView: View {
                     showCommands = false
                     showQuizMe = false
                     showImageGen = false
+                    showPDFCreator = false
                     chatManager.currentSessionId = nil
                 }
             }
@@ -2712,6 +2729,7 @@ struct SidebarView: View {
                             showCommands = false
                             showQuizMe = false
                             showImageGen = false
+                            showPDFCreator = false
                             chatManager.currentSessionId = nil
                         }
                     }
@@ -2723,6 +2741,7 @@ struct SidebarView: View {
                             showImageGallery = false
                             showQuizMe = false
                             showImageGen = false
+                            showPDFCreator = false
                             chatManager.currentSessionId = nil
                         }
                     }
@@ -2736,6 +2755,7 @@ struct SidebarView: View {
                             showModelComparison = false
                             showImageGallery = false
                             showImageGen = false
+                            showPDFCreator = false
                             chatManager.currentSessionId = nil
                         }
                     }
@@ -2745,6 +2765,21 @@ struct SidebarView: View {
                     ) {
                         withAnimation {
                             showImageGen = true
+                            showQuizMe = false
+                            showCommands = false
+                            showModelComparison = false
+                            showImageGallery = false
+                            showPDFCreator = false
+                            chatManager.currentSessionId = nil
+                        }
+                    }
+                } else if toolId == "pdfcreator" && showPDFCreatorTool {
+                    SidebarItem(
+                        icon: "doc.richtext", title: "PDF Creator", isSelected: showPDFCreator
+                    ) {
+                        withAnimation {
+                            showPDFCreator = true
+                            showImageGen = false
                             showQuizMe = false
                             showCommands = false
                             showModelComparison = false
@@ -2793,6 +2828,12 @@ struct SidebarView: View {
                     .controlSize(.small)
                     Toggle(isOn: $showImageGenTool) {
                         Label("Image Generation", systemImage: "paintbrush")
+                            .font(.system(size: 12))
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    Toggle(isOn: $showPDFCreatorTool) {
+                        Label("PDF Creator", systemImage: "doc.richtext")
                             .font(.system(size: 12))
                     }
                     .toggleStyle(.switch)
@@ -2865,7 +2906,7 @@ struct SidebarView: View {
 
     private var toolOrder: [String] {
         let raw = toolOrderRaw.split(separator: ",").map(String.init)
-        let allTools = ["compare", "commands", "quizme", "imagegen"]
+        let allTools = ["compare", "commands", "quizme", "imagegen", "pdfcreator"]
         // Ensure all tools are present (handle new tools added after first save)
         var order = raw.filter { allTools.contains($0) }
         for tool in allTools where !order.contains(tool) {
@@ -2880,6 +2921,7 @@ struct SidebarView: View {
         case "commands": return "command"
         case "quizme": return "questionmark.bubble"
         case "imagegen": return "paintbrush"
+        case "pdfcreator": return "doc.richtext"
         default: return "questionmark"
         }
     }
@@ -2890,6 +2932,7 @@ struct SidebarView: View {
         case "commands": return "Commands"
         case "quizme": return "Quiz Me"
         case "imagegen": return "Image Generation"
+        case "pdfcreator": return "PDF Creator"
         default: return id
         }
     }
@@ -3482,7 +3525,7 @@ struct InputView: View {
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject private var slashCommandManager = SlashCommandManager.shared
 
-    @FocusState private var isFocused: Bool
+    @State private var isFocused: Bool = false
     @StateObject private var pasteMonitor = PasteMonitor()
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
@@ -3523,13 +3566,6 @@ struct InputView: View {
         }
         .onAppear {
             setupMonitor()
-        }
-        .onChange(of: isFocused) { _, focused in
-            if focused {
-                pasteMonitor.start()
-            } else {
-                pasteMonitor.stop()
-            }
         }
     }
 
@@ -3975,55 +4011,54 @@ struct InputView: View {
                 .padding(.leading, 4)
             }
 
-            TextField("", text: $inputText, axis: .vertical)
-                .focused($isFocused)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15))
-                .foregroundStyle(colorScheme == .dark ? Color.white : Color.primary)
-                .lineLimit(1...10)
-                .onKeyPress(.upArrow) {
-                    if showSlashAutocomplete && !slashMatches.isEmpty {
-                        slashSelectedIndex = max(0, slashSelectedIndex - 1)
-                        return .handled
-                    }
-                    return .ignored
-                }
-                .onKeyPress(.downArrow) {
-                    if showSlashAutocomplete && !slashMatches.isEmpty {
-                        slashSelectedIndex = min(slashMatches.count - 1, slashSelectedIndex + 1)
-                        return .handled
-                    }
-                    return .ignored
-                }
-                .onKeyPress(.tab) {
+            NativeTextInput(
+                text: $inputText,
+                isFocused: $isFocused,
+                font: .systemFont(ofSize: 15),
+                textColor: colorScheme == .dark ? .white : .labelColor,
+                maxLines: 10,
+                onCommit: {
                     if showSlashAutocomplete && !slashMatches.isEmpty {
                         applySlashCommand(slashMatches[slashSelectedIndex])
-                        return .handled
-                    }
-                    return .ignored
-                }
-                .onKeyPress(.escape) {
-                    if showSlashAutocomplete {
-                        showSlashAutocomplete = false
-                        return .handled
-                    }
-                    return .ignored
-                }
-                .onKeyPress(.return) {
-                    if showSlashAutocomplete && !slashMatches.isEmpty {
-                        applySlashCommand(slashMatches[slashSelectedIndex])
-                        return .handled
-                    }
-                    if NSEvent.modifierFlags.contains(.shift) {
-                        return .ignored
                     } else {
                         onSend()
-                        return .handled
+                    }
+                },
+                onEscape: {
+                    if showSlashAutocomplete {
+                        showSlashAutocomplete = false
+                    }
+                },
+                onArrowUp: {
+                    if showSlashAutocomplete && !slashMatches.isEmpty {
+                        slashSelectedIndex = max(0, slashSelectedIndex - 1)
+                        return true
+                    }
+                    return false
+                },
+                onArrowDown: {
+                    if showSlashAutocomplete && !slashMatches.isEmpty {
+                        slashSelectedIndex = min(slashMatches.count - 1, slashSelectedIndex + 1)
+                        return true
+                    }
+                    return false
+                },
+                onTab: {
+                    if showSlashAutocomplete && !slashMatches.isEmpty {
+                        applySlashCommand(slashMatches[slashSelectedIndex])
+                        return true
+                    }
+                    return false
+                },
+                onFocusChange: { focused in
+                    if focused {
+                        pasteMonitor.start()
+                    } else {
+                        pasteMonitor.stop()
                     }
                 }
-                .onPasteCommand(of: [.image, .fileURL]) { providers in
-                    handlePaste(providers)
-                }
+            )
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -5742,8 +5777,8 @@ struct SettingsView: View {
                 }
             }
 
-            Section(header: Text("Image Downloads")) {
-                LabeledContent("Image save path") {
+            Section(header: Text("File Downloads")) {
+                LabeledContent("File save path") {
                     HStack {
                         TextField("", text: $imageDownloadPath)
                             .textFieldStyle(.roundedBorder)
@@ -5766,7 +5801,7 @@ struct SettingsView: View {
                     }
                 }
                 Text(
-                    "Generated images will be instantly saved to this folder. Leave empty to disable."
+                    "Generated files will be instantly saved to this folder. Leave empty to disable."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)

@@ -19,7 +19,7 @@ struct QuickAIView: View {
     @State private var backgroundScale: CGFloat = 0.92
     @State private var backgroundBlur: CGFloat = 0
     @State private var selectedPDF: Data? = nil
-    @FocusState private var isFocused: Bool
+    @State private var isFocused: Bool = false
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject private var slashCommandManager = SlashCommandManager.shared
     @State private var slashMatches: [SlashCommand] = []
@@ -1388,7 +1388,7 @@ extension QuickAIView {
             HStack(alignment: .center, spacing: 12) {
                 ZStack(alignment: .leading) {
                     if inputText.isEmpty {
-                        Text("Request... (type / for commands)")
+                        Text(" Request... (type / for commands)")
                             .font(.system(size: 16))
                             .foregroundStyle(
                                 colorScheme == .dark
@@ -1397,91 +1397,76 @@ extension QuickAIView {
                             )
                             .allowsHitTesting(false)
                     }
-                    TextField("", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 16))
-                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                        .lineLimit(1...6)
-                        .multilineTextAlignment(.leading)
-                        .focused($isFocused)
-                        .onChange(of: inputText) { _, newValue in
-                            updateSlashAutocomplete(newValue)
-                        }
-                        .onKeyPress(.upArrow) {
+                    NativeTextInput(
+                        text: $inputText,
+                        isFocused: $isFocused,
+                        font: .systemFont(ofSize: 16),
+                        textColor: colorScheme == .dark ? .white : .black,
+                        maxLines: 6,
+                        onCommit: {
+                            if showSlashAutocomplete && !slashMatches.isEmpty {
+                                applySlashCommand(slashMatches[slashSelectedIndex])
+                            } else {
+                                sendMessage()
+                            }
+                        },
+                        onEscape: {
+                            if showSlashAutocomplete {
+                                showSlashAutocomplete = false
+                            }
+                        },
+                        onArrowUp: {
                             if showSlashAutocomplete && !slashMatches.isEmpty {
                                 slashSelectedIndex = max(0, slashSelectedIndex - 1)
-                                return .handled
+                                return true
                             }
-                            return .ignored
-                        }
-                        .onKeyPress(.downArrow) {
+                            return false
+                        },
+                        onArrowDown: {
                             if showSlashAutocomplete && !slashMatches.isEmpty {
                                 slashSelectedIndex = min(
                                     slashMatches.count - 1, slashSelectedIndex + 1)
-                                return .handled
+                                return true
                             }
-                            return .ignored
-                        }
-                        .onKeyPress(.tab) {
+                            return false
+                        },
+                        onTab: {
                             if showSlashAutocomplete && !slashMatches.isEmpty {
                                 applySlashCommand(slashMatches[slashSelectedIndex])
-                                return .handled
+                                return true
                             }
-                            return .ignored
-                        }
-                        .onKeyPress(.escape) {
-                            if showSlashAutocomplete {
-                                showSlashAutocomplete = false
-                                return .handled
-                            }
-                            return .ignored
-                        }
-                        .onKeyPress(.return) {
-                            if showSlashAutocomplete && !slashMatches.isEmpty {
-                                applySlashCommand(slashMatches[slashSelectedIndex])
-                                return .handled
-                            }
-                            sendMessage()
-                            return .handled
-                        }
-                        .onPasteCommand(of: [.fileURL, .pdf]) { providers in
-                            for provider in providers {
-                                if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
-                                    provider.loadItem(
-                                        forTypeIdentifier: "com.adobe.pdf", options: nil
-                                    ) { urlData, _ in
-                                        if let urlData = urlData as? Data,
-                                            let url = URL(
-                                                dataRepresentation: urlData, relativeTo: nil),
-                                            let data = try? Data(contentsOf: url)
-                                        {
-                                            DispatchQueue.main.async {
-                                                self.selectedPDF = data
-                                            }
+                            return false
+                        },
+                        onPasteNonText: { pasteboard in
+                            if let urls = pasteboard.readObjects(
+                                forClasses: [NSURL.self], options: nil) as? [URL]
+                            {
+                                for url in urls {
+                                    if url.pathExtension.lowercased() == "pdf",
+                                        let data = try? Data(contentsOf: url)
+                                    {
+                                        DispatchQueue.main.async {
+                                            self.selectedPDF = data
                                         }
-                                    }
-                                } else if provider.hasItemConformingToTypeIdentifier(
-                                    "public.file-url")
-                                {
-                                    provider.loadItem(
-                                        forTypeIdentifier: "public.file-url", options: nil
-                                    ) { urlData, _ in
-                                        if let urlData = urlData as? Data,
-                                            let url = URL(
-                                                dataRepresentation: urlData, relativeTo: nil)
-                                        {
-                                            if url.pathExtension.lowercased() == "pdf",
-                                                let data = try? Data(contentsOf: url)
-                                            {
-                                                DispatchQueue.main.async {
-                                                    self.selectedPDF = data
-                                                }
-                                            }
-                                        }
+                                        return true
                                     }
                                 }
                             }
+                            if pasteboard.canReadItem(withDataConformingToTypes: ["com.adobe.pdf"]),
+                                let data = pasteboard.data(forType: .init("com.adobe.pdf"))
+                            {
+                                DispatchQueue.main.async {
+                                    self.selectedPDF = data
+                                }
+                                return true
+                            }
+                            return false
                         }
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+                    .onChange(of: inputText) { _, newValue in
+                        updateSlashAutocomplete(newValue)
+                    }
                 }
 
                 // Thinking Level Selector
