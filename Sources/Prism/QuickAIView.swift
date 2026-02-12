@@ -379,9 +379,10 @@ struct QuickAIView: View {
                     do {
                         var fullContent = ""
                         var fullThinking = ""
+                        var receivedImage: NSImage? = nil
                         var lastUpdateTime = Date()
 
-                        for try await (contentChunk, thinkingChunk, _)
+                        for try await (contentChunk, thinkingChunk, imageData)
                             in geminiService.sendMessageStream(
                                 history: chatManager.getCurrentMessages(), apiKey: geminiKey,
                                 model: geminiModel, systemPrompt: systemPrompt,
@@ -391,23 +392,31 @@ struct QuickAIView: View {
                             if let thinking = thinkingChunk {
                                 fullThinking += thinking
                             }
+                            if let imgData = imageData, let img = NSImage(data: imgData) {
+                                receivedImage = img
+                            }
 
                             if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
                                 let contentToUpdate = fullContent
                                 let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
+                                let imgToUpdate = receivedImage
 
                                 DispatchQueue.main.async {
                                     self.chatManager.updateMessage(
                                         id: aiMsgId, content: contentToUpdate,
-                                        thinkingContent: thinkingToUpdate, isStreaming: true)
+                                        thinkingContent: thinkingToUpdate,
+                                        image: imgToUpdate,
+                                        isStreaming: true)
                                 }
                                 lastUpdateTime = Date()
                             }
                         }
+                        let finalImage = receivedImage
                         DispatchQueue.main.async {
                             self.chatManager.updateMessage(
                                 id: aiMsgId, content: fullContent,
                                 thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
+                                image: finalImage,
                                 isStreaming: false)
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
