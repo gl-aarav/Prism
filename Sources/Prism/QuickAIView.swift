@@ -18,7 +18,7 @@ struct QuickAIView: View {
     @State private var messagesOffset: CGFloat = 30
     @State private var backgroundScale: CGFloat = 0.92
     @State private var backgroundBlur: CGFloat = 0
-    @State private var selectedPDF: Data? = nil
+    @State private var selectedAttachments: [Attachment] = []
     @State private var isFocused: Bool = false
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject private var slashCommandManager = SlashCommandManager.shared
@@ -272,6 +272,11 @@ struct QuickAIView: View {
         let baseHeight: CGFloat = isExpanded ? 550 : 110
         var targetHeight = baseHeight + CGFloat(max(0, lines - 1)) * extraHeightPerLine
 
+        // Add extra height for attachment previews
+        if !selectedAttachments.isEmpty {
+            targetHeight += 100  // attachment strip height + padding
+        }
+
         // Add extra height when slash command autocomplete is showing
         if showSlashAutocomplete && !slashMatches.isEmpty {
             let autocompleteHeight = min(CGFloat(slashMatches.count) * 44 + 40, 280)
@@ -346,7 +351,10 @@ struct QuickAIView: View {
     }
 
     func sendMessage() {
-        guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard
+            !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !selectedAttachments.isEmpty
+        else { return }
 
         if !isExpanded {
             withAnimation(expandAnimation) {
@@ -355,13 +363,95 @@ struct QuickAIView: View {
         }
 
         let content = inputText
-        let pdfData = selectedPDF
+        let currentAttachments = selectedAttachments
         inputText = ""
-        selectedPDF = nil
+        selectedAttachments = []
         recalcPanelSize()
 
-        let userMsg = Message(content: content, image: nil, pdfData: pdfData, isUser: true)
+        // Build message attachments
+        var legacyImage: NSImage?
+        var legacyPDF: Data?
+        var msgAttachments: [MessageAttachment] = []
+        var augmentedContent = content
+        for attachment in currentAttachments {
+            let typeStr: String
+            switch attachment.type {
+            case .image: typeStr = "image"
+            case .pdf: typeStr = "pdf"
+            case .text: typeStr = "text"
+            }
+            msgAttachments.append(
+                MessageAttachment(
+                    type: typeStr, data: attachment.data, fileName: attachment.fileName))
+            if attachment.type == .image && legacyImage == nil {
+                legacyImage = NSImage(data: attachment.data)
+            } else if attachment.type == .pdf && legacyPDF == nil {
+                legacyPDF = attachment.data
+            }
+            if attachment.type == .text, let text = String(data: attachment.data, encoding: .utf8) {
+                let name = attachment.fileName ?? "file"
+                augmentedContent +=
+                    "\n\n--- Contents of \(name) ---\n\(text)\n--- End of \(name) ---"
+            }
+        }
+
+        let userMsg = Message(
+            content: content, image: legacyImage, pdfData: legacyPDF,
+            attachments: msgAttachments.isEmpty ? nil : msgAttachments, isUser: true)
         chatManager.addMessage(userMsg)
+
+        performSend()
+    }
+
+    func regenerateResponse(for messageId: UUID) {
+        var existingVersions: [MessageVersion]? = nil
+        let messages = chatManager.getCurrentMessages()
+        if let aiMsg = messages.first(where: { $0.id == messageId }) {
+            let currentVersion = MessageVersion(
+                content: aiMsg.content,
+                thinkingContent: aiMsg.thinkingContent,
+                imageData: aiMsg.imageData,
+                model: aiMsg.model
+            )
+            if var vers = aiMsg.versions {
+                if let idx = aiMsg.currentVersionIndex, idx < vers.count - 1 {
+                    vers.removeSubrange((idx + 1)...)
+                }
+                if vers.last?.content != currentVersion.content
+                    || vers.last?.imageData != currentVersion.imageData
+                {
+                    vers.append(currentVersion)
+                }
+                existingVersions = vers
+            } else {
+                existingVersions = [currentVersion]
+            }
+        }
+        chatManager.truncateHistory(from: messageId)
+
+        performSend(existingVersions: existingVersions)
+    }
+
+    func editAndResend(message: Message, newContent: String) {
+        let currentMessages = chatManager.getCurrentMessages()
+        if let lastMessage = currentMessages.last, !lastMessage.isUser {
+            chatManager.removeLastMessage()
+        }
+        chatManager.removeLastMessage()
+
+        let userMsg = Message(
+            content: newContent,
+            image: message.image,
+            pdfData: message.pdfData,
+            attachments: message.attachments,
+            isUser: true
+        )
+        chatManager.addMessage(userMsg)
+
+        performSend()
+    }
+
+    func performSend(existingVersions: [MessageVersion]? = nil) {
         isLoading = true
 
         chatManager.currentTask = Task {
@@ -418,6 +508,9 @@ struct QuickAIView: View {
                                 thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
                                 image: finalImage,
                                 isStreaming: false)
+                            if let versions = existingVersions {
+                                self.chatManager.attachVersions(versions, to: aiMsgId)
+                            }
                             self.chatManager.finalizeMessageUpdate()
                             self.isLoading = false
                         }
@@ -471,6 +564,9 @@ struct QuickAIView: View {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: accumulatedContent, isStreaming: false)
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -497,11 +593,13 @@ struct QuickAIView: View {
                 let activeModel = selectedOllamaModel
 
                 // Web search augmentation (Ollama only)
+                let searchQuery =
+                    chatManager.getCurrentMessages().last(where: { $0.isUser })?.content ?? ""
                 var ollamaSystemPrompt = systemPrompt
                 if webSearchEnabled && !ollamaAPIKey.isEmpty {
                     do {
                         let searchResults = try await webSearchService.search(
-                            query: content, apiKey: ollamaAPIKey)
+                            query: searchQuery, apiKey: ollamaAPIKey)
                         let searchContext = webSearchService.buildSearchContext(
                             results: searchResults)
                         if !searchContext.isEmpty {
@@ -549,6 +647,9 @@ struct QuickAIView: View {
                             content: fullContent,
                             thinkingContent: fullThinking.isEmpty ? nil : fullThinking
                         )
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
                         self.chatManager.finalizeMessageUpdate()
                         self.streamBuffer.removeValue(forKey: aiMsgId)
                         self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
@@ -634,17 +735,23 @@ struct QuickAIMessageView: View, Equatable {
     let message: Message
     var liveContent: String? = nil
     var liveThinking: String? = nil
+    var onRegenerate: (() -> Void)?
+    var onEdit: ((String) -> Void)?
+    var canEdit: Bool = false
+    var onSwitchVersion: ((Int) -> Void)?
     @State private var isCopied = false
     @State private var isPasted = false
     @State private var isCursorVisible = true
     @State private var isThinkingExpanded = false
+    @State private var isEditing = false
+    @State private var editText = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @Environment(\.colorScheme) private var colorScheme
     private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     static func == (lhs: QuickAIMessageView, rhs: QuickAIMessageView) -> Bool {
         return lhs.message == rhs.message && lhs.liveContent == rhs.liveContent
-            && lhs.liveThinking == rhs.liveThinking
+            && lhs.liveThinking == rhs.liveThinking && lhs.canEdit == rhs.canEdit
     }
 
     var body: some View {
@@ -670,7 +777,132 @@ struct QuickAIMessageView: View, Equatable {
                                 }
                             }
                     }
-                    if !message.content.isEmpty {
+
+                    // Show additional attachments (PDFs, text files)
+                    if let attachments = message.attachments {
+                        let nonImageAttachments = attachments.filter { $0.type != "image" }
+                        if !nonImageAttachments.isEmpty {
+                            HStack(spacing: 6) {
+                                ForEach(nonImageAttachments) { att in
+                                    HStack(spacing: 4) {
+                                        Image(
+                                            systemName: att.type == "pdf"
+                                                ? "doc.text.fill" : "doc.plaintext"
+                                        )
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(att.type == "pdf" ? .red : .blue)
+                                        Text(att.fileName ?? (att.type == "pdf" ? "PDF" : "File"))
+                                            .font(.system(size: 10))
+                                            .lineLimit(1)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color.secondary.opacity(0.1))
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if isEditing {
+                        // Inline editing mode
+                        VStack(alignment: .trailing, spacing: 10) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "pencil.circle.fill")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.blue)
+                                Text("Editing message")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+
+                            TextEditor(text: $editText)
+                                .font(.system(size: 13))
+                                .scrollContentBackground(.hidden)
+                                .frame(minHeight: 60, maxHeight: 200)
+                                .padding(10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(
+                                            colorScheme == .dark
+                                                ? Color.white.opacity(0.05)
+                                                : Color.black.opacity(0.03))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.blue.opacity(0.4), lineWidth: 1.5)
+                                )
+
+                            HStack(spacing: 8) {
+                                Button(action: {
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        isEditing = false
+                                        editText = ""
+                                    }
+                                }) {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 10, weight: .semibold))
+                                        Text("Cancel")
+                                            .font(.system(size: 11, weight: .medium))
+                                    }
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color.gray.opacity(0.15))
+                                    )
+                                }
+                                .buttonStyle(.plain)
+
+                                Button(action: {
+                                    if let onEdit = onEdit,
+                                        !editText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                            .isEmpty
+                                    {
+                                        onEdit(editText)
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            isEditing = false
+                                            editText = ""
+                                        }
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.up.circle.fill")
+                                            .font(.system(size: 11, weight: .semibold))
+                                        Text("Save & Send")
+                                            .font(.system(size: 11, weight: .semibold))
+                                    }
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [Color.blue, Color.blue.opacity(0.8)],
+                                                    startPoint: .top,
+                                                    endPoint: .bottom
+                                                )
+                                            )
+                                    )
+                                    .shadow(color: Color.blue.opacity(0.3), radius: 3, y: 2)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(12)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                        )
+                    } else if !message.content.isEmpty {
                         Text(message.content)
                             .font(.system(size: 14))
                             .padding(.horizontal, 16)
@@ -688,6 +920,39 @@ struct QuickAIMessageView: View, Equatable {
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .glassEffect(.regular, in: .rect(cornerRadius: 12))
+
+                        // User message action buttons
+                        HStack(spacing: 8) {
+                            if canEdit {
+                                ExpandingActionButton(
+                                    title: "Edit",
+                                    icon: "pencil",
+                                    font: .caption2,
+                                    action: {
+                                        editText = message.content
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            isEditing = true
+                                        }
+                                    }
+                                )
+                            }
+
+                            ExpandingActionButton(
+                                title: isCopied ? "Copied!" : "Copy",
+                                icon: isCopied ? "checkmark" : "doc.on.doc",
+                                color: isCopied ? .green : .secondary,
+                                font: .caption2,
+                                action: {
+                                    let pasteboard = NSPasteboard.general
+                                    pasteboard.clearContents()
+                                    pasteboard.setString(message.content, forType: .string)
+                                    isCopied = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                        isCopied = false
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             } else {
@@ -751,7 +1016,7 @@ struct QuickAIMessageView: View, Equatable {
                                 .id("streamingMarkdown")
                         }
 
-                        // Copy Button
+                        // Action Buttons
                         HStack(spacing: 8) {
                             ExpandingActionButton(
                                 title: isCopied ? "Copied!" : "Copy",
@@ -783,6 +1048,63 @@ struct QuickAIMessageView: View, Equatable {
                                         QuickAIManager.shared.pasteToActiveApp(
                                             text: message.content)
                                     }
+                                )
+                            }
+
+                            if let onRegenerate = onRegenerate {
+                                ExpandingActionButton(
+                                    title: "Regenerate",
+                                    icon: "arrow.counterclockwise",
+                                    font: .caption2,
+                                    action: onRegenerate
+                                )
+                            }
+
+                            // Version navigator
+                            if let versions = message.versions, versions.count > 1 {
+                                let currentIdx = message.currentVersionIndex ?? (versions.count - 1)
+                                HStack(spacing: 5) {
+                                    Button(action: {
+                                        if currentIdx > 0 {
+                                            onSwitchVersion?(currentIdx - 1)
+                                        }
+                                    }) {
+                                        Image(systemName: "chevron.left")
+                                            .font(.system(size: 9, weight: .semibold))
+                                            .foregroundStyle(
+                                                currentIdx > 0
+                                                    ? Color.primary : Color.secondary.opacity(0.3))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(currentIdx <= 0)
+
+                                    Text("\(currentIdx + 1)/\(versions.count)")
+                                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                        .monospacedDigit()
+
+                                    Button(action: {
+                                        if currentIdx < versions.count - 1 {
+                                            onSwitchVersion?(currentIdx + 1)
+                                        }
+                                    }) {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 9, weight: .semibold))
+                                            .foregroundStyle(
+                                                currentIdx < versions.count - 1
+                                                    ? Color.primary : Color.secondary.opacity(0.3))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(currentIdx >= versions.count - 1)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(
+                                            colorScheme == .dark
+                                                ? Color.white.opacity(0.08)
+                                                : Color.black.opacity(0.05))
                                 )
                             }
 
@@ -1331,11 +1653,31 @@ extension QuickAIView {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    ForEach(chatManager.getCurrentMessages()) { message in
+                    let messages = chatManager.getCurrentMessages()
+                    ForEach(messages) { message in
+                        let isLast = message.id == messages.last?.id
+                        let isLastUserMessage =
+                            message.isUser && messages.last(where: { $0.isUser })?.id == message.id
                         QuickAIMessageView(
                             message: message,
                             liveContent: streamBuffer[message.id],
-                            liveThinking: streamThinkingBuffer[message.id]
+                            liveThinking: streamThinkingBuffer[message.id],
+                            onRegenerate: (!message.isUser && !isLoading && isLast)
+                                ? { regenerateResponse(for: message.id) }
+                                : nil,
+                            onEdit: (isLastUserMessage && !isLoading)
+                                ? { newContent in
+                                    editAndResend(message: message, newContent: newContent)
+                                }
+                                : nil,
+                            canEdit: isLastUserMessage && !isLoading,
+                            onSwitchVersion: (!message.isUser && message.versions != nil
+                                && (message.versions?.count ?? 0) > 1)
+                                ? { versionIndex in
+                                    chatManager.switchVersion(
+                                        messageId: message.id, to: versionIndex)
+                                }
+                                : nil
                         )
                         .equatable()
                     }
@@ -1376,22 +1718,24 @@ extension QuickAIView {
     }
 
     private var inputSection: some View {
-        VStack(spacing: 8) {
-            if let pdfData = selectedPDF {
-                HStack {
-                    Image(systemName: "doc.text.fill")
-                        .foregroundStyle(.red)
-                    Text("PDF attached (\(pdfData.count / 1024) KB)")
-                        .font(.caption)
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Button(action: { selectedPDF = nil }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+        VStack(spacing: 0) {
+            // Attachment previews inside the command bar
+            if !selectedAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(selectedAttachments) { attachment in
+                            QuickAIAttachmentPreview(attachment: attachment) {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    selectedAttachments.removeAll { $0.id == attachment.id }
+                                    recalcPanelSize()
+                                }
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 14)
+                    .padding(.bottom, 8)
                 }
-                .padding(.horizontal, 16)
             }
 
             HStack(alignment: .center, spacing: 12) {
@@ -1447,25 +1791,53 @@ extension QuickAIView {
                             return false
                         },
                         onPasteNonText: { pasteboard in
+                            // Handle image paste
+                            if let objects = pasteboard.readObjects(
+                                forClasses: [NSImage.self], options: nil) as? [NSImage],
+                                let image = objects.first, let tiff = image.tiffRepresentation
+                            {
+                                DispatchQueue.main.async {
+                                    self.selectedAttachments.append(
+                                        Attachment(type: .image, data: tiff))
+                                    self.recalcPanelSize()
+                                }
+                                return true
+                            }
+                            // Handle file URL paste
                             if let urls = pasteboard.readObjects(
                                 forClasses: [NSURL.self], options: nil) as? [URL]
                             {
+                                var handled = false
                                 for url in urls {
-                                    if url.pathExtension.lowercased() == "pdf",
-                                        let data = try? Data(contentsOf: url)
-                                    {
+                                    let ext = url.pathExtension.lowercased()
+                                    if ext == "pdf", let data = try? Data(contentsOf: url) {
                                         DispatchQueue.main.async {
-                                            self.selectedPDF = data
+                                            self.selectedAttachments.append(
+                                                Attachment(type: .pdf, data: data))
+                                            self.recalcPanelSize()
                                         }
-                                        return true
+                                        handled = true
+                                    } else if [
+                                        "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
+                                    ].contains(ext), let data = try? Data(contentsOf: url) {
+                                        DispatchQueue.main.async {
+                                            self.selectedAttachments.append(
+                                                Attachment(type: .image, data: data))
+                                            self.recalcPanelSize()
+                                        }
+                                        handled = true
                                     }
                                 }
+                                if handled { return true }
                             }
+                            // Handle raw PDF data paste
                             if pasteboard.canReadItem(withDataConformingToTypes: ["com.adobe.pdf"]),
                                 let data = pasteboard.data(forType: .init("com.adobe.pdf"))
                             {
                                 DispatchQueue.main.async {
-                                    self.selectedPDF = data
+                                    self.selectedAttachments.append(
+                                        Attachment(type: .pdf, data: data))
+                                    self.recalcPanelSize()
                                 }
                                 return true
                             }
@@ -1742,10 +2114,98 @@ extension QuickAIView {
                         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                 }
                 .buttonStyle(.plain)
-                .disabled(inputText.isEmpty || isLoading)
+                .disabled((inputText.isEmpty && selectedAttachments.isEmpty) || isLoading)
             }
             .padding(16)
             .background(CommandBarBackground(cornerRadius: 20))
+        }
+    }
+}
+
+// MARK: - QuickAI Attachment Preview
+
+struct QuickAIAttachmentPreview: View {
+    let attachment: Attachment
+    var onRemove: () -> Void
+    @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                switch attachment.type {
+                case .image:
+                    if let image = NSImage(data: attachment.data) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 80, height: 80)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                case .pdf:
+                    VStack(spacing: 4) {
+                        Image(systemName: "doc.text.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(.red)
+                        Text(attachment.fileName ?? "PDF")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .frame(width: 80, height: 80)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    )
+                case .text:
+                    VStack(spacing: 4) {
+                        Image(systemName: "doc.plaintext")
+                            .font(.system(size: 28))
+                            .foregroundStyle(.blue)
+                        Text(attachment.fileName ?? "File")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .frame(width: 80, height: 80)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    )
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+
+            // X button — always visible, larger hit target
+            Button(action: onRemove) {
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 22, height: 22)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(
+                            colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.6))
+                }
+                .contentShape(Circle().scale(1.5))
+            }
+            .buttonStyle(.plain)
+            .offset(x: 4, y: -4)
+            .opacity(isHovered ? 1 : 0.7)
+        }
+        .padding(.top, 4)
+        .padding(.trailing, 4)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
         }
     }
 }

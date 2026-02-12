@@ -3362,6 +3362,7 @@ struct HeaderView: View {
 struct AttachmentPreview: View {
     let attachment: Attachment
     var onRemove: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -3411,13 +3412,22 @@ struct AttachmentPreview: View {
             )
 
             Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.gray)
-                    .background(Color.white.clipShape(Circle()))
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 20, height: 20)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(
+                            colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.6))
+                }
+                .contentShape(Circle().scale(1.5))
             }
             .buttonStyle(.plain)
-            .offset(x: 5, y: -5)
+            .offset(x: 4, y: -4)
         }
+        .padding(.top, 4)
+        .padding(.trailing, 4)
     }
 }
 
@@ -3430,6 +3440,8 @@ class PasteMonitor: ObservableObject {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
             if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "v" {
+                // Skip if the event targets the QuickAI panel
+                if event.window is QuickAIPanel { return event }
                 let pb = NSPasteboard.general
                 var newAttachments: [Attachment] = []
 
@@ -3587,10 +3599,8 @@ struct InputView: View {
                     HStack(spacing: 10) {
                         ForEach(selectedAttachments) { attachment in
                             AttachmentPreview(attachment: attachment) {
-                                if let index = selectedAttachments.firstIndex(where: {
-                                    $0.id == attachment.id
-                                }) {
-                                    selectedAttachments.remove(at: index)
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    selectedAttachments.removeAll { $0.id == attachment.id }
                                 }
                             }
                         }
