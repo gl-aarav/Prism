@@ -1605,11 +1605,14 @@ extension QuickAIView {
                             ForEach(geminiManager.favoriteModels, id: \.self) { model in
                                 Button(action: { geminiModel = model }) {
                                     if geminiModel == model {
-                                        Label(model, systemImage: "checkmark")
-                                            .foregroundStyle(
-                                                colorScheme == .dark ? Color.white : Color.primary)
+                                        Label(
+                                            geminiManager.displayName(for: model),
+                                            systemImage: "checkmark"
+                                        )
+                                        .foregroundStyle(
+                                            colorScheme == .dark ? Color.white : Color.primary)
                                     } else {
-                                        Text(model)
+                                        Text(geminiManager.displayName(for: model))
                                     }
                                 }
                             }
@@ -1622,12 +1625,15 @@ extension QuickAIView {
                                     ForEach(nonFavModels, id: \.self) { model in
                                         Button(action: { geminiModel = model }) {
                                             if geminiModel == model {
-                                                Label(model, systemImage: "checkmark")
-                                                    .foregroundStyle(
-                                                        colorScheme == .dark
-                                                            ? Color.white : Color.primary)
+                                                Label(
+                                                    geminiManager.displayName(for: model),
+                                                    systemImage: "checkmark"
+                                                )
+                                                .foregroundStyle(
+                                                    colorScheme == .dark
+                                                        ? Color.white : Color.primary)
                                             } else {
-                                                Text(model)
+                                                Text(geminiManager.displayName(for: model))
                                             }
                                         }
                                     }
@@ -1641,9 +1647,13 @@ extension QuickAIView {
                             ForEach(geminiManager.availableModels, id: \.self) { model in
                                 Button(action: { geminiManager.toggleFavorite(model) }) {
                                     if geminiManager.isFavorite(model) {
-                                        Label(model, systemImage: "star.fill")
+                                        Label(
+                                            geminiManager.displayName(for: model),
+                                            systemImage: "star.fill")
                                     } else {
-                                        Label(model, systemImage: "star")
+                                        Label(
+                                            geminiManager.displayName(for: model),
+                                            systemImage: "star")
                                     }
                                 }
                             }
