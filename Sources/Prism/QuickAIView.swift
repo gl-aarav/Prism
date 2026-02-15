@@ -759,7 +759,33 @@ struct QuickAIMessageView: View, Equatable {
             if message.isUser {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 8) {
-                    if let image = message.image {
+                    // Show all image attachments
+                    if let attachments = message.attachments {
+                        let imageAttachments = attachments.filter { $0.type == "image" }
+                        if !imageAttachments.isEmpty {
+                            ForEach(imageAttachments) { att in
+                                if let image = NSImage(data: att.data) {
+                                    Image(nsImage: image)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(maxWidth: 200, maxHeight: 200)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .onTapGesture {
+                                            previewImage(image)
+                                        }
+                                        .contextMenu {
+                                            Button("Copy Image") {
+                                                copyImage(image)
+                                            }
+                                            Button("Take me to chat") {
+                                                openInMainWindow()
+                                            }
+                                        }
+                                }
+                            }
+                        }
+                    } else if let image = message.image {
+                        // Legacy fallback for messages without attachments array
                         Image(nsImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
@@ -1791,14 +1817,18 @@ extension QuickAIView {
                             return false
                         },
                         onPasteNonText: { pasteboard in
-                            // Handle image paste
+                            // Handle image paste — add ALL pasted images
                             if let objects = pasteboard.readObjects(
                                 forClasses: [NSImage.self], options: nil) as? [NSImage],
-                                let image = objects.first, let tiff = image.tiffRepresentation
+                                !objects.isEmpty
                             {
                                 DispatchQueue.main.async {
-                                    self.selectedAttachments.append(
-                                        Attachment(type: .image, data: tiff))
+                                    for image in objects {
+                                        if let tiff = image.tiffRepresentation {
+                                            self.selectedAttachments.append(
+                                                Attachment(type: .image, data: tiff))
+                                        }
+                                    }
                                     self.recalcPanelSize()
                                 }
                                 return true

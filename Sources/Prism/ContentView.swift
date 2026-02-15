@@ -1131,23 +1131,46 @@ class GeminiService {
                         parts.append(["text": msg.content])
                     }
 
-                    if let data = msg.imageData, NSImage(data: data) != nil {
-                        // Convert to base64
-                        let base64 = data.base64EncodedString()
-                        parts.append([
-                            "inline_data": [
-                                "mime_type": "image/jpeg",  // Assuming JPEG/PNG compatible data
-                                "data": base64,
-                            ]
-                        ])
-                    } else if let pdfData = msg.pdfData {
-                        let base64 = pdfData.base64EncodedString()
-                        parts.append([
-                            "inline_data": [
-                                "mime_type": "application/pdf",
-                                "data": base64,
-                            ]
-                        ])
+                    // Add all attachments (images and PDFs)
+                    if let attachments = msg.attachments, !attachments.isEmpty {
+                        for att in attachments {
+                            if att.type == "image", NSImage(data: att.data) != nil {
+                                let base64 = att.data.base64EncodedString()
+                                parts.append([
+                                    "inline_data": [
+                                        "mime_type": "image/jpeg",
+                                        "data": base64,
+                                    ]
+                                ])
+                            } else if att.type == "pdf" {
+                                let base64 = att.data.base64EncodedString()
+                                parts.append([
+                                    "inline_data": [
+                                        "mime_type": "application/pdf",
+                                        "data": base64,
+                                    ]
+                                ])
+                            }
+                        }
+                    } else {
+                        // Legacy fallback for messages without attachments array
+                        if let data = msg.imageData, NSImage(data: data) != nil {
+                            let base64 = data.base64EncodedString()
+                            parts.append([
+                                "inline_data": [
+                                    "mime_type": "image/jpeg",
+                                    "data": base64,
+                                ]
+                            ])
+                        } else if let pdfData = msg.pdfData {
+                            let base64 = pdfData.base64EncodedString()
+                            parts.append([
+                                "inline_data": [
+                                    "mime_type": "application/pdf",
+                                    "data": base64,
+                                ]
+                            ])
+                        }
                     }
 
                     // Ensure at least one part exists (Gemini requires non-empty parts)
@@ -5185,7 +5208,24 @@ struct MessageView: View, Equatable {
             if message.isUser {
                 Spacer()
                 VStack(alignment: .trailing) {
-                    if let image = message.image {
+                    // Show all image attachments
+                    if let attachments = message.attachments {
+                        let imageAttachments = attachments.filter { $0.type == "image" }
+                        if !imageAttachments.isEmpty {
+                            ForEach(Array(imageAttachments.enumerated()), id: \.element.id) { index, att in
+                                if let image = NSImage(data: att.data) {
+                                    ThumbnailView(
+                                        image: image, maxWidth: 200, maxHeight: 300,
+                                        messageId: message.id,
+                                        coordinateSpaceName: "detailContainer",
+                                        onImageTap: onImageTap
+                                    )
+                                    .id("\(message.currentVersionIndex ?? -1)_\(index)")
+                                }
+                            }
+                        }
+                    } else if let image = message.image {
+                        // Legacy fallback for messages without attachments array
                         ThumbnailView(
                             image: image, maxWidth: 200, maxHeight: 300,
                             messageId: message.id,
