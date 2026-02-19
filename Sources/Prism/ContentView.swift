@@ -5965,7 +5965,7 @@ struct SettingsView: View {
                                     get: { Double(autocompleteDebounceMs) },
                                     set: { autocompleteDebounceMs = Int($0) }
                                 ),
-                                in: 200...1500,
+                                in: 0...1500,
                                 step: 50
                             )
                             Text("\(autocompleteDebounceMs)ms")

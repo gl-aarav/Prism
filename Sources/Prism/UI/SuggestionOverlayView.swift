@@ -13,10 +13,10 @@ struct SuggestionOverlayView: View {
                 // Use dynamic font size matching exact host app text size
                 .font(.system(size: manager.suggestionFontSize, weight: .regular, design: .default))
                 .foregroundStyle(Color.primary.opacity(0.35))
-                .padding(.leading, 2) // Slight padding so it doesn't hug the cursor too tightly
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(maxHeight: .infinity, alignment: .center) // Mathematically centers font within cursor geometry box
+                .padding(.leading, -1.5) // Nudge slightly left to counteract standard font bearing
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading) // Anchors straight to the descender baseline
                 .fixedSize(horizontal: true, vertical: false)
                 .allowsHitTesting(false)
         }

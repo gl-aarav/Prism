@@ -187,17 +187,21 @@ class AutocompleteManager: ObservableObject {
 
         // Live-read debounce from UserDefaults
         let currentDebounce = UserDefaults.standard.integer(forKey: "CotypistDebounceMs")
-        let delay = currentDebounce > 0 ? currentDebounce : 500
+        let delay = max(0, currentDebounce)
 
         // Debounce: wait before triggering prediction
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.triggerPrediction(context: newText)
+        if delay == 0 {
+            triggerPrediction(context: newText)
+        } else {
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.triggerPrediction(context: newText)
+            }
+            debounceTimer = workItem
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + .milliseconds(delay),
+                execute: workItem
+            )
         }
-        debounceTimer = workItem
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + .milliseconds(delay),
-            execute: workItem
-        )
     }
 
     // MARK: - Prediction
@@ -341,14 +345,16 @@ class AutocompleteManager: ObservableObject {
         guard let panel = overlayPanel else { return }
 
         // Size the panel to fit the inline text
-        let font = NSFont.systemFont(ofSize: 13)
+        // Size the panel to fit the inline text using the dynamic font size
+        let font = NSFont.systemFont(ofSize: suggestionFontSize)
         let attributes: [NSAttributedString.Key: Any] = [.font: font]
         let textSize = (text as NSString).boundingRect(
-            with: NSSize(width: 600, height: 30),
+            with: NSSize(width: 800, height: 200),
             options: [.usesLineFragmentOrigin],
             attributes: attributes
         )
-        let width = min(textSize.width + 8, 600)
+        // Add just a tiny 2px buffer to prevent clipping the very edge of italic/script fonts
+        let width = min(textSize.width + 2, 800)
 
         let currentFrame = panel.frame
         let newFrame = NSRect(
