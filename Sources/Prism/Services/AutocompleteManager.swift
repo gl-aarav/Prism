@@ -329,14 +329,13 @@ class AutocompleteManager: ObservableObject {
             attributes: attributes
         )
         let width = min(textSize.width + 8, 600)
-        let height: CGFloat = 22
 
         let currentFrame = panel.frame
         let newFrame = NSRect(
             x: currentFrame.origin.x,
             y: currentFrame.origin.y,
             width: width,
-            height: height
+            height: currentFrame.height // Keep current height, updateOverlayPosition will correct it
         )
         panel.setFrame(newFrame, display: true)
 
@@ -360,25 +359,30 @@ class AutocompleteManager: ObservableObject {
         let primaryScreenHeight = NSScreen.screens.first?.frame.height ?? 1080
 
         // Convert AX Y (top-left origin) to AppKit Y (bottom-left origin)
-        // AX: y = distance from TOP of primary screen
-        // AppKit: y = distance from BOTTOM of primary screen
-        // AX bottom of cursor = cursorFrame.origin.y + cursorFrame.height
-        // AppKit bottom of cursor = primaryScreenHeight - (cursorFrame.origin.y + cursorFrame.height)
         let appKitCursorBottom = primaryScreenHeight - cursorFrame.origin.y - cursorFrame.height
-        let cursorHeight = max(cursorFrame.height, 16)  // At least 16px line height
 
-        // Position inline: right after the cursor, aligned to the cursor baseline
-        let x = cursorFrame.maxX + 2  // 2px after cursor
-        // Align panel bottom with cursor bottom, offset up to center vertically
-        let y = appKitCursorBottom + (cursorHeight - panel.frame.height) / 2
+        // Position inline: right after the cursor
+        let x = cursorFrame.maxX + 1  // 1px after cursor
+        
+        // Align panel bottom exactly with cursor bottom.
+        // The panel height now matches cursor height, so vertical centering in SwiftUI matches the text line exactly.
+        // Add a -1 point offset since SwiftUI text sometimes draws slightly above the mathematical center.
+        let y = appKitCursorBottom - 1
 
         // Ensure it stays on screen
+        let panelHeight = max(cursorFrame.height, 16)
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
             let clampedX = min(x, screenFrame.maxX - panel.frame.width)
-            panel.setFrameOrigin(NSPoint(x: clampedX, y: y))
+            panel.setFrame(
+                NSRect(x: clampedX, y: y, width: panel.frame.width, height: panelHeight),
+                display: true
+            )
         } else {
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            panel.setFrame(
+                NSRect(x: x, y: y, width: panel.frame.width, height: panelHeight),
+                display: true
+            )
         }
     }
 

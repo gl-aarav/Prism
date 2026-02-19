@@ -5930,7 +5930,6 @@ struct SettingsView: View {
                             }
                         ))
                         .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 180)
                     } label: {
                         Label("App Blacklist", systemImage: "xmark.app")
                     }
