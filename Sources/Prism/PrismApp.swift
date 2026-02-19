@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import SwiftUI
 
 @main
@@ -54,6 +55,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "ShowMenuBar": true,
             "EnableQuickAI": true,
+            "EnableCotypist": false,
+            "CotypistBackend": "Ollama",
+            "CotypistDebounceMs": 500,
+            "CotypistMemoryEnabled": true,
         ])
     }
 
@@ -86,6 +91,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         HotKeyManager.shared.register()
+
+        // Cotypist: register toggle shortcut and auto-start if enabled
+        KeyboardShortcuts.onKeyUp(for: .toggleCotypist) {
+            AutocompleteManager.shared.toggle()
+        }
+        if UserDefaults.standard.bool(forKey: "EnableCotypist") {
+            AutocompleteManager.shared.setup()
+        }
 
         IconManager.shared.updateIcon()
 

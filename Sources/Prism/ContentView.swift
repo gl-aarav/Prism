@@ -5645,6 +5645,15 @@ struct SettingsView: View {
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
 
+    // AI Autocomplete settings
+    @AppStorage("EnableCotypist") private var enableAutocomplete: Bool = false
+    @AppStorage("CotypistBackend") private var autocompleteBackend: String = "Ollama"
+    @AppStorage("CotypistModel") private var autocompleteModel: String = ""
+    @AppStorage("CotypistDebounceMs") private var autocompleteDebounceMs: Int = 500
+    @AppStorage("CotypistCustomInstruction") private var autocompletePersona: String = ""
+    @AppStorage("CotypistBlacklist") private var autocompleteBlacklist: String = "[]"
+    @AppStorage("CotypistMemoryEnabled") private var autocompleteMemory: Bool = true
+
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
@@ -5821,6 +5830,135 @@ struct SettingsView: View {
                             panel.allowedContentTypes = [.image]
                             if panel.runModal() == .OK {
                                 backgroundImagePath = panel.url?.path ?? ""
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section(header: Label("AI Autocomplete", systemImage: "text.cursor")) {
+                Toggle(isOn: Binding(
+                    get: { enableAutocomplete },
+                    set: { newValue in
+                        enableAutocomplete = newValue
+                        if newValue {
+                            AutocompleteManager.shared.setup()
+                        } else {
+                            AutocompleteManager.shared.stop()
+                        }
+                    }
+                )) {
+                    Label("Enable AI Autocomplete", systemImage: "sparkles")
+                }
+                .toggleStyle(.switch)
+
+                if enableAutocomplete {
+                    LabeledContent {
+                        KeyboardShortcuts.Recorder(for: .toggleCotypist)
+                    } label: {
+                        Label("Toggle Shortcut", systemImage: "command")
+                    }
+                }
+            }
+
+            if enableAutocomplete {
+                Section(header: Label("Model", systemImage: "cpu")) {
+                    Picker(selection: $autocompleteBackend) {
+                        ForEach(AutocompleteService.Backend.allCases) { backend in
+                            Text(backend.rawValue).tag(backend.rawValue)
+                        }
+                    } label: {
+                        Label("AI Backend", systemImage: "server.rack")
+                    }
+
+                    LabeledContent {
+                        TextField("default", text: $autocompleteModel)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 180)
+                    } label: {
+                        Label("Model Name", systemImage: "brain.head.profile")
+                    }
+                }
+
+                Section(header: Label("Behavior", systemImage: "slider.horizontal.3")) {
+                    LabeledContent {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { Double(autocompleteDebounceMs) },
+                                    set: { autocompleteDebounceMs = Int($0) }
+                                ),
+                                in: 200...1500,
+                                step: 50
+                            )
+                            Text("\(autocompleteDebounceMs)ms")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 55, alignment: .trailing)
+                        }
+                    } label: {
+                        Label("Prediction Delay", systemImage: "timer")
+                    }
+
+                    LabeledContent {
+                        TextField("e.g. concise, professional", text: $autocompletePersona)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 180)
+                    } label: {
+                        Label("Persona / Style", systemImage: "person.text.rectangle")
+                    }
+                    Text("Tone, vocabulary, and expertise level for suggestions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    LabeledContent {
+                        TextField("com.apple.Terminal, ...", text: Binding(
+                            get: {
+                                guard let data = autocompleteBlacklist.data(using: .utf8),
+                                      let arr = try? JSONDecoder().decode([String].self, from: data)
+                                else { return "" }
+                                return arr.joined(separator: ", ")
+                            },
+                            set: { newValue in
+                                let items = newValue.components(separatedBy: ",")
+                                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                                    .filter { !$0.isEmpty }
+                                if let data = try? JSONEncoder().encode(items),
+                                   let json = String(data: data, encoding: .utf8) {
+                                    autocompleteBlacklist = json
+                                }
+                            }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 180)
+                    } label: {
+                        Label("App Blacklist", systemImage: "xmark.app")
+                    }
+                    Text("Disable in specific apps (bundle IDs, comma-separated).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section(header: Label("Writing Memory", systemImage: "brain")) {
+                    Toggle(isOn: $autocompleteMemory) {
+                        Label("Learn Writing Style", systemImage: "memorychip")
+                    }
+                    .toggleStyle(.switch)
+
+                    Text("Remembers accepted suggestions to match your style. Auto-expires after 7 days.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if autocompleteMemory {
+                        HStack {
+                            Label("\(WritingMemory.shared.count) samples", systemImage: "doc.text")
+                                .foregroundStyle(.secondary)
+                                .font(.callout)
+                            Spacer()
+                            Button(role: .destructive) {
+                                WritingMemory.shared.clearAll()
+                            } label: {
+                                Label("Clear Memory", systemImage: "trash")
                             }
                         }
                     }

@@ -1,0 +1,267 @@
+import Foundation
+
+/// Lightweight service for generating short inline autocomplete suggestions.
+/// Reuses existing Ollama / Gemini / Apple Foundation patterns but with
+/// tight timeouts and a completion-focused system prompt.
+class AutocompleteService {
+    static let shared = AutocompleteService()
+
+    private let session: URLSession
+
+    /// The system prompt that instructs the model to produce ONLY the continuation.
+    static let defaultSystemPrompt = """
+        You are an inline text autocomplete engine. The user will give you text they have \
+        typed so far. You must predict ONLY the remaining text that comes AFTER what they typed. \
+        \
+        CRITICAL RULES: \
+        1. Do NOT repeat any part of the input text. Output ONLY the new continuation. \
+        2. Do NOT add quotes, markdown formatting, or explanations. \
+        3. Keep completions short — finish the current sentence or line (1 sentence max). \
+        4. If the last word is incomplete, first complete that word, then continue naturally. \
+        5. Match the tone, language, and style of the existing text. \
+        \
+        Example — Input: "Thank you for your" → Output: " email regarding the project timeline." \
+        Example — Input: "Hi Alex,\\n\\nI wanted to fol" → Output: "low up on our conversation from yesterday." \
+        Example — Input: "def calculate_" → Output: "total(items):\\n    return sum(item.price for item in items)"
+        """
+
+    private init() {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10  // Short timeout for responsiveness
+        config.timeoutIntervalForResource = 15
+        self.session = URLSession(configuration: config)
+    }
+
+    // MARK: - Backend Selection
+
+    enum Backend: String, CaseIterable, Identifiable {
+        case ollama = "Ollama"
+        case gemini = "Gemini"
+        case appleFoundation = "Apple Intelligence"
+
+        var id: String { rawValue }
+    }
+
+    // MARK: - Completion Generation
+
+    /// Generate an autocomplete suggestion by streaming from the selected backend.
+    /// Returns an `AsyncThrowingStream` of partial completion text.
+    func generateCompletion(
+        context: String,
+        backend: Backend,
+        model: String,
+        customInstruction: String = ""
+    ) -> AsyncThrowingStream<String, Error> {
+        var systemPrompt = AutocompleteService.defaultSystemPrompt
+
+        // Append custom instruction if present
+        if !customInstruction.isEmpty {
+            systemPrompt += "\n\nAdditional style instruction: \(customInstruction)"
+        }
+
+        // Append writing memory context if enabled
+        if UserDefaults.standard.bool(forKey: "CotypistMemoryEnabled") {
+            let memoryContext = WritingMemory.shared.getStyleContext()
+            if !memoryContext.isEmpty {
+                systemPrompt += "\n\n\(memoryContext)"
+            }
+        }
+
+        let userPrompt = String(context.suffix(500))  // Last 500 chars of context
+
+        switch backend {
+        case .ollama:
+            return streamFromOllama(prompt: userPrompt, systemPrompt: systemPrompt, model: model)
+        case .gemini:
+            return streamFromGemini(prompt: userPrompt, systemPrompt: systemPrompt, model: model)
+        case .appleFoundation:
+            return streamFromAppleFoundation(prompt: userPrompt, systemPrompt: systemPrompt)
+        }
+    }
+
+    // MARK: - Ollama
+
+    private func streamFromOllama(
+        prompt: String, systemPrompt: String, model: String
+    ) -> AsyncThrowingStream<String, Error> {
+        return AsyncThrowingStream { continuation in
+            Task {
+                let ollamaURL =
+                    UserDefaults.standard.string(forKey: "OllamaURL") ?? "http://localhost:11434"
+                let baseURL = ollamaURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                guard let url = URL(string: "\(baseURL)/api/generate") else {
+                    continuation.finish(throwing: URLError(.badURL))
+                    return
+                }
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                let body: [String: Any] = [
+                    "model": model.isEmpty ? "llama3.2" : model,
+                    "prompt": prompt,
+                    "system": systemPrompt,
+                    "stream": true,
+                    "options": [
+                        "num_predict": 80,  // Limit output length
+                        "temperature": 0.3,  // Lower temp for more predictable completions
+                    ],
+                ]
+
+                request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+                do {
+                    let (bytes, response) = try await session.bytes(for: request)
+                    guard let httpResponse = response as? HTTPURLResponse,
+                        httpResponse.statusCode == 200
+                    else {
+                        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                        continuation.finish(
+                            throwing: NSError(
+                                domain: "AutocompleteService",
+                                code: status,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: "Ollama returned status \(status)"
+                                ]
+                            ))
+                        return
+                    }
+
+                    for try await line in bytes.lines {
+                        guard let data = line.data(using: .utf8),
+                            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                        else { continue }
+
+                        if let text = json["response"] as? String, !text.isEmpty {
+                            continuation.yield(text)
+                        }
+                        if let done = json["done"] as? Bool, done {
+                            break
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    // MARK: - Gemini
+
+    private func streamFromGemini(
+        prompt: String, systemPrompt: String, model: String
+    ) -> AsyncThrowingStream<String, Error> {
+        return AsyncThrowingStream { continuation in
+            Task {
+                let apiKey = UserDefaults.standard.string(forKey: "GeminiKey") ?? ""
+                guard !apiKey.isEmpty else {
+                    continuation.finish(
+                        throwing: NSError(
+                            domain: "AutocompleteService",
+                            code: 1,
+                            userInfo: [NSLocalizedDescriptionKey: "Gemini API key not set"]
+                        ))
+                    return
+                }
+
+                let modelName = model.isEmpty ? "gemini-2.5-flash" : model
+                guard
+                    let url = URL(
+                        string:
+                            "https://generativelanguage.googleapis.com/v1beta/models/\(modelName):streamGenerateContent?key=\(apiKey)&alt=sse"
+                    )
+                else {
+                    continuation.finish(throwing: URLError(.badURL))
+                    return
+                }
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                let body: [String: Any] = [
+                    "system_instruction": [
+                        "parts": [["text": systemPrompt]]
+                    ],
+                    "contents": [
+                        [
+                            "role": "user",
+                            "parts": [["text": prompt]],
+                        ]
+                    ],
+                    "generationConfig": [
+                        "maxOutputTokens": 80,
+                        "temperature": 0.3,
+                    ],
+                ]
+
+                request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+                do {
+                    let (bytes, response) = try await session.bytes(for: request)
+                    guard let httpResponse = response as? HTTPURLResponse,
+                        httpResponse.statusCode == 200
+                    else {
+                        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                        continuation.finish(
+                            throwing: NSError(
+                                domain: "AutocompleteService",
+                                code: status,
+                                userInfo: [
+                                    NSLocalizedDescriptionKey: "Gemini returned status \(status)"
+                                ]
+                            ))
+                        return
+                    }
+
+                    for try await line in bytes.lines {
+                        let trimmed = line.trimmingCharacters(in: .whitespaces)
+                        guard trimmed.hasPrefix("data: ") else { continue }
+                        let jsonString = String(trimmed.dropFirst(6))
+                        guard let data = jsonString.data(using: .utf8),
+                            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                        else { continue }
+
+                        if let candidates = json["candidates"] as? [[String: Any]],
+                            let first = candidates.first,
+                            let content = first["content"] as? [String: Any],
+                            let parts = content["parts"] as? [[String: Any]],
+                            let text = parts.first?["text"] as? String
+                        {
+                            continuation.yield(text)
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    // MARK: - Apple Foundation
+
+    private func streamFromAppleFoundation(
+        prompt: String, systemPrompt: String
+    ) -> AsyncThrowingStream<String, Error> {
+        let service = AppleFoundationService()
+        let message = Message(content: prompt, isUser: true)
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    for try await chunk in service.sendMessageStream(
+                        history: [message], systemPrompt: systemPrompt)
+                    {
+                        continuation.yield(chunk)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+}
