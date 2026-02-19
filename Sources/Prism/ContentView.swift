@@ -5653,6 +5653,7 @@ struct SettingsView: View {
     @AppStorage("CotypistCustomInstruction") private var autocompletePersona: String = ""
     @AppStorage("CotypistBlacklist") private var autocompleteBlacklist: String = "[]"
     @AppStorage("CotypistMemoryEnabled") private var autocompleteMemory: Bool = true
+    @AppStorage("CotypistCompletionLength") private var autocompleteCompletionLength: String = "Medium (~ 2 - 4 words)"
 
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
@@ -5862,7 +5863,7 @@ struct SettingsView: View {
             }
 
             if enableAutocomplete {
-                Section(header: Label("Model", systemImage: "cpu")) {
+                Section(header: Label("AI Model", systemImage: "cpu")) {
                     Picker(selection: $autocompleteBackend) {
                         ForEach(AutocompleteService.Backend.allCases) { backend in
                             Text(backend.rawValue).tag(backend.rawValue)
@@ -5872,12 +5873,88 @@ struct SettingsView: View {
                     }
 
                     LabeledContent {
-                        TextField("default", text: $autocompleteModel)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 180)
+                        HStack {
+                            TextField("e.g. qwen2.5:1.5b", text: $autocompleteModel)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 180)
+                            
+                            if autocompleteBackend == "Ollama" && !autocompleteModel.isEmpty {
+                                Button {
+                                    let task = Process()
+                                    task.executableURL = URL(fileURLWithPath: "/usr/local/bin/ollama")
+                                    if !FileManager.default.fileExists(atPath: task.executableURL?.path ?? "") {
+                                        task.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/ollama")
+                                    }
+                                    task.arguments = ["pull", autocompleteModel]
+                                    try? task.run()
+                                } label: {
+                                    Image(systemName: "arrow.down.circle")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("Download model in background")
+                            }
+                        }
                     } label: {
                         Label("Model Name", systemImage: "brain.head.profile")
                     }
+                    Text("Select the model used for completions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if autocompleteBackend == "Ollama" {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Recommendations:")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 4)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Text("⭐").font(.caption)
+                                    Text("qwen2.5:1.5b").font(.caption).bold()
+                                    Text("(Default)").font(.footnote).foregroundStyle(.secondary)
+                                }
+                                Text("Best balance of speed and quality for most users.").font(.caption2).foregroundStyle(.secondary)
+                            }
+                            
+                            Text("For powerful machines (16GB+ RAM):")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 4)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Text("⚡").font(.caption)
+                                    Text("qwen2.5:3b").font(.caption).bold()
+                                    Text("(Higher quality)").font(.footnote).foregroundStyle(.secondary)
+                                }
+                                Text("Superior completion quality.").font(.caption2).foregroundStyle(.secondary)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Text("🌐").font(.caption)
+                                    Text("gemma2:2b").font(.caption).bold()
+                                    Text("(Multi-language)").font(.footnote).foregroundStyle(.secondary)
+                                }
+                                Text("Slightly better support for non-English languages.").font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
+                Section(header: Label("Completion Settings", systemImage: "text.alignleft")) {
+                    Picker(selection: $autocompleteCompletionLength) {
+                        ForEach(["Short (~ 1 - 2 words)", "Medium (~ 2 - 4 words)", "Long (~ 5+ words)"], id: \.self) { length in
+                            Text(length).tag(length)
+                        }
+                    } label: {
+                        Label("Maximum Length", systemImage: "ruler")
+                    }
+                    Text("Controls how long generated completions can be.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section(header: Label("Behavior", systemImage: "slider.horizontal.3")) {

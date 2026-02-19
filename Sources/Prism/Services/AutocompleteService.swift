@@ -50,9 +50,19 @@ class AutocompleteService {
         context: String,
         backend: Backend,
         model: String,
-        customInstruction: String = ""
+        customInstruction: String = "",
+        length: String = "Medium (~ 2 - 4 words)"
     ) -> AsyncThrowingStream<String, Error> {
         var systemPrompt = AutocompleteService.defaultSystemPrompt
+
+        // Adjust prompt based on requested length
+        if length.contains("Short") {
+            systemPrompt += "\n\nCRITICAL: Keep the completion VERY SHORT (1-2 words max). Stop immediately after."
+        } else if length.contains("Long") {
+            systemPrompt += "\n\nCRITICAL: You may write slightly longer completions (up to a full sentence or ~10 words) if it naturally finishes the thought."
+        } else {
+            systemPrompt += "\n\nCRITICAL: Keep the completion brief, around 2-4 words."
+        }
 
         // Append custom instruction if present
         if !customInstruction.isEmpty {

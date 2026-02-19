@@ -13,6 +13,9 @@ class AutocompleteManager: ObservableObject {
     /// The current suggestion text (nil when no suggestion is available).
     @Published var suggestion: String? = nil
 
+    /// Dynamic font size based on the cursor height of the host app.
+    @Published var suggestionFontSize: CGFloat = 13.0
+
     /// Whether a prediction is currently in-flight.
     @Published var isLoading: Bool = false
 
@@ -27,6 +30,7 @@ class AutocompleteManager: ObservableObject {
     @AppStorage("CotypistDebounceMs") var debounceMs: Int = 500
     @AppStorage("CotypistCustomInstruction") var customInstruction: String = ""
     @AppStorage("CotypistBlacklist") var blacklistJSON: String = "[]"
+    @AppStorage("CotypistCompletionLength") var completionLength: String = "Medium (~ 2 - 4 words)"
 
     // MARK: - Internal
 
@@ -35,6 +39,7 @@ class AutocompleteManager: ObservableObject {
     private var currentTask: Task<Void, Never>?
     private var overlayPanel: SuggestionOverlayPanel?
     private var lastTextBeforeCursor: String = ""
+    private var isAcceptingPartialWord: Bool = false
 
     /// Live-read backend from UserDefaults so settings changes take effect immediately.
     var backend: AutocompleteService.Backend {
@@ -97,8 +102,9 @@ class AutocompleteManager: ObservableObject {
         tap.isSuggestionVisible = { [weak self] in
             self?.suggestion != nil
         }
-        tap.onTab = { [weak self] in self?.acceptFull() }
-        tap.onRightArrow = { [weak self] in self?.acceptNextWord() }
+        // Swapped bindings: Tab accepts next word, Right Arrow accepts full text
+        tap.onTab = { [weak self] in self?.acceptNextWord() }
+        tap.onRightArrow = { [weak self] in self?.acceptFull() }
         tap.install()
 
         // Create overlay panel
@@ -149,6 +155,13 @@ class AutocompleteManager: ObservableObject {
     // MARK: - Text Change Handling
 
     private func handleTextChange(_ newText: String) {
+        // If we just injected a partial word, don't cancel the existing suggestion.
+        // But do update the last tracked text so the next user keystroke triggers properly.
+        if isAcceptingPartialWord {
+            lastTextBeforeCursor = newText
+            return
+        }
+
         // Cancel any pending prediction
         cancelPrediction()
 
@@ -196,6 +209,7 @@ class AutocompleteManager: ObservableObject {
         let liveBackend = backend
         let liveModel = currentModel
         let liveInstruction = currentCustomInstruction
+        let liveLength = completionLength
 
         currentTask = Task { [weak self] in
             guard let self = self else { return }
@@ -206,7 +220,8 @@ class AutocompleteManager: ObservableObject {
                     context: context,
                     backend: liveBackend,
                     model: liveModel,
-                    customInstruction: liveInstruction
+                    customInstruction: liveInstruction,
+                    length: liveLength
                 )
 
                 for try await chunk in stream {
@@ -290,7 +305,12 @@ class AutocompleteManager: ObservableObject {
         // Insert the first word (with a trailing space if more words follow)
         let remaining = String(trimmed.dropFirst(firstWord.count)).trimmingCharacters(in: .whitespaces)
         let insertText = remaining.isEmpty ? firstWord : firstWord + " "
+        
+        isAcceptingPartialWord = true
         TextInjector.shared.insertText(insertText)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.isAcceptingPartialWord = false
+        }
 
         // Update the suggestion to remove the accepted word
         if remaining.isEmpty {
@@ -359,18 +379,29 @@ class AutocompleteManager: ObservableObject {
         let primaryScreenHeight = NSScreen.screens.first?.frame.height ?? 1080
 
         // Convert AX Y (top-left origin) to AppKit Y (bottom-left origin)
-        let appKitCursorBottom = primaryScreenHeight - cursorFrame.origin.y - cursorFrame.height
+        // cursorFrame.origin.y is the top of the cursor geometry in AX space
+        // AX bottom = origin.y + height
+        let axBottom = cursorFrame.origin.y + cursorFrame.height
+        let appKitCursorBottom = primaryScreenHeight - axBottom
 
         // Position inline: right after the cursor
-        let x = cursorFrame.maxX + 1  // 1px after cursor
+        let x = cursorFrame.maxX  // Flush with cursor (padding handles gap)
         
         // Align panel bottom exactly with cursor bottom.
-        // The panel height now matches cursor height, so vertical centering in SwiftUI matches the text line exactly.
-        // Add a -1 point offset since SwiftUI text sometimes draws slightly above the mathematical center.
-        let y = appKitCursorBottom - 1
+        let y = appKitCursorBottom
+        
+        // Calculate dynamic font size to perfectly match the cursor height.
+        // Usually, font size is ~85% of line height/cursor height.
+        let calculatedFontSize = max(10, min(cursorFrame.height * 0.85, 48))
+        if self.suggestionFontSize != calculatedFontSize {
+            self.suggestionFontSize = calculatedFontSize
+        }
+        
+        // Match the panel height perfectly to the cursor geometry. This ensures SwiftUI.Text
+        // framed with .center alignment will exactly match the text baseline of the host app.
+        let panelHeight = max(16, cursorFrame.height)
 
         // Ensure it stays on screen
-        let panelHeight = max(cursorFrame.height, 16)
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
             let clampedX = min(x, screenFrame.maxX - panel.frame.width)

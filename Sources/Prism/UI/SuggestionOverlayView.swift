@@ -10,11 +10,14 @@ struct SuggestionOverlayView: View {
     var body: some View {
         if let suggestion = manager.suggestion {
             Text(suggestion)
-                .font(.system(size: 13, weight: .regular, design: .default))
+                // Use dynamic font size matching exact host app text size
+                .font(.system(size: manager.suggestionFontSize, weight: .regular, design: .default))
                 .foregroundStyle(Color.primary.opacity(0.35))
+                .padding(.leading, 2) // Slight padding so it doesn't hug the cursor too tightly
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .fixedSize(horizontal: true, vertical: true)
+                .frame(maxHeight: .infinity, alignment: .center) // Mathematically centers font within cursor geometry box
+                .fixedSize(horizontal: true, vertical: false)
                 .allowsHitTesting(false)
         }
     }
