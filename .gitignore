@@ -20,7 +20,3 @@ tmp/
 *.tmp
 *.bak
 *.swp
-
-
-create_app.sh
-create_dmg.sh
