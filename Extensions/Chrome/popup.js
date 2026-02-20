@@ -8,8 +8,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const newChatBtn = document.getElementById('newChatBtn');
     const closeBtn = document.getElementById('closeBtn');
 
+    // Context Toggle
+    const contextToggle = document.getElementById('contextToggle');
+    const contextCloseBtn = document.getElementById('contextCloseBtn');
+    const contextToggleText = document.getElementById('contextToggleText');
+    const promptInputPlaceholder = document.getElementById('promptInput');
+
     let isGenerating = false;
     let lastUserMessage = "";
+    let includeContext = true;
 
     // Auto-resize textarea
     promptInput.addEventListener('input', () => {
@@ -35,6 +42,33 @@ document.addEventListener('DOMContentLoaded', () => {
             window.close();
         });
     }
+
+    // Handle Context Toggle
+    function setContextState(enabled) {
+        includeContext = enabled;
+        if (enabled) {
+            contextToggle.classList.remove('disabled');
+            contextToggleText.textContent = 'Include website';
+            promptInputPlaceholder.placeholder = 'Ask about this page...';
+            contextCloseBtn.title = "Remove context";
+            document.querySelector('.system-message').textContent = 'Select a model and ask a question about this page.';
+        } else {
+            contextToggle.classList.add('disabled');
+            contextToggleText.textContent = 'No context';
+            promptInputPlaceholder.placeholder = 'Message Prism...';
+            contextCloseBtn.title = "Add context";
+            document.querySelector('.system-message').textContent = 'Select a model and ask a general question.';
+        }
+    }
+
+    contextCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // prevent triggering the parent wrapper click if we wanted to add it
+        setContextState(!includeContext);
+    });
+
+    contextToggle.addEventListener('click', () => {
+        setContextState(!includeContext);
+    });
 
     // Fetch models and group them
     async function fetchModels() {
@@ -154,11 +188,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const assistantMsgDiv = appendMessage('assistant', '<span style="opacity:0.5">Thinking...</span>');
 
         try {
-            // Get page context
+            // Get page context if toggle is ON
             let pageContext = "";
             let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-            if (tab && tab.url && !tab.url.startsWith('chrome://')) {
+            if (includeContext && tab && tab.url && !tab.url.startsWith('chrome://')) {
                 try {
                     const response = await new Promise((resolve, reject) => {
                         chrome.tabs.sendMessage(tab.id, { action: "getPageContext" }, (res) => {
@@ -185,7 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Construct prompt with context
             let fullPrompt = text;
-            if (pageContext.length > 0) {
+            if (includeContext && pageContext.length > 0) {
                 const truncatedContext = pageContext.length > 50000 ? pageContext.substring(0, 50000) + "..." : pageContext;
                 fullPrompt = `[Webpage Text for Context]:\n${truncatedContext}\n\n[User Request]:\n${text}`;
             }

@@ -339,6 +339,87 @@ select option {
     pointer-events: none;
 }
 
+/* Context Toggle Pill */
+.context-toggle-wrapper {
+    position: absolute;
+    top: -36px;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel-bg);
+    backdrop-filter: var(--panel-blur);
+    -webkit-backdrop-filter: var(--panel-blur);
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    z-index: 11;
+    /* Above input area */
+}
+
+.context-toggle-wrapper:hover {
+    background: rgba(128, 128, 128, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.context-toggle-wrapper.disabled {
+    background: rgba(128, 128, 128, 0.05);
+    color: var(--text-secondary);
+    border-style: dashed;
+    border-color: rgba(128, 128, 128, 0.3);
+}
+
+.context-toggle-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    color: var(--accent);
+    transition: color 0.2s ease;
+}
+
+.context-toggle-wrapper.disabled .context-toggle-icon {
+    color: var(--text-secondary);
+}
+
+.context-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(128, 128, 128, 0.1);
+    border: none;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin-left: 4px;
+    transition: all 0.2s ease;
+}
+
+.context-close-btn:hover {
+    background: rgba(255, 59, 48, 0.15);
+    color: #ff3b30;
+}
+
+.context-toggle-wrapper.disabled .context-close-btn svg {
+    transform: rotate(45deg);
+    /* Turn X into + */
+}
+
+.context-toggle-wrapper.disabled .context-close-btn:hover {
+    background: rgba(52, 199, 89, 0.15);
+    color: #34c759;
+}
+
 textarea {
     flex: 1;
     background: rgba(128, 128, 128, 0.06);
