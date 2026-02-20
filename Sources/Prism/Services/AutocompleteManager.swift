@@ -388,12 +388,16 @@ class AutocompleteManager: ObservableObject {
     private func updateOverlayPosition(_ cursorFrame: NSRect) {
         guard let panel = overlayPanel, cursorFrame != .zero else { return }
 
-        // Find the screen that contains the cursor
-        let primaryScreenHeight = NSScreen.screens.first?.frame.height ?? 1080
+        // Find the screen that actually contains the cursor
+        let targetScreen = NSScreen.screens.first { screen in
+            screen.frame.contains(cursorFrame)
+        } ?? NSScreen.main ?? NSScreen.screens[0]
+        
+        // Use the specific screen's frame for coordinate mapping
+        let screenHeight = targetScreen.frame.height
         
         let x = cursorFrame.maxX - 8
-        let screenMaxX = NSScreen.main?.visibleFrame.maxX ?? NSScreen.screens.first?.frame.maxX ?? 1920
-        let availableWidth = max(100.0, screenMaxX - x - 24)
+        let availableWidth = max(100.0, targetScreen.visibleFrame.maxX - x - 24)
 
         // Calculate dynamic font size based on cursor height
         let calculatedFontSize = max(11, min(cursorFrame.height * 0.75, 24))
@@ -409,33 +413,22 @@ class AutocompleteManager: ObservableObject {
         let fittingSize = panel.hostingView.fittingSize
         let panelWidth = min(fittingSize.width, availableWidth)
         let panelHeight = fittingSize.height
-        // The top of the cursor in AppKit coordinates is:
-        let topAppKitY = primaryScreenHeight - cursorFrame.minY
+        
+        // The top of the cursor in AppKit coordinates (using the target screen's height)
+        // Since CGEvent coordinates are global top-left, we must adjust Y relative to the screen
+        let topAppKitY = targetScreen.frame.maxY - cursorFrame.minY
         
         // The panel's y coordinate specifies its bottom edge.
-        // We subtract 12 to compensate for the transparent padding
-        // inside SuggestionOverlayView so the inner pill aligns.
         let y = topAppKitY - panelHeight + 12
         
-        // The x coordinate should be just to the right of the cursor.
-        // We subtract 12 for the shadow padding, plus 4pt for breathing room = -8
-        // (x is already calculated earlier for availableWidth)
+        // Ensure the text is constrained horizontally and vertically on the target screen
+        let clampedX = min(max(x, targetScreen.visibleFrame.minX + 4), targetScreen.visibleFrame.maxX - panelWidth - 4)
+        let clampedY = max(min(y, targetScreen.visibleFrame.maxY - panelHeight - 4), targetScreen.visibleFrame.minY + 4)
         
-        if let screen = NSScreen.main {
-            let screenFrame = screen.visibleFrame
-            // Ensure the text is constrained horizontally and vertically on screen
-            let clampedX = min(x, screenFrame.maxX - panelWidth - 4)
-            let clampedY = max(y, screenFrame.minY + 4)
-            panel.setFrame(
-                NSRect(x: clampedX, y: clampedY, width: panelWidth, height: panelHeight),
-                display: true
-            )
-        } else {
-            panel.setFrame(
-                NSRect(x: x, y: y, width: panelWidth, height: panelHeight),
-                display: true
-            )
-        }
+        panel.setFrame(
+            NSRect(x: clampedX, y: clampedY, width: panelWidth, height: panelHeight),
+            display: true
+        )
     }
 
     // MARK: - Toggle
