@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const Math = document.getElementById('regenerateBtn'); // Alias for syntax checks just in case but we use regenerateBtn
     const regenerateBtn = document.getElementById('regenerateBtn');
     const newChatBtn = document.getElementById('newChatBtn');
+    const closeBtn = document.getElementById('closeBtn');
 
     let isGenerating = false;
     let lastUserMessage = "";
@@ -27,6 +28,13 @@ document.addEventListener('DOMContentLoaded', () => {
         regenerateBtn.style.display = 'none';
         promptInput.focus();
     });
+
+    // Handle Close
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            window.close();
+        });
+    }
 
     // Fetch models and group them
     async function fetchModels() {
@@ -218,8 +226,39 @@ document.addEventListener('DOMContentLoaded', () => {
                             } else if (data.text) {
                                 generatedText += data.text;
                             }
-                            // Basic formatting (replace newlines with <br> for simple HTML display)
-                            assistantMsgDiv.innerHTML = escapeHtml(generatedText).replace(/\n/g, '<br/>');
+                            // We need to render markdown and latex
+                            // 1. Extract Math before marked to prevent mangling of underscores etc.
+                            let mathTokens = [];
+                            let processedText = generatedText.replace(/\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|\\\(([\s\S]*?)\\\)|\$((?:[^$\\]|\\.)+)\$/g, (match) => {
+                                const id = `@@MATH${mathTokens.length}@@`;
+                                mathTokens.push(match);
+                                return id;
+                            });
+
+                            // 2. Parse Markdown
+                            let rawHtml = marked.parse(processedText, { breaks: true, gfm: true });
+
+                            // 3. Restore Math
+                            mathTokens.forEach((match, i) => {
+                                rawHtml = rawHtml.replace(`@@MATH${i}@@`, match);
+                            });
+
+                            // 4. Sanitize
+                            const safeHtml = DOMPurify.sanitize(rawHtml);
+                            assistantMsgDiv.innerHTML = safeHtml;
+
+                            // 5. Render Math
+                            if (window.renderMathInElement) {
+                                renderMathInElement(assistantMsgDiv, {
+                                    delimiters: [
+                                        { left: "$$", right: "$$", display: true },
+                                        { left: "\\[", right: "\\]", display: true },
+                                        { left: "$", right: "$", display: false },
+                                        { left: "\\(", right: "\\)", display: false }
+                                    ],
+                                    throwOnError: false
+                                });
+                            }
                             scrollToBottom();
                         } catch (e) {
                             // Incomplete JSON chunk, typically handled implicitly by better SSE parsers but we suffice with this
