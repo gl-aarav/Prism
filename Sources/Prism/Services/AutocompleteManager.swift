@@ -162,10 +162,32 @@ class AutocompleteManager: ObservableObject {
             return
         }
 
+        // Check if the user is "typing through" the current suggestion.
+        // If the new text is just the old text + the prefix of the current suggestion,
+        // we can simply keep the suggestion and chop off the typed part.
+        if let currentSuggestion = suggestion {
+            if newText.hasPrefix(lastTextBeforeCursor) {
+                let addedText = String(newText.dropFirst(lastTextBeforeCursor.count))
+                if !addedText.isEmpty, currentSuggestion.hasPrefix(addedText) {
+                    // User typed exactly what was suggested!
+                    // Shorten the suggestion and DO NOT trigger a new prediction.
+                    lastTextBeforeCursor = newText
+                    let remaining = String(currentSuggestion.dropFirst(addedText.count))
+                    
+                    if remaining.isEmpty {
+                        suggestion = nil
+                    } else {
+                        suggestion = remaining
+                    }
+                    return
+                }
+            }
+        }
+
         // Cancel any pending prediction
         cancelPrediction()
 
-        // Clear current suggestion when text changes
+        // Clear current suggestion when text changes and didn't match the type-through
         suggestion = nil
 
         // Don't predict if text is too short or empty
@@ -243,7 +265,10 @@ class AutocompleteManager: ObservableObject {
                     }
 
                     if !cleaned.isEmpty {
-                        let completionText = cleaned
+                        // Ensure single-line rendering for the UI by replacing newlines with spaces
+                        let singleLine = cleaned.replacingOccurrences(of: "\n", with: " ")
+                                                .replacingOccurrences(of: "\r", with: "")
+                        let completionText = singleLine
                         await MainActor.run {
                             self.suggestion = completionText
                         }
@@ -333,37 +358,18 @@ class AutocompleteManager: ObservableObject {
     // MARK: - Overlay Management
 
     private func setupOverlay() {
-        let panel = SuggestionOverlayPanel()
-        panel.contentView = NSHostingView(
-            rootView: SuggestionOverlayView()
-                .environmentObject(self)
-        )
-        overlayPanel = panel
+        overlayPanel = SuggestionOverlayPanel()
     }
 
     private func showOverlay(_ text: String) {
         guard let panel = overlayPanel else { return }
 
-        // Size the panel to fit the inline text
-        // Size the panel to fit the inline text using the dynamic font size
-        let font = NSFont.systemFont(ofSize: suggestionFontSize)
-        let attributes: [NSAttributedString.Key: Any] = [.font: font]
-        let textSize = (text as NSString).boundingRect(
-            with: NSSize(width: 800, height: 200),
-            options: [.usesLineFragmentOrigin],
-            attributes: attributes
-        )
-        // Add just a tiny 2px buffer to prevent clipping the very edge of italic/script fonts
-        let width = min(textSize.width + 2, 800)
+        // Update the SwiftUI view
+        panel.update(text: text, fontSize: suggestionFontSize)
 
-        let currentFrame = panel.frame
-        let newFrame = NSRect(
-            x: currentFrame.origin.x,
-            y: currentFrame.origin.y,
-            width: width,
-            height: currentFrame.height // Keep current height, updateOverlayPosition will correct it
-        )
-        panel.setFrame(newFrame, display: true)
+        // Give SwiftUI time to layout, then reposition using the intrinsic size
+        panel.hostingView.layout()
+        updateOverlayPosition(CursorTracker.shared.cursorFrame)
 
         if !panel.isVisible {
             panel.orderFront(nil)
@@ -377,47 +383,47 @@ class AutocompleteManager: ObservableObject {
     private func updateOverlayPosition(_ cursorFrame: NSRect) {
         guard let panel = overlayPanel, cursorFrame != .zero else { return }
 
-        // cursorFrame is in AX/CG coordinates: origin at TOP-LEFT of primary display.
-        // NSPanel uses AppKit coordinates: origin at BOTTOM-LEFT of primary display.
-        // We need to convert Y.
-
         // Find the screen that contains the cursor
         let primaryScreenHeight = NSScreen.screens.first?.frame.height ?? 1080
-
-        // Convert AX Y (top-left origin) to AppKit Y (bottom-left origin)
-        // cursorFrame.origin.y is the top of the cursor geometry in AX space
-        // AX bottom = origin.y + height
-        let axBottom = cursorFrame.origin.y + cursorFrame.height
-        let appKitCursorBottom = primaryScreenHeight - axBottom
-
-        // Position inline: right after the cursor
-        let x = cursorFrame.maxX  // Flush with cursor (padding handles gap)
         
-        // Align panel bottom exactly with cursor bottom.
-        let y = appKitCursorBottom
-        
-        // Calculate dynamic font size to perfectly match the cursor height.
-        // Usually, font size is ~85% of line height/cursor height.
-        let calculatedFontSize = max(10, min(cursorFrame.height * 0.85, 48))
+        // Calculate dynamic font size based on cursor height
+        let calculatedFontSize = max(11, min(cursorFrame.height * 0.75, 24))
         if self.suggestionFontSize != calculatedFontSize {
             self.suggestionFontSize = calculatedFontSize
+            if let text = suggestion {
+                panel.update(text: text, fontSize: calculatedFontSize)
+                panel.hostingView.layout()
+            }
         }
         
-        // Match the panel height perfectly to the cursor geometry. This ensures SwiftUI.Text
-        // framed with .center alignment will exactly match the text baseline of the host app.
-        let panelHeight = max(16, cursorFrame.height)
-
-        // Ensure it stays on screen
+        // Get the new fitting size of the liquid glass pill
+        let fittingSize = panel.hostingView.fittingSize
+        let panelWidth = min(fittingSize.width, 800)
+        let panelHeight = fittingSize.height
+        // The top of the cursor in AppKit coordinates is:
+        let topAppKitY = primaryScreenHeight - cursorFrame.minY
+        
+        // The panel's y coordinate specifies its bottom edge.
+        // We subtract 12 to compensate for the transparent padding
+        // inside SuggestionOverlayView so the inner pill aligns.
+        let y = topAppKitY - panelHeight + 12
+        
+        // The x coordinate should be just to the right of the cursor.
+        // We subtract 12 for the shadow padding, plus 4pt for breathing room = -8
+        let x = cursorFrame.maxX - 8
+        
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
-            let clampedX = min(x, screenFrame.maxX - panel.frame.width)
+            // Ensure the text is constrained horizontally and vertically on screen
+            let clampedX = min(x, screenFrame.maxX - panelWidth - 4)
+            let clampedY = max(y, screenFrame.minY + 4)
             panel.setFrame(
-                NSRect(x: clampedX, y: y, width: panel.frame.width, height: panelHeight),
+                NSRect(x: clampedX, y: clampedY, width: panelWidth, height: panelHeight),
                 display: true
             )
         } else {
             panel.setFrame(
-                NSRect(x: x, y: y, width: panel.frame.width, height: panelHeight),
+                NSRect(x: x, y: y, width: panelWidth, height: panelHeight),
                 display: true
             )
         }
