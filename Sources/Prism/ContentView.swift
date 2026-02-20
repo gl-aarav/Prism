@@ -5647,14 +5647,14 @@ struct SettingsView: View {
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
 
     // AI Autocomplete settings
-    @AppStorage("EnableCotypist") private var enableAutocomplete: Bool = false
-    @AppStorage("CotypistBackend") private var autocompleteBackend: String = "Ollama"
-    @AppStorage("CotypistModel") private var autocompleteModel: String = ""
-    @AppStorage("CotypistDebounceMs") private var autocompleteDebounceMs: Int = 500
-    @AppStorage("CotypistCustomInstruction") private var autocompletePersona: String = ""
-    @AppStorage("CotypistBlacklist") private var autocompleteBlacklist: String = "[]"
-    @AppStorage("CotypistMemoryEnabled") private var autocompleteMemory: Bool = true
-    @AppStorage("CotypistCompletionLength") private var autocompleteCompletionLength: String = "Medium (~ 2 - 4 words)"
+    @AppStorage("EnableAIAutocomplete") private var enableAutocomplete: Bool = false
+    @AppStorage("AIAutocompleteBackend") private var autocompleteBackend: String = "Ollama"
+    @AppStorage("AIAutocompleteModel") private var autocompleteModel: String = ""
+    @AppStorage("AIAutocompleteDebounceMs") private var autocompleteDebounceMs: Int = 500
+    @AppStorage("AIAutocompleteCustomInstruction") private var autocompletePersona: String = ""
+    @AppStorage("AIAutocompleteBlacklist") private var autocompleteBlacklist: String = "[]"
+    @AppStorage("AIAutocompleteMemoryEnabled") private var autocompleteMemory: Bool = true
+    @AppStorage("AIAutocompleteCompletionLength") private var autocompleteCompletionLength: String = "Medium (~ 2 - 4 words)"
 
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
@@ -5682,7 +5682,7 @@ struct SettingsView: View {
 
                 if enableAutocomplete {
                     LabeledContent {
-                        KeyboardShortcuts.Recorder(for: .toggleCotypist)
+                        KeyboardShortcuts.Recorder(for: .toggleAIAutocomplete)
                     } label: {
                         Label("Toggle Shortcut", systemImage: "command")
                     }

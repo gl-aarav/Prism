@@ -2,7 +2,7 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Core orchestrator for the Cotypist autocomplete feature.
+/// Core orchestrator for the AI autocomplete feature.
 /// Ties together CursorTracker, AutocompleteService, KeyboardEventTap,
 /// TextInjector, and the suggestion overlay.
 class AutocompleteManager: ObservableObject {
@@ -19,18 +19,18 @@ class AutocompleteManager: ObservableObject {
     /// Whether a prediction is currently in-flight.
     @Published var isLoading: Bool = false
 
-    /// Whether Cotypist is globally enabled.
+    /// Whether AI autocomplete is globally enabled.
     @Published var isEnabled: Bool = false
 
     // MARK: - Settings (backed by UserDefaults)
 
-    @AppStorage("EnableCotypist") var enableCotypist: Bool = false
-    @AppStorage("CotypistBackend") var backendRaw: String = "Ollama"
-    @AppStorage("CotypistModel") var cotypistModel: String = ""
-    @AppStorage("CotypistDebounceMs") var debounceMs: Int = 500
-    @AppStorage("CotypistCustomInstruction") var customInstruction: String = ""
-    @AppStorage("CotypistBlacklist") var blacklistJSON: String = "[]"
-    @AppStorage("CotypistCompletionLength") var completionLength: String = "Medium (~ 2 - 4 words)"
+    @AppStorage("EnableAIAutocomplete") var enableAutocomplete: Bool = false
+    @AppStorage("AIAutocompleteBackend") var backendRaw: String = "Ollama"
+    @AppStorage("AIAutocompleteModel") var aiAutocompleteModel: String = ""
+    @AppStorage("AIAutocompleteDebounceMs") var debounceMs: Int = 500
+    @AppStorage("AIAutocompleteCustomInstruction") var customInstruction: String = ""
+    @AppStorage("AIAutocompleteBlacklist") var blacklistJSON: String = "[]"
+    @AppStorage("AIAutocompleteCompletionLength") var completionLength: String = "Medium (~ 2 - 4 words)"
 
     // MARK: - Internal
 
@@ -43,23 +43,23 @@ class AutocompleteManager: ObservableObject {
 
     /// Live-read backend from UserDefaults so settings changes take effect immediately.
     var backend: AutocompleteService.Backend {
-        let raw = UserDefaults.standard.string(forKey: "CotypistBackend") ?? "Ollama"
+        let raw = UserDefaults.standard.string(forKey: "AIAutocompleteBackend") ?? "Ollama"
         return AutocompleteService.Backend(rawValue: raw) ?? .ollama
     }
 
     /// Live-read model from UserDefaults so settings changes take effect immediately.
     var currentModel: String {
-        UserDefaults.standard.string(forKey: "CotypistModel") ?? ""
+        UserDefaults.standard.string(forKey: "AIAutocompleteModel") ?? ""
     }
 
     /// Live-read custom instruction so settings changes take effect immediately.
     var currentCustomInstruction: String {
-        UserDefaults.standard.string(forKey: "CotypistCustomInstruction") ?? ""
+        UserDefaults.standard.string(forKey: "AIAutocompleteCustomInstruction") ?? ""
     }
 
     var blacklistedApps: [String] {
         get {
-            let json = UserDefaults.standard.string(forKey: "CotypistBlacklist") ?? "[]"
+            let json = UserDefaults.standard.string(forKey: "AIAutocompleteBlacklist") ?? "[]"
             guard let data = json.data(using: .utf8),
                 let decoded = try? JSONDecoder().decode([String].self, from: data)
             else { return [] }
@@ -69,7 +69,7 @@ class AutocompleteManager: ObservableObject {
             if let data = try? JSONEncoder().encode(newValue),
                 let json = String(data: data, encoding: .utf8)
             {
-                UserDefaults.standard.set(json, forKey: "CotypistBlacklist")
+                UserDefaults.standard.set(json, forKey: "AIAutocompleteBlacklist")
             }
         }
     }
@@ -79,7 +79,7 @@ class AutocompleteManager: ObservableObject {
     // MARK: - Setup
 
     func setup() {
-        guard enableCotypist else { return }
+        guard enableAutocomplete else { return }
 
         // Check accessibility permission
         guard AccessibilityHelper.shared.checkAccessibilityPermission(prompt: true) else {
@@ -208,7 +208,7 @@ class AutocompleteManager: ObservableObject {
         guard CursorTracker.shared.isTextFieldFocused else { return }
 
         // Live-read debounce from UserDefaults
-        let currentDebounce = UserDefaults.standard.integer(forKey: "CotypistDebounceMs")
+        let currentDebounce = UserDefaults.standard.integer(forKey: "AIAutocompleteDebounceMs")
         let delay = max(0, currentDebounce)
 
         // Debounce: wait before triggering prediction
@@ -309,7 +309,7 @@ class AutocompleteManager: ObservableObject {
         guard let text = suggestion, !text.isEmpty else { return }
         
         // Record in writing memory if enabled
-        if UserDefaults.standard.bool(forKey: "CotypistMemoryEnabled") {
+        if UserDefaults.standard.bool(forKey: "AIAutocompleteMemoryEnabled") {
             WritingMemory.shared.record(
                 context: lastTextBeforeCursor,
                 accepted: text,
@@ -434,9 +434,9 @@ class AutocompleteManager: ObservableObject {
     func toggle() {
         if isEnabled {
             stop()
-            enableCotypist = false
+            enableAutocomplete = false
         } else {
-            enableCotypist = true
+            enableAutocomplete = true
             setup()
         }
     }

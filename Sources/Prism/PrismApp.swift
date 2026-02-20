@@ -55,10 +55,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "ShowMenuBar": true,
             "EnableQuickAI": true,
-            "EnableCotypist": false,
-            "CotypistBackend": "Ollama",
-            "CotypistDebounceMs": 500,
-            "CotypistMemoryEnabled": true,
+            "EnableAIAutocomplete": false,
+            "AIAutocompleteBackend": "Ollama",
+            "AIAutocompleteDebounceMs": 500,
+            "AIAutocompleteMemoryEnabled": true,
         ])
     }
 
@@ -92,11 +92,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         HotKeyManager.shared.register()
 
-        // Cotypist: register toggle shortcut and auto-start if enabled
-        KeyboardShortcuts.onKeyUp(for: .toggleCotypist) {
+        // AI Autocomplete: register toggle shortcut and auto-start if enabled
+        KeyboardShortcuts.onKeyUp(for: .toggleAIAutocomplete) {
             AutocompleteManager.shared.toggle()
         }
-        if UserDefaults.standard.bool(forKey: "EnableCotypist") {
+        if UserDefaults.standard.bool(forKey: "EnableAIAutocomplete") {
             AutocompleteManager.shared.setup()
         }
 

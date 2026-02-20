@@ -20,7 +20,7 @@ class WritingMemory {
 
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("Prism/Cotypist", isDirectory: true)
+        let dir = appSupport.appendingPathComponent("Prism/AIAutocomplete", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         fileURL = dir.appendingPathComponent("writing_memory.json")
         load()

@@ -71,7 +71,7 @@ class AutocompleteService {
         }
 
         // Append writing memory context if enabled
-        if UserDefaults.standard.bool(forKey: "CotypistMemoryEnabled") {
+        if UserDefaults.standard.bool(forKey: "AIAutocompleteMemoryEnabled") {
             let memoryContext = WritingMemory.shared.getStyleContext()
             if !memoryContext.isEmpty {
                 systemPrompt += "\n\n\(memoryContext)"
