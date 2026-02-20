@@ -394,8 +394,6 @@ class AutocompleteManager: ObservableObject {
         } ?? NSScreen.main ?? NSScreen.screens[0]
         
         // Use the specific screen's frame for coordinate mapping
-        let screenHeight = targetScreen.frame.height
-        
         let x = cursorFrame.maxX - 8
         let availableWidth = max(100.0, targetScreen.visibleFrame.maxX - x - 24)
 

@@ -102,6 +102,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         IconManager.shared.updateIcon()
 
+        // Start local extension server
+        ExtensionServer.shared.start()
+
         print("Prism has launched!")
     }
 
