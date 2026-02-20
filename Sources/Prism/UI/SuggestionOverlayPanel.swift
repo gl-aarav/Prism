@@ -7,7 +7,7 @@ class SuggestionOverlayPanel: NSPanel {
     let hostingView: NSHostingView<SuggestionOverlayView>
 
     init() {
-        let view = SuggestionOverlayView(suggestion: "Loading...", fontSize: 13)
+        let view = SuggestionOverlayView(suggestion: "Loading...", fontSize: 13, maxWidth: 800)
         let hostingView = NSHostingView(rootView: view)
         self.hostingView = hostingView
         
@@ -35,8 +35,8 @@ class SuggestionOverlayPanel: NSPanel {
     }
 
     /// Update the displayed suggestion text and font size.
-    func update(text: String, fontSize: CGFloat) {
-        hostingView.rootView = SuggestionOverlayView(suggestion: text, fontSize: fontSize)
+    func update(text: String, fontSize: CGFloat, maxWidth: CGFloat = 800) {
+        hostingView.rootView = SuggestionOverlayView(suggestion: text, fontSize: fontSize, maxWidth: maxWidth)
     }
 
     override var canBecomeKey: Bool { false }

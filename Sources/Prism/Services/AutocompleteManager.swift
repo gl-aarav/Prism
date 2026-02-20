@@ -364,8 +364,13 @@ class AutocompleteManager: ObservableObject {
     private func showOverlay(_ text: String) {
         guard let panel = overlayPanel else { return }
 
+        let cursorFrame = CursorTracker.shared.cursorFrame
+        let x = cursorFrame.maxX - 8
+        let screenMaxX = NSScreen.main?.visibleFrame.maxX ?? NSScreen.screens.first?.frame.maxX ?? 1920
+        let availableWidth = max(100.0, screenMaxX - x - 24)
+
         // Update the SwiftUI view
-        panel.update(text: text, fontSize: suggestionFontSize)
+        panel.update(text: text, fontSize: suggestionFontSize, maxWidth: availableWidth)
 
         // Give SwiftUI time to layout, then reposition using the intrinsic size
         panel.hostingView.layout()
@@ -386,19 +391,23 @@ class AutocompleteManager: ObservableObject {
         // Find the screen that contains the cursor
         let primaryScreenHeight = NSScreen.screens.first?.frame.height ?? 1080
         
+        let x = cursorFrame.maxX - 8
+        let screenMaxX = NSScreen.main?.visibleFrame.maxX ?? NSScreen.screens.first?.frame.maxX ?? 1920
+        let availableWidth = max(100.0, screenMaxX - x - 24)
+
         // Calculate dynamic font size based on cursor height
         let calculatedFontSize = max(11, min(cursorFrame.height * 0.75, 24))
         if self.suggestionFontSize != calculatedFontSize {
             self.suggestionFontSize = calculatedFontSize
             if let text = suggestion {
-                panel.update(text: text, fontSize: calculatedFontSize)
+                panel.update(text: text, fontSize: calculatedFontSize, maxWidth: availableWidth)
                 panel.hostingView.layout()
             }
         }
         
         // Get the new fitting size of the liquid glass pill
         let fittingSize = panel.hostingView.fittingSize
-        let panelWidth = min(fittingSize.width, 800)
+        let panelWidth = min(fittingSize.width, availableWidth)
         let panelHeight = fittingSize.height
         // The top of the cursor in AppKit coordinates is:
         let topAppKitY = primaryScreenHeight - cursorFrame.minY
@@ -410,7 +419,7 @@ class AutocompleteManager: ObservableObject {
         
         // The x coordinate should be just to the right of the cursor.
         // We subtract 12 for the shadow padding, plus 4pt for breathing room = -8
-        let x = cursorFrame.maxX - 8
+        // (x is already calculated earlier for availableWidth)
         
         if let screen = NSScreen.main {
             let screenFrame = screen.visibleFrame
