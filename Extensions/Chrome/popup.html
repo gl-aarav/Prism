@@ -1,93 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prism Chat</title>
+    <title>Prism</title>
     <link rel="stylesheet" href="popup.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 </head>
-<div class="app-background"></div>
-<div class="header">
-    <div class="logo">
-        <img src="icon.png" alt="Prism Logo">
-        <h1>Prism</h1>
-    </div>
-    <div class="header-actions">
-        <button id="newChatBtn" class="new-chat-btn" title="New Chat">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-        </button>
-        <div class="custom-select">
-            <select id="modelSelect">
-                <option value="">Loading models...</option>
-            </select>
+<body>
+    <div class="app-background"></div>
+
+    <!-- SVG Gradients -->
+    <svg style="position:absolute;width:0;height:0">
+        <defs>
+            <linearGradient id="headerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#0A84FF"/>
+                <stop offset="100%" style="stop-color:#34C759"/>
+            </linearGradient>
+            <linearGradient id="sparkleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#0A84FF"/>
+                <stop offset="100%" style="stop-color:#34C759"/>
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="model-selector-wrapper">
+                <select id="modelSelect">
+                    <option value="">Loading models...</option>
+                </select>
+                <div class="model-selector-display" id="modelDisplay">
+                    <span class="model-icon" id="modelIcon"></span>
+                    <span class="model-name" id="modelName">Select Model</span>
+                    <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
         </div>
-        <button id="closeBtn" class="close-btn" title="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-        </button>
+        <div class="header-right">
+            <button id="newChatBtn" class="header-icon-btn" title="New Chat">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+            </button>
+        </div>
     </div>
-</div>
 
-<div id="chatContainer" class="chat-container">
-    <!-- Messages will be injected here -->
-    <div class="system-message">Select a model and ask a question about this page.</div>
-</div>
+    <!-- Chat Container -->
+    <div id="chatContainer" class="chat-container">
+        <div id="emptyState" class="empty-state">
+            <div class="empty-orb orb-1"></div>
+            <div class="empty-orb orb-2"></div>
+            <div class="empty-orb orb-3"></div>
+            <div class="empty-state-content">
+                <div class="empty-icon-ring">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke-width="1.5">
+                        <path stroke="url(#sparkleGrad)" d="M12 2L13.09 8.26L18 6L14.74 10.91L21 12L14.74 13.09L18 18L13.09 15.74L12 22L10.91 15.74L6 18L9.26 13.09L3 12L9.26 10.91L6 6L10.91 8.26L12 2Z"/>
+                    </svg>
+                </div>
+                <h2 class="empty-title">Hello</h2>
+                <p class="empty-subtitle">How can I help you today?</p>
+                <div class="suggestion-chips">
+                    <button class="suggestion-chip" data-text="Summarize this page">Summarize</button>
+                    <button class="suggestion-chip" data-text="Explain this page in simple terms">Explain</button>
+                    <button class="suggestion-chip" data-text="What are the key points of this page?">Key Points</button>
+                    <button class="suggestion-chip" data-text="Help me write about this topic">Write</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-<div class="input-area">
-    <!-- Context Toggle Pill -->
-    <div id="contextToggle" class="context-toggle-wrapper">
-        <span class="context-toggle-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
+    <!-- Input Area -->
+    <div class="input-area">
+        <div id="contextToggle" class="context-toggle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                 <line x1="3" y1="9" x2="21" y2="9"></line>
                 <line x1="9" y1="21" x2="9" y2="9"></line>
             </svg>
-        </span>
-        <span id="contextToggleText">Include website</span>
-        <button id="contextCloseBtn" class="context-close-btn" title="Remove context">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-        </button>
+            <span class="context-toggle-label" id="contextToggleText">Include website</span>
+            <button id="contextCloseBtn" class="context-close-btn" title="Remove context">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="input-bar">
+            <textarea id="promptInput" placeholder="Ask about this page..." rows="1"></textarea>
+            <button id="thinkingBtn" class="input-icon-btn" title="Reasoning Effort" style="display:none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17a2 2 0 002 2h4a2 2 0 002-2v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z"/>
+                    <line x1="9" y1="21" x2="15" y2="21"/>
+                </svg>
+            </button>
+            <div id="thinkingDropdown" class="thinking-dropdown" style="display:none;">
+                <button class="thinking-level-option" data-level="low">Low</button>
+                <button class="thinking-level-option active" data-level="medium">Medium</button>
+                <button class="thinking-level-option" data-level="high">High</button>
+            </div>
+            <button id="sendBtn" class="send-btn" disabled>
+                <svg id="sendIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5"></line>
+                    <polyline points="5 12 12 5 19 12"></polyline>
+                </svg>
+                <svg id="stopIcon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                </svg>
+            </button>
+        </div>
     </div>
 
-    <textarea id="promptInput" placeholder="Ask about this page..." rows="1"></textarea>
-    <!-- Regenerate Button -->
-    <button id="regenerateBtn" class="action-btn" title="Regenerate Last Response" style="display: none;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-            <path d="M3 3v5h5"></path>
-        </svg>
-    </button>
-    <!-- Send Button -->
-    <button id="sendBtn" class="action-btn send-btn" disabled>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M2.01 21L23 12L2.01 3L2 10l15 2-15 2z" fill="currentColor" />
-        </svg>
-    </button>
-</div>
-
-<script src="vendor/purify.min.js"></script>
-<script src="vendor/marked.min.js"></script>
-<link rel="stylesheet" href="vendor/katex/katex.min.css">
-<script src="vendor/katex/katex.min.js"></script>
-<script src="vendor/katex/auto-render.min.js"></script>
-<script src="popup.js"></script>
+    <script src="vendor/purify.min.js"></script>
+    <script src="vendor/marked.min.js"></script>
+    <link rel="stylesheet" href="vendor/katex/katex.min.css">
+    <script src="vendor/katex/katex.min.js"></script>
+    <script src="vendor/katex/auto-render.min.js"></script>
+    <script src="popup.js"></script>
 </body>
-
 </html>
