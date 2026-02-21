@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     modelSelect.value = result.lastModelId;
                 }
                 updateModelDisplay();
-                updateThinkingBtn();
+                updateWebSearchBtn();
             });
         } catch (e) {
             modelSelect.innerHTML = '<option value="">Cannot connect to Prism</option>';
@@ -100,18 +100,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function supportsThinking(modelId) {
-        const lower = modelId.toLowerCase();
-        return lower.includes('deepseek') || lower.includes('r1') ||
-            lower.includes('gpt-oss') ||
-            lower.includes('gemini-3') || lower.includes('gemini-2.5') ||
-            lower.includes('thinking');
-    }
-
-    function updateThinkingBtn() {
-        thinkingBtn.style.display = supportsThinking(modelSelect.value) ? 'flex' : 'none';
-    }
-
     function updateWebSearchBtn() {
         // Only show web search button if it's an Ollama model
         webSearchBtn.style.display = modelSelect.value.startsWith('ollama:') ? 'flex' : 'none';
@@ -123,7 +111,6 @@ document.addEventListener('DOMContentLoaded', () => {
     modelSelect.addEventListener('change', () => {
         chrome.storage.local.set({ lastModelId: modelSelect.value });
         updateModelDisplay();
-        updateThinkingBtn();
         updateWebSearchBtn();
     });
 
@@ -398,7 +385,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             renderContent(assistant.contentDiv, fullContent, true);
                         }
                         scrollToBottom();
-                    } catch (e) { /* incomplete JSON chunk */ }
+                    } catch (e) {
+                        // Some SSE streams split the JSON string over multiple lines or chunks.
+                        // But we append data string by line, so incomplete lines are ignored until the buffer fills.
+                    }
                 }
             }
 

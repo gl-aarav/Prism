@@ -2281,7 +2281,7 @@ struct ContentView: View {
 
                         let stream = try await Task.detached {
                             return geminiService.sendMessageStream(
-                                history: chatManager.messages, apiKey: geminiKey, model: geminiModel,
+                                history: chatManager.getCurrentMessages(), apiKey: geminiKey, model: geminiModel,
                                 systemPrompt: systemPrompt,
                                 thinkingLevel: geminiThinkingLevel)
                         }.value
