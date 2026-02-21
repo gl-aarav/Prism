@@ -65,6 +65,7 @@ class ExtensionServer {
             }
 
             let thinkingLevel = json["thinkingLevel"] as? String ?? "medium"
+            let webSearchEnabled = json["webSearch"] as? Bool ?? false
 
             // Convert all messages to Message objects for full history context
             let history: [Message] = messagesArr.compactMap { msgDict in
@@ -138,7 +139,8 @@ class ExtensionServer {
                             } else {
                                 let stream = gemini.sendMessageStream(
                                     history: history, apiKey: apiKey, model: actualModel,
-                                    systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
+                                    systemPrompt: systemPrompt, thinkingLevel: thinkingLevel,
+                                    webSearchEnabled: webSearchEnabled)
                                 for try await (chunk, thinkingChunk, _) in stream {
                                     if let thinking = thinkingChunk, !thinking.isEmpty {
                                         let thinkEvent =

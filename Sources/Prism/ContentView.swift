@@ -1089,7 +1089,7 @@ class GeminiService {
 
     func sendMessageStream(
         history: [Message], apiKey: String, model: String, systemPrompt: String = "",
-        thinkingLevel: String = "medium"
+        thinkingLevel: String = "medium", webSearchEnabled: Bool = false
     ) -> AsyncThrowingStream<(String, String?, Data?), Error> {
         return AsyncThrowingStream { continuation in
             Task {
@@ -1191,6 +1191,13 @@ class GeminiService {
                         "parts": [
                             ["text": systemPrompt]
                         ]
+                    ]
+                }
+
+                // Add Web Search tool if requested (for text models)
+                if webSearchEnabled && !isImageModel {
+                    body["tools"] = [
+                        ["googleSearch": [:]]
                     ]
                 }
 
@@ -2279,11 +2286,15 @@ struct ContentView: View {
                         var receivedImage: NSImage? = nil
                         var lastUpdateTime = Date()
 
-                        for try await (contentChunk, thinkingChunk, imageData)
-                            in geminiService.sendMessageStream(
-                                history: currentHistory, apiKey: geminiKey, model: geminiModel,
-                                systemPrompt: systemPrompt, thinkingLevel: currentThinkingLevel)
-                        {
+                        let stream = try await Task.detached {
+                            return geminiService.sendMessageStream(
+                                history: chatManager.messages, apiKey: geminiKey, model: geminiModel,
+                                systemPrompt: systemPrompt,
+                                thinkingLevel: geminiThinkingLevel,
+                                webSearchEnabled: webSearchEnabled)
+                        }.value
+
+                        for try await (contentChunk, thinkingChunk, imageData) in stream {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {
                                 fullThinking += thinking

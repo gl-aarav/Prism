@@ -11,16 +11,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const stopIcon = document.getElementById('stopIcon');
     const newChatBtn = document.getElementById('newChatBtn');
     const thinkingBtn = document.getElementById('thinkingBtn');
-    const thinkingDropdown = document.getElementById('thinkingDropdown');
-    const contextToggle = document.getElementById('contextToggle');
     const contextCloseBtn = document.getElementById('contextCloseBtn');
     const contextToggleText = document.getElementById('contextToggleText');
+    const webSearchToggle = document.getElementById('webSearchToggle');
+    const webSearchToggleText = document.getElementById('webSearchToggleText');
 
     // State
     let chatHistory = [];
     let isGenerating = false;
     let abortController = null;
     let includeContext = true;
+    let includeWebSearch = false;
     let thinkingLevel = 'medium';
     let thinkingDropdownOpen = false;
 
@@ -47,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
             models.forEach(m => {
                 let name = m.name;
                 let group = 'Other';
-                if (name.startsWith('Apple'))       { group = 'Apple'; }
+                if (name.startsWith('Apple')) { group = 'Apple'; }
                 else if (name.startsWith('Gemini:')) { group = 'Gemini'; name = name.replace('Gemini: ', ''); }
                 else if (name.startsWith('Ollama:')) { group = 'Ollama'; name = name.replace('Ollama: ', ''); }
                 groups[group].push({ id: m.id, name });
@@ -103,8 +104,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function supportsThinking(modelId) {
         const lower = modelId.toLowerCase();
         return lower.includes('deepseek') || lower.includes('r1') ||
-               lower.includes('gpt-oss') ||
-               lower.includes('gemini-3') || lower.includes('gemini-2.5');
+            lower.includes('gpt-oss') ||
+            lower.includes('gemini-3') || lower.includes('gemini-2.5') ||
+            lower.includes('thinking');
     }
 
     function updateThinkingBtn() {
@@ -168,10 +170,26 @@ document.addEventListener('DOMContentLoaded', () => {
         includeContext = enabled;
         contextToggle.classList.toggle('disabled', !enabled);
         contextToggleText.textContent = enabled ? 'Include website' : 'No context';
-        promptInput.placeholder = enabled ? 'Ask about this page...' : 'Ask AI anything...';
+        updatePromptPlaceholder();
     }
+
+    function setWebSearchState(enabled) {
+        includeWebSearch = enabled;
+        webSearchToggle.classList.toggle('disabled', !enabled);
+        webSearchToggleText.textContent = enabled ? 'Web Search On' : 'Web Search Off';
+        updatePromptPlaceholder();
+    }
+
+    function updatePromptPlaceholder() {
+        if (includeContext && !includeWebSearch) promptInput.placeholder = 'Ask about this page...';
+        else if (!includeContext && includeWebSearch) promptInput.placeholder = 'Search the web...';
+        else if (includeContext && includeWebSearch) promptInput.placeholder = 'Search web & page...';
+        else promptInput.placeholder = 'Ask AI anything...';
+    }
+
     contextCloseBtn.addEventListener('click', e => { e.stopPropagation(); setContextState(!includeContext); });
     contextToggle.addEventListener('click', () => setContextState(!includeContext));
+    webSearchToggle.addEventListener('click', () => setWebSearchState(!includeWebSearch));
 
     // ── THINKING LEVEL ──────────────────────────────────────
     thinkingBtn.addEventListener('click', e => {
@@ -316,7 +334,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('http://localhost:8080/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model: modelId, messages: messagesForApi, thinkingLevel: thinkingLevel }),
+                body: JSON.stringify({
+                    model: modelId,
+                    messages: messagesForApi,
+                    thinkingLevel: thinkingLevel,
+                    webSearch: includeWebSearch
+                }),
                 signal: abortController.signal
             });
             if (!res.ok) throw new Error('Failed to fetch response');
