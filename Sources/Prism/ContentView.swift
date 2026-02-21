@@ -2279,8 +2279,8 @@ struct ContentView: View {
                         var receivedImage: NSImage? = nil
                         var lastUpdateTime = Date()
 
-                        let stream = try await Task.detached {
-                            return geminiService.sendMessageStream(
+                        let stream = await Task.detached {
+                            return await geminiService.sendMessageStream(
                                 history: chatManager.getCurrentMessages(), apiKey: geminiKey, model: geminiModel,
                                 systemPrompt: systemPrompt,
                                 thinkingLevel: geminiThinkingLevel)
@@ -5776,31 +5776,78 @@ struct SettingsView: View {
                     }
                     .padding(.vertical, 4)
 
-                    LabeledContent {
-                        TextField("com.apple.Terminal, ...", text: Binding(
-                            get: {
-                                guard let data = autocompleteBlacklist.data(using: .utf8),
-                                      let arr = try? JSONDecoder().decode([String].self, from: data)
-                                else { return "" }
-                                return arr.joined(separator: ", ")
-                            },
-                            set: { newValue in
-                                let items = newValue.components(separatedBy: ",")
-                                    .map { $0.trimmingCharacters(in: .whitespaces) }
-                                    .filter { !$0.isEmpty }
-                                if let data = try? JSONEncoder().encode(items),
-                                   let json = String(data: data, encoding: .utf8) {
-                                    autocompleteBlacklist = json
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("App Blocklist", systemImage: "xmark.app")
+                        
+                        let blacklistedApps: [String] = {
+                            guard let data = autocompleteBlacklist.data(using: .utf8),
+                                  let arr = try? JSONDecoder().decode([String].self, from: data)
+                            else { return [] }
+                            return arr
+                        }()
+                        
+                        if blacklistedApps.isEmpty {
+                            Text("No apps blocked.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 2)
+                        } else {
+                            VStack(spacing: 4) {
+                                ForEach(blacklistedApps, id: \.self) { bundleId in
+                                    HStack {
+                                        Text(bundleId)
+                                            .font(.system(.callout, design: .monospaced))
+                                        Spacer()
+                                        Button(action: {
+                                            var apps = blacklistedApps
+                                            apps.removeAll { $0 == bundleId }
+                                            if let data = try? JSONEncoder().encode(apps),
+                                               let json = String(data: data, encoding: .utf8) {
+                                                autocompleteBlacklist = json
+                                            }
+                                        }) {
+                                            Image(systemName: "minus.circle.fill")
+                                                .foregroundColor(.red.opacity(0.8))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .padding(6)
+                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .cornerRadius(6)
                                 }
                             }
-                        ))
-                        .textFieldStyle(.roundedBorder)
-                    } label: {
-                        Label("App Blacklist", systemImage: "xmark.app")
+                        }
+                        
+                        Button(action: {
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [UTType.application]
+                            panel.allowsMultipleSelection = false
+                            panel.canChooseDirectories = false
+                            panel.canChooseFiles = true
+                            panel.directoryURL = URL(fileURLWithPath: "/Applications")
+                            
+                            if panel.runModal() == .OK, let url = panel.url {
+                                if let bundle = Bundle(url: url), let bundleId = bundle.bundleIdentifier {
+                                    var apps = blacklistedApps
+                                    if !apps.contains(bundleId) {
+                                        apps.append(bundleId)
+                                        if let data = try? JSONEncoder().encode(apps),
+                                           let json = String(data: data, encoding: .utf8) {
+                                            autocompleteBlacklist = json
+                                        }
+                                    }
+                                }
+                            }
+                        }) {
+                            Label("Add App...", systemImage: "plus.circle")
+                        }
+                        .padding(.top, 4)
+
+                        Text("Disable autocomplete in specific apps by selecting them.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    Text("Disable in specific apps (bundle IDs, comma-separated).")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
                 }
 
                 Section(header: Label("Writing Memory", systemImage: "brain")) {

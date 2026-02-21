@@ -44,7 +44,7 @@ class ExtensionServer {
 
             let allModels = appleModels + ollamaModels + geminiModels
 
-            var response = HttpResponse.ok(.json(allModels))
+            let response = HttpResponse.ok(.json(allModels))
             return self.applyCORS(to: response)
         }
 

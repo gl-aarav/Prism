@@ -179,4 +179,17 @@ class AccessibilityHelper {
     func getFrontmostAppBundleIdentifier() -> String? {
         return NSWorkspace.shared.frontmostApplication?.bundleIdentifier
     }
+
+    // MARK: - Element Properties
+
+    /// Checks if the element's value attribute is settable (editable).
+    func isElementEditable(_ element: AXUIElement) -> Bool {
+        var isSettable: DarwinBoolean = false
+        let result = AXUIElementIsAttributeSettable(
+            element,
+            kAXValueAttribute as CFString,
+            &isSettable
+        )
+        return result == .success && isSettable.boolValue
+    }
 }

@@ -91,7 +91,8 @@ class CursorTracker: ObservableObject {
         let role = helper.getRole(element)
         let isText = role == "AXTextArea" || role == "AXTextField" || role == "AXComboBox"
             || role == "AXSearchField"
-        guard isText else {
+            
+        guard isText, helper.isElementEditable(element) else {
             updateState(focused: false, bundleId: bundleId)
             return
         }
