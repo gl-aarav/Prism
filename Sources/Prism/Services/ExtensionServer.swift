@@ -4,13 +4,13 @@ import Swifter
 class ExtensionServer {
     static let shared = ExtensionServer()
     private let server = HttpServer()
-    
+
     // We keep a reference to active streams if needed to clean them up, but Swifter closures handle their own lifecycle.
-    
+
     private init() {
         setupRoutes()
     }
-    
+
     func start() {
         do {
             try server.start(8080)
@@ -19,87 +19,108 @@ class ExtensionServer {
             print("Failed to start extension server: \(error)")
         }
     }
-    
+
     func stop() {
         server.stop()
     }
-    
+
     private func setupRoutes() {
         // CORS Middleware approach for Swifter: we add headers to responses.
-        
+
         server["/api/models"] = { request in
             if request.method.uppercased() == "OPTIONS" {
                 return self.applyCORS(to: .ok(.html("")))
             }
-            let ollamaModels = OllamaModelManager.shared.allModels.map { 
+            let ollamaModels = OllamaModelManager.shared.allModels.map {
                 ["id": "ollama:\($0)", "name": "Ollama: \($0)"]
             }
-            let geminiModels = GeminiModelManager.shared.availableModels.map { 
-                ["id": "gemini:\($0)", "name": "Gemini: \(GeminiModelManager.shared.displayName(for: $0))"]
+            let geminiModels = GeminiModelManager.shared.availableModels.map {
+                [
+                    "id": "gemini:\($0)",
+                    "name": "Gemini: \(GeminiModelManager.shared.displayName(for: $0))",
+                ]
             }
             let appleModels = [["id": "apple:foundation", "name": "Apple Intelligence"]]
-            
+
             let allModels = appleModels + ollamaModels + geminiModels
-            
+
             var response = HttpResponse.ok(.json(allModels))
             return self.applyCORS(to: response)
         }
-        
+
         server["/api/chat"] = { request in
             if request.method.uppercased() == "OPTIONS" {
                 return self.applyCORS(to: .ok(.html("")))
             }
-            
+
             // Expected body: { "model": "...", "messages": [...], "thinkingLevel": "medium" }
             let body = Data(request.body)
-            guard let json = try? JSONSerialization.jsonObject(with: body, options: []) as? [String: Any],
-                  let modelId = json["model"] as? String,
-                  let messagesArr = json["messages"] as? [[String: Any]] else {
+            guard
+                let json = try? JSONSerialization.jsonObject(with: body, options: [])
+                    as? [String: Any],
+                let modelId = json["model"] as? String,
+                let messagesArr = json["messages"] as? [[String: Any]]
+            else {
                 return self.applyCORS(to: .badRequest(nil))
             }
-            
+
             let thinkingLevel = json["thinkingLevel"] as? String ?? "medium"
-            
+
             // Convert all messages to Message objects for full history context
             let history: [Message] = messagesArr.compactMap { msgDict in
                 guard let role = msgDict["role"] as? String,
-                      let content = msgDict["content"] as? String else { return nil }
+                    let content = msgDict["content"] as? String
+                else { return nil }
                 return Message(content: content, isUser: role == "user")
             }
-            
+
             guard !history.isEmpty else {
                 return self.applyCORS(to: .badRequest(nil))
             }
-            
+
             // Determine backend
             let isOllama = modelId.hasPrefix("ollama:")
             let isGemini = modelId.hasPrefix("gemini:")
             let isApple = modelId.hasPrefix("apple:")
-            
-            let actualModel = modelId.components(separatedBy: ":").dropFirst().joined(separator: ":")
+
+            let actualModel = modelId.components(separatedBy: ":").dropFirst().joined(
+                separator: ":")
             let systemPrompt = UserDefaults.standard.string(forKey: "SystemPrompt") ?? ""
-            
+
             // Stream response via SSE — extension manages its own chat history
-            return HttpResponse.raw(200, "OK", ["Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"]) { writer in
-                
+            return HttpResponse.raw(
+                200, "OK",
+                [
+                    "Content-Type": "text/event-stream", "Cache-Control": "no-cache",
+                    "Access-Control-Allow-Origin": "*",
+                ]
+            ) { writer in
+
                 let group = DispatchGroup()
                 group.enter()
-                
+
                 Task {
                     do {
                         if isApple {
                             let service = AppleFoundationService()
-                            for try await chunk in service.sendMessageStream(history: history, systemPrompt: systemPrompt) {
+                            for try await chunk in service.sendMessageStream(
+                                history: history, systemPrompt: systemPrompt)
+                            {
                                 let event = "data: \(try self.jsonEscape(chunk))\n\n"
                                 try? writer.write(Array(event.utf8))
                             }
                         } else if isOllama {
                             let ollama = OllamaService()
-                            let endpoint = UserDefaults.standard.string(forKey: "OllamaURL") ?? "http://localhost:11434"
-                            let stream = ollama.sendMessageStream(history: history, endpoint: endpoint, model: actualModel, systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
+                            let endpoint =
+                                UserDefaults.standard.string(forKey: "OllamaURL")
+                                ?? "http://localhost:11434"
+                            let stream = ollama.sendMessageStream(
+                                history: history, endpoint: endpoint, model: actualModel,
+                                systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
                             for try await (chunk, thinkingChunk) in stream {
                                 if let thinking = thinkingChunk, !thinking.isEmpty {
-                                    let thinkEvent = "data: \(try self.jsonEscapeDict(["thinking": thinking]))\n\n"
+                                    let thinkEvent =
+                                        "data: \(try self.jsonEscapeDict(["thinking": thinking]))\n\n"
                                     try? writer.write(Array(thinkEvent.utf8))
                                 }
                                 if !chunk.isEmpty {
@@ -111,13 +132,17 @@ class ExtensionServer {
                             let gemini = GeminiService()
                             let apiKey = UserDefaults.standard.string(forKey: "GeminiKey") ?? ""
                             if apiKey.isEmpty {
-                                let event = "data: \(try self.jsonEscapeDict(["error": "Gemini API Key missing. Set it in Prism Settings."]))\n\n"
+                                let event =
+                                    "data: \(try self.jsonEscapeDict(["error": "Gemini API Key missing. Set it in Prism Settings."]))\n\n"
                                 try? writer.write(Array(event.utf8))
                             } else {
-                                let stream = gemini.sendMessageStream(history: history, apiKey: apiKey, model: actualModel, systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
+                                let stream = gemini.sendMessageStream(
+                                    history: history, apiKey: apiKey, model: actualModel,
+                                    systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
                                 for try await (chunk, thinkingChunk, _) in stream {
                                     if let thinking = thinkingChunk, !thinking.isEmpty {
-                                        let thinkEvent = "data: \(try self.jsonEscapeDict(["thinking": thinking]))\n\n"
+                                        let thinkEvent =
+                                            "data: \(try self.jsonEscapeDict(["thinking": thinking]))\n\n"
                                         try? writer.write(Array(thinkEvent.utf8))
                                     }
                                     if !chunk.isEmpty {
@@ -127,32 +152,48 @@ class ExtensionServer {
                                 }
                             }
                         }
-                        
+
                         let endEvent = "data: [DONE]\n\n"
                         try? writer.write(Array(endEvent.utf8))
                     } catch {
-                        let errorEvent = "data: \((try? self.jsonEscapeDict(["error": error.localizedDescription])) ?? "{\"error\":\"Unknown error\"}")\n\n"
+                        let errorEvent =
+                            "data: \((try? self.jsonEscapeDict(["error": error.localizedDescription])) ?? "{\"error\":\"Unknown error\"}")\n\n"
                         try? writer.write(Array(errorEvent.utf8))
                     }
                     group.leave()
                 }
-                
+
                 group.wait()
             }
         }
     }
-    
+
     private func applyCORS(to response: HttpResponse) -> HttpResponse {
         // Wrapper for Swifter responses to add CORS headers
         switch response {
         case .ok(let body):
-            if case let .json(jsonObject) = body {
-                let data = (try? JSONSerialization.data(withJSONObject: jsonObject, options: [])) ?? Data()
-                return .raw(200, "OK", ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type"]) { writer in
+            if case .json(let jsonObject) = body {
+                let data =
+                    (try? JSONSerialization.data(withJSONObject: jsonObject, options: [])) ?? Data()
+                return .raw(
+                    200, "OK",
+                    [
+                        "Content-Type": "application/json", "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type",
+                    ]
+                ) { writer in
                     try? writer.write(Array(data))
                 }
-            } else if case let .html(htmlString) = body {
-                return .raw(200, "OK", ["Content-Type": "text/html", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type"]) { writer in
+            } else if case .html(let htmlString) = body {
+                return .raw(
+                    200, "OK",
+                    [
+                        "Content-Type": "text/html", "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type",
+                    ]
+                ) { writer in
                     try? writer.write(Array(htmlString.utf8))
                 }
             }
@@ -163,13 +204,13 @@ class ExtensionServer {
         }
         return response
     }
-    
+
     private func jsonEscape(_ string: String) throws -> String {
         let dict = ["text": string]
         let data = try JSONSerialization.data(withJSONObject: dict, options: [])
         return String(data: data, encoding: .utf8) ?? "{}"
     }
-    
+
     private func jsonEscapeDict(_ dict: [String: String]) throws -> String {
         let data = try JSONSerialization.data(withJSONObject: dict, options: [])
         return String(data: data, encoding: .utf8) ?? "{}"
