@@ -13,8 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const thinkingBtn = document.getElementById('thinkingBtn');
     const contextCloseBtn = document.getElementById('contextCloseBtn');
     const contextToggleText = document.getElementById('contextToggleText');
-    const webSearchToggle = document.getElementById('webSearchToggle');
-    const webSearchToggleText = document.getElementById('webSearchToggleText');
+    const webSearchBtn = document.getElementById('webSearchBtn');
 
     // State
     let chatHistory = [];
@@ -113,10 +112,19 @@ document.addEventListener('DOMContentLoaded', () => {
         thinkingBtn.style.display = supportsThinking(modelSelect.value) ? 'flex' : 'none';
     }
 
+    function updateWebSearchBtn() {
+        // Only show web search button if it's an Ollama model
+        webSearchBtn.style.display = modelSelect.value.startsWith('ollama:') ? 'flex' : 'none';
+        if (!modelSelect.value.startsWith('ollama:') && includeWebSearch) {
+            setWebSearchState(false);
+        }
+    }
+
     modelSelect.addEventListener('change', () => {
         chrome.storage.local.set({ lastModelId: modelSelect.value });
         updateModelDisplay();
         updateThinkingBtn();
+        updateWebSearchBtn();
     });
 
     fetchModels();
@@ -175,8 +183,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setWebSearchState(enabled) {
         includeWebSearch = enabled;
-        webSearchToggle.classList.toggle('disabled', !enabled);
-        webSearchToggleText.textContent = enabled ? 'Web Search On' : 'Web Search Off';
+        if (enabled) {
+            webSearchBtn.style.color = 'var(--accent)';
+        } else {
+            webSearchBtn.style.color = 'var(--text-secondary)';
+        }
         updatePromptPlaceholder();
     }
 
@@ -189,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     contextCloseBtn.addEventListener('click', e => { e.stopPropagation(); setContextState(!includeContext); });
     contextToggle.addEventListener('click', () => setContextState(!includeContext));
-    webSearchToggle.addEventListener('click', () => setWebSearchState(!includeWebSearch));
+    webSearchBtn.addEventListener('click', () => setWebSearchState(!includeWebSearch));
 
     // ── THINKING LEVEL ──────────────────────────────────────
     thinkingBtn.addEventListener('click', e => {

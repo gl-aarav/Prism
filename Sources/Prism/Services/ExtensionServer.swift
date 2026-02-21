@@ -115,8 +115,26 @@ class ExtensionServer {
                             let endpoint =
                                 UserDefaults.standard.string(forKey: "OllamaURL")
                                 ?? "http://localhost:11434"
+
+                            var currentHistory = history
+                            if webSearchEnabled {
+                                let ollamaAPIKey = UserDefaults.standard.string(forKey: "OllamaAPIKey") ?? ""
+                                if !ollamaAPIKey.isEmpty, let lastUserMsg = currentHistory.last(where: { $0.isUser }) {
+                                    let webSearchService = WebSearchService()
+                                    do {
+                                        let searchResults = try await webSearchService.search(query: lastUserMsg.content, apiKey: ollamaAPIKey)
+                                        let searchContext = webSearchService.buildSearchContext(results: searchResults)
+                                        if let lastIndex = currentHistory.lastIndex(where: { $0.isUser }) {
+                                            currentHistory[lastIndex].content = searchContext + "\n" + currentHistory[lastIndex].content
+                                        }
+                                    } catch {
+                                        print("Web search failed: \(error)")
+                                    }
+                                }
+                            }
+
                             let stream = ollama.sendMessageStream(
-                                history: history, endpoint: endpoint, model: actualModel,
+                                history: currentHistory, endpoint: endpoint, model: actualModel,
                                 systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
                             for try await (chunk, thinkingChunk) in stream {
                                 if let thinking = thinkingChunk, !thinking.isEmpty {
@@ -139,8 +157,7 @@ class ExtensionServer {
                             } else {
                                 let stream = gemini.sendMessageStream(
                                     history: history, apiKey: apiKey, model: actualModel,
-                                    systemPrompt: systemPrompt, thinkingLevel: thinkingLevel,
-                                    webSearchEnabled: webSearchEnabled)
+                                    systemPrompt: systemPrompt, thinkingLevel: thinkingLevel)
                                 for try await (chunk, thinkingChunk, _) in stream {
                                     if let thinking = thinkingChunk, !thinking.isEmpty {
                                         let thinkEvent =

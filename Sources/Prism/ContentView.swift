@@ -1089,7 +1089,7 @@ class GeminiService {
 
     func sendMessageStream(
         history: [Message], apiKey: String, model: String, systemPrompt: String = "",
-        thinkingLevel: String = "medium", webSearchEnabled: Bool = false
+        thinkingLevel: String = "medium"
     ) -> AsyncThrowingStream<(String, String?, Data?), Error> {
         return AsyncThrowingStream { continuation in
             Task {
@@ -1191,13 +1191,6 @@ class GeminiService {
                         "parts": [
                             ["text": systemPrompt]
                         ]
-                    ]
-                }
-
-                // Add Web Search tool if requested (for text models)
-                if webSearchEnabled && !isImageModel {
-                    body["tools"] = [
-                        ["googleSearch": [:]]
                     ]
                 }
 
@@ -2290,8 +2283,7 @@ struct ContentView: View {
                             return geminiService.sendMessageStream(
                                 history: chatManager.messages, apiKey: geminiKey, model: geminiModel,
                                 systemPrompt: systemPrompt,
-                                thinkingLevel: geminiThinkingLevel,
-                                webSearchEnabled: webSearchEnabled)
+                                thinkingLevel: geminiThinkingLevel)
                         }.value
 
                         for try await (contentChunk, thinkingChunk, imageData) in stream {

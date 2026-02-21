@@ -100,42 +100,42 @@
                 </svg>
             </button>
         </div>
-        <div id="webSearchToggle" class="context-toggle disabled" style="margin-left:8px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    </div>
+    <div class="input-bar">
+        <textarea id="promptInput" placeholder="Ask about this page..." rows="1"></textarea>
+        <button id="webSearchBtn" class="input-icon-btn" title="Web Search" style="display:none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="2" y1="12" x2="22" y2="12"></line>
                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z">
                 </path>
             </svg>
-            <span class="context-toggle-label" id="webSearchToggleText">Web Search Off</span>
+        </button>
+        <button id="thinkingBtn" class="input-icon-btn" title="Reasoning Effort" style="display:none;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path
+                    d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17a2 2 0 002 2h4a2 2 0 002-2v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" />
+                <line x1="9" y1="21" x2="15" y2="21" />
+            </svg>
+        </button>
+        <div id="thinkingDropdown" class="thinking-dropdown" style="display:none;">
+            <button class="thinking-level-option" data-level="low">Low</button>
+            <button class="thinking-level-option active" data-level="medium">Medium</button>
+            <button class="thinking-level-option" data-level="high">High</button>
         </div>
-        <div class="input-bar">
-            <textarea id="promptInput" placeholder="Ask about this page..." rows="1"></textarea>
-            <button id="thinkingBtn" class="input-icon-btn" title="Reasoning Effort" style="display:none;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path
-                        d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17a2 2 0 002 2h4a2 2 0 002-2v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" />
-                    <line x1="9" y1="21" x2="15" y2="21" />
-                </svg>
-            </button>
-            <div id="thinkingDropdown" class="thinking-dropdown" style="display:none;">
-                <button class="thinking-level-option" data-level="low">Low</button>
-                <button class="thinking-level-option active" data-level="medium">Medium</button>
-                <button class="thinking-level-option" data-level="high">High</button>
-            </div>
-            <button id="sendBtn" class="send-btn" disabled>
-                <svg id="sendIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="12" y1="19" x2="12" y2="5"></line>
-                    <polyline points="5 12 12 5 19 12"></polyline>
-                </svg>
-                <svg id="stopIcon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
-                    <rect x="6" y="6" width="12" height="12" rx="2" />
-                </svg>
-            </button>
-        </div>
+        <button id="sendBtn" class="send-btn" disabled>
+            <svg id="sendIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"></line>
+                <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+            <svg id="stopIcon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+        </button>
+    </div>
     </div>
 
     <script src="vendor/purify.min.js"></script>
