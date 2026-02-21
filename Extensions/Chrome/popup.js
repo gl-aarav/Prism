@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let includeWebSearch = false;
     let thinkingLevel = 'medium';
     let thinkingDropdownOpen = false;
+    let hasInjectedContextThisSession = false;
 
     // Auto-resize textarea
     promptInput.addEventListener('input', () => {
@@ -120,6 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
     newChatBtn.addEventListener('click', () => {
         if (isGenerating) stopGeneration();
         chatHistory = [];
+        hasInjectedContextThisSession = false;
         chatContainer.innerHTML = '';
         chatContainer.appendChild(createEmptyState());
         promptInput.value = '';
@@ -311,8 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Build messages array with full chat history
         let messagesForApi = chatHistory.map(m => ({ role: m.role, content: m.content }));
 
-        // Inject page context into latest user message
-        if (pageContext.length > 0) {
+        // Inject page context only into the latest user message if not already present
+        if (pageContext.length > 0 && !hasInjectedContextThisSession) {
             const truncated = pageContext.length > 50000 ? pageContext.substring(0, 50000) + '...' : pageContext;
             const lastIdx = messagesForApi.length - 1;
             if (lastIdx >= 0 && messagesForApi[lastIdx].role === 'user') {
@@ -320,8 +322,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     role: 'user',
                     content: '[Webpage Context]:\n' + truncated + '\n\n[User Message]:\n' + messagesForApi[lastIdx].content
                 };
+                hasInjectedContextThisSession = true;
             }
         }
+
+        console.log("SENDING TO API:", JSON.stringify(messagesForApi, null, 2));
 
         abortController = new AbortController();
         let fullContent = '';
