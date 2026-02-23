@@ -3,10 +3,10 @@ import SwiftUI
 
 class OllamaModelManager: ObservableObject {
     static let shared = OllamaModelManager()
-    
+
     @AppStorage("OllamaFavorites") private var favoritesJSON: String = "[]"
     @AppStorage("OllamaCustomModels") private var customModelsJSON: String = "[]"
-    
+
     @Published var availableModels: [String] = [
         "llama3.3",
         "llama3.2",
@@ -16,9 +16,9 @@ class OllamaModelManager: ObservableObject {
         "mistral-small",
         "gemma2",
         "qwen2.5",
-        "codellama"
+        "codellama",
     ]
-    
+
     /// Models fetched from the local Ollama instance via /api/tags.
     @Published var installedModels: [String] = []
 
@@ -28,7 +28,9 @@ class OllamaModelManager: ObservableObject {
 
     /// Fetch the list of locally installed models from Ollama's /api/tags endpoint.
     func fetchInstalledModels(endpoint: String? = nil) {
-        let baseURL = (endpoint ?? UserDefaults.standard.string(forKey: "OllamaURL") ?? "http://localhost:11434")
+        let baseURL =
+            (endpoint ?? UserDefaults.standard.string(forKey: "OllamaURL")
+            ?? "http://localhost:11434")
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard let url = URL(string: "\(baseURL)/api/tags") else { return }
@@ -38,8 +40,8 @@ class OllamaModelManager: ObservableObject {
 
         URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
             guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let models = json["models"] as? [[String: Any]]
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let models = json["models"] as? [[String: Any]]
             else { return }
 
             let names = models.compactMap { $0["name"] as? String }
@@ -51,7 +53,7 @@ class OllamaModelManager: ObservableObject {
             }
         }.resume()
     }
-    
+
     // Helper to group models by manufacturer/series
     func getManufacturer(for model: String) -> String {
         let lower = model.lowercased()
@@ -63,18 +65,20 @@ class OllamaModelManager: ObservableObject {
         if lower.contains("phi") { return "Microsoft" }
         return "Other"
     }
-    
+
     var customModels: [String] {
         get {
             guard let data = customModelsJSON.data(using: .utf8),
-                  let decoded = try? JSONDecoder().decode([String].self, from: data) else {
+                let decoded = try? JSONDecoder().decode([String].self, from: data)
+            else {
                 return []
             }
             return decoded
         }
         set {
             if let data = try? JSONEncoder().encode(newValue),
-               let json = String(data: data, encoding: .utf8) {
+                let json = String(data: data, encoding: .utf8)
+            {
                 customModelsJSON = json
                 objectWillChange.send()
             }
@@ -103,38 +107,40 @@ class OllamaModelManager: ObservableObject {
         let combined = Array(Set(availableModels + customModels))
         return combined.sorted()
     }
-    
+
     var groupedModels: [String: [String]] {
         Dictionary(grouping: sortedModels, by: { getManufacturer(for: $0) })
     }
-    
+
     var sortedManufacturers: [String] {
         ["Meta", "DeepSeek", "Microsoft", "Qwen", "Google", "Mistral", "Other"]
     }
-    
+
     var favoriteModels: [String] {
         get {
             guard let data = favoritesJSON.data(using: .utf8),
-                  let decoded = try? JSONDecoder().decode([String].self, from: data) else {
+                let decoded = try? JSONDecoder().decode([String].self, from: data)
+            else {
                 return []
             }
             return decoded
         }
         set {
             if let data = try? JSONEncoder().encode(newValue),
-               let json = String(data: data, encoding: .utf8) {
+                let json = String(data: data, encoding: .utf8)
+            {
                 favoritesJSON = json
                 objectWillChange.send()
             }
         }
     }
-    
+
     var sortedModels: [String] {
         let favorites = favoriteModels
         let others = allModels.filter { !favorites.contains($0) }
         return favorites + others
     }
-    
+
     func toggleFavorite(_ model: String) {
         var currentFavorites = favoriteModels
         if let index = currentFavorites.firstIndex(of: model) {
@@ -144,7 +150,7 @@ class OllamaModelManager: ObservableObject {
         }
         favoriteModels = currentFavorites
     }
-    
+
     func isFavorite(_ model: String) -> Bool {
         return favoriteModels.contains(model)
     }
