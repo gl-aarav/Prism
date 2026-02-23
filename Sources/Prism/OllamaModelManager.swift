@@ -19,6 +19,39 @@ class OllamaModelManager: ObservableObject {
         "codellama"
     ]
     
+    /// Models fetched from the local Ollama instance via /api/tags.
+    @Published var installedModels: [String] = []
+
+    private init() {
+        fetchInstalledModels()
+    }
+
+    /// Fetch the list of locally installed models from Ollama's /api/tags endpoint.
+    func fetchInstalledModels(endpoint: String? = nil) {
+        let baseURL = (endpoint ?? UserDefaults.standard.string(forKey: "OllamaURL") ?? "http://localhost:11434")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(baseURL)/api/tags") else { return }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let models = json["models"] as? [[String: Any]]
+            else { return }
+
+            let names = models.compactMap { $0["name"] as? String }
+            DispatchQueue.main.async {
+                self?.installedModels = names
+                // Merge into availableModels so pickers reflect what's actually installed
+                let merged = Array(Set((self?.availableModels ?? []) + names)).sorted()
+                self?.availableModels = merged
+            }
+        }.resume()
+    }
+    
     // Helper to group models by manufacturer/series
     func getManufacturer(for model: String) -> String {
         let lower = model.lowercased()

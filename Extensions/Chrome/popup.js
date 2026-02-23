@@ -51,12 +51,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 let name = m.name;
                 let group = 'Other';
                 if (name.startsWith('Apple')) { group = 'Apple'; }
-                else if (name.startsWith('Gemini:') || name.includes(': Gemini')) { group = 'Gemini'; name = name.replace(/^Gemini:\s*/, '').replace(/^[^:]+:\s*/, ''); }
-                else if (name.startsWith('Ollama:') || name.includes(': ')) {
-                    if (m.id.startsWith('ollama:')) { group = 'Ollama'; name = name.replace(/^Ollama:\s*/, '').replace(/^[^:]+:\s*/, ''); }
-                    else if (m.id.startsWith('copilot:')) { group = 'Copilot'; name = name.replace(/^Copilot:\s*/, ''); }
-                    else { name = name.replace(/^[^:]+:\s*/, ''); }
-                }
+                else if (m.id.startsWith('gemini:')) { group = 'Gemini'; name = name.replace(/^Gemini:\s*/, ''); }
+                else if (m.id.startsWith('ollama:')) { group = 'Ollama'; name = name.replace(/^Ollama:\s*/, ''); }
+                else if (m.id.startsWith('copilot:')) { group = 'Copilot'; name = name.replace(/^Copilot[^:]*:\s*/, ''); }
                 else if (name.startsWith('Copilot:')) { group = 'Copilot'; name = name.replace('Copilot: ', ''); }
                 groups[group].push({ id: m.id, name });
             });

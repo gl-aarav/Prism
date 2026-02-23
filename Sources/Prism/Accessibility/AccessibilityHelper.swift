@@ -51,6 +51,7 @@ class AccessibilityHelper {
     // MARK: - Text Reading
 
     /// Reads the `kAXValueAttribute` (text content) from the given element.
+    /// Falls back to kAXSelectedTextAttribute context for Electron/Chromium apps.
     func getTextFromElement(_ element: AXUIElement) -> String? {
         var value: AnyObject?
         let result = AXUIElementCopyAttributeValue(
@@ -58,8 +59,34 @@ class AccessibilityHelper {
             kAXValueAttribute as CFString,
             &value
         )
-        guard result == .success else { return nil }
-        return value as? String
+        if result == .success, let text = value as? String {
+            return text
+        }
+
+        // Fallback for Electron/Chromium contentEditable elements:
+        // Try reading the full text via AXStringForRange if numberOfCharacters is available.
+        var countValue: AnyObject?
+        let countResult = AXUIElementCopyAttributeValue(
+            element,
+            "AXNumberOfCharacters" as CFString,
+            &countValue
+        )
+        if countResult == .success, let count = countValue as? Int, count > 0 {
+            var cfRange = CFRange(location: 0, length: count)
+            guard let rangeValue = AXValueCreate(.cfRange, &cfRange) else { return nil }
+            var stringValue: AnyObject?
+            let strResult = AXUIElementCopyParameterizedAttributeValue(
+                element,
+                "AXStringForRange" as CFString,
+                rangeValue,
+                &stringValue
+            )
+            if strResult == .success, let text = stringValue as? String {
+                return text
+            }
+        }
+
+        return nil
     }
 
     /// Returns the role of the element (e.g. "AXTextArea", "AXTextField").
@@ -190,6 +217,16 @@ class AccessibilityHelper {
             kAXValueAttribute as CFString,
             &isSettable
         )
-        return result == .success && isSettable.boolValue
+        if result == .success && isSettable.boolValue { return true }
+
+        // Fallback: Electron/Chromium contentEditable divs may not report kAXValueAttribute
+        // as settable, but do support kAXSelectedTextAttribute.
+        var isSelectedSettable: DarwinBoolean = false
+        let selResult = AXUIElementIsAttributeSettable(
+            element,
+            kAXSelectedTextAttribute as CFString,
+            &isSelectedSettable
+        )
+        return selResult == .success && isSelectedSettable.boolValue
     }
 }
