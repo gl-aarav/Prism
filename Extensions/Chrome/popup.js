@@ -53,8 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (name.startsWith('Apple')) { group = 'Apple'; }
                 else if (m.id.startsWith('gemini:')) { group = 'Gemini'; name = name.replace(/^Gemini:\s*/, ''); }
                 else if (m.id.startsWith('ollama:')) { group = 'Ollama'; name = name.replace(/^Ollama:\s*/, ''); }
-                else if (m.id.startsWith('copilot:')) { 
-                    group = 'Copilot'; 
+                else if (m.id.startsWith('copilot:')) {
+                    group = 'Copilot';
                     // Remove the default "Copilot: " prefix but keep the username if it exists.
                     // For example "Copilot: Model Name" -> "Model Name"
                     // "Copilot (username): Model Name" -> "(username): Model Name"
@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     modelSelect.value = result.lastModelId;
                 }
                 updateModelDisplay();
-                updateWebSearchBtn();
+                updateModelCapabilities();
             });
         } catch (e) {
             modelSelect.innerHTML = '<option value="">Cannot connect to Prism</option>';
@@ -117,18 +117,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateWebSearchBtn() {
+    function updateModelCapabilities() {
         // Only show web search button if it's an Ollama model
         webSearchBtn.style.display = modelSelect.value.startsWith('ollama:') ? 'flex' : 'none';
         if (!modelSelect.value.startsWith('ollama:') && includeWebSearch) {
             setWebSearchState(false);
+        }
+
+        // Hide thinking button for Copilot and Apple models as they don't support reasoning logs via this API
+        if (modelSelect.value.startsWith('copilot:') || modelSelect.value.startsWith('apple:')) {
+            thinkingBtn.style.display = 'none';
+            thinkingDropdownOpen = false;
+            const thinkingDropdown = document.getElementById('thinkingDropdown');
+            if (thinkingDropdown) thinkingDropdown.style.display = 'none';
+        } else {
+            thinkingBtn.style.display = 'flex';
         }
     }
 
     modelSelect.addEventListener('change', () => {
         chrome.storage.local.set({ lastModelId: modelSelect.value });
         updateModelDisplay();
-        updateWebSearchBtn();
+        updateModelCapabilities();
     });
 
     fetchModels();
