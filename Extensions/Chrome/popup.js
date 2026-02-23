@@ -53,8 +53,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (name.startsWith('Apple')) { group = 'Apple'; }
                 else if (m.id.startsWith('gemini:')) { group = 'Gemini'; name = name.replace(/^Gemini:\s*/, ''); }
                 else if (m.id.startsWith('ollama:')) { group = 'Ollama'; name = name.replace(/^Ollama:\s*/, ''); }
-                else if (m.id.startsWith('copilot:')) { group = 'Copilot'; name = name.replace(/^Copilot[^:]*:\s*/, ''); }
-                else if (name.startsWith('Copilot:')) { group = 'Copilot'; name = name.replace('Copilot: ', ''); }
+                else if (m.id.startsWith('copilot:')) { 
+                    group = 'Copilot'; 
+                    // Remove the default "Copilot: " prefix but keep the username if it exists.
+                    // For example "Copilot: Model Name" -> "Model Name"
+                    // "Copilot (username): Model Name" -> "(username): Model Name"
+                    // To make it look nice, we can just replace "Copilot: " or "Copilot "
+                    if (name.startsWith('Copilot: ')) {
+                        name = name.substring(9);
+                    } else if (name.startsWith('Copilot (')) {
+                        name = name.substring(8); // leaves "(username): Model Name"
+                    }
+                }
                 groups[group].push({ id: m.id, name });
             });
 

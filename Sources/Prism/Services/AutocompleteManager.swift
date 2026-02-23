@@ -200,10 +200,8 @@ class AutocompleteManager: ObservableObject {
         guard newText != lastTextBeforeCursor else { return }
         lastTextBeforeCursor = newText
 
-        // Check if the focused app is blacklisted by user or hardcoded (browsers with extensions)
-        let hardcodedBlacklist = [
-            "com.google.Chrome", "com.apple.Safari", "org.mozilla.firefox", "com.brave.Browser",
-        ]
+        // Check if the focused app is blacklisted by user
+        let hardcodedBlacklist: [String] = []
         if let bundleId = CursorTracker.shared.focusedAppBundleId,
             blacklistedApps.contains(bundleId) || hardcodedBlacklist.contains(bundleId)
         {

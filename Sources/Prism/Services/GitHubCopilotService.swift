@@ -225,11 +225,16 @@ class GitHubCopilotService: ObservableObject {
                         login, forKey: "\(self.userNameKey)_\(acctId.uuidString)")
                     UserDefaults.standard.set(
                         avatar, forKey: "\(self.avatarKey)_\(acctId.uuidString)")
+                    AccountManager.shared.renameAccount(id: acctId, newName: "GitHub Copilot (\(login))")
                 } else {
                     self.userName = login
                     self.avatarURL = avatar
                     UserDefaults.standard.set(login, forKey: self.userNameKey)
                     UserDefaults.standard.set(avatar, forKey: self.avatarKey)
+                    // If this was the first/legacy account without an ID, rename the first copilot account
+                    if let firstCopilot = AccountManager.shared.copilotAccounts().first {
+                        AccountManager.shared.renameAccount(id: firstCopilot.id, newName: "GitHub Copilot (\(login))")
+                    }
                 }
                 self.isAuthenticated = true
             }
