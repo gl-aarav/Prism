@@ -1819,7 +1819,8 @@ struct ContentView: View {
                                         thinkingMode: thinkingMode,
                                         isOllama: selectedProvider.contains("Ollama"),
                                         isGemini: selectedProvider == "Gemini API",
-                                        isCopilot: selectedProvider == "GitHub Copilot" || selectedProvider.hasPrefix("GitHub Copilot|"),
+                                        isCopilot: selectedProvider == "GitHub Copilot"
+                                            || selectedProvider.hasPrefix("GitHub Copilot|"),
                                         isGeminiCLI: selectedProvider == "Gemini CLI",
                                         webSearchEnabled: $webSearchEnabled,
                                         hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
@@ -2521,9 +2522,15 @@ struct ContentView: View {
                 }
             } else if selectedProvider == "Gemini CLI" {
                 // Gemini CLI
-                let geminiCLIModel = UserDefaults.standard.string(forKey: "SelectedGeminiCLIModel") ?? "gemini-2.5-flash"
+                let geminiCLIModel =
+                    UserDefaults.standard.string(forKey: "SelectedGeminiCLIModel")
+                    ?? "gemini-2.5-flash"
                 let aiMsgId = UUID()
-                var aiMsg = Message(content: "", model: "Gemini CLI: \(GeminiCLIService.shared.displayName(for: geminiCLIModel))", isUser: false)
+                var aiMsg = Message(
+                    content: "",
+                    model:
+                        "Gemini CLI: \(GeminiCLIService.shared.displayName(for: geminiCLIModel))",
+                    isUser: false)
                 aiMsg.id = aiMsgId
                 aiMsg.isStreaming = true
 
@@ -3582,8 +3589,9 @@ struct HeaderView: View {
             if let uuidStr = parts.last, let uuid = UUID(uuidString: String(uuidStr)) {
                 // For Copilot, prefer the GitHub username
                 if base == "GitHub Copilot",
-                   let ghUser = GitHubCopilotService.shared.accountAuthState[uuid]?.userName,
-                   !ghUser.isEmpty {
+                    let ghUser = GitHubCopilotService.shared.accountAuthState[uuid]?.userName,
+                    !ghUser.isEmpty
+                {
                     return "Copilot (\(ghUser))"
                 }
                 if let account = accountManager.accounts.first(where: { $0.id == uuid }) {
@@ -3787,7 +3795,8 @@ struct InputView: View {
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
-    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String = "gemini-2.5-flash"
+    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
+        "gemini-2.5-flash"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared

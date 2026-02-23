@@ -76,7 +76,9 @@ class ExtensionServer {
                     }
                 } else {
                     for account in copilotAccounts {
-                        let acctName = GitHubCopilotService.shared.accountAuthState[account.id]?.userName ?? account.displayName
+                        let acctName =
+                            GitHubCopilotService.shared.accountAuthState[account.id]?.userName
+                            ?? account.displayName
                         for model in GitHubCopilotModelManager.shared.chatModels {
                             allModels.append([
                                 "id": "copilot:\(model)|\(account.id.uuidString)",
@@ -327,7 +329,8 @@ class ExtensionServer {
                                 try? writer.write(Array(event.utf8))
                             } else {
                                 let stream = GitHubCopilotService.shared.sendMessageStream(
-                                    history: history, model: actualModel, systemPrompt: systemPrompt,
+                                    history: history, model: actualModel,
+                                    systemPrompt: systemPrompt,
                                     accountId: accountId
                                 )
                                 for try await (chunk, _) in stream {

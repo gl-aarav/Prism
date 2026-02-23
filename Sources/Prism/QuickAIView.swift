@@ -40,7 +40,8 @@ struct QuickAIView: View {
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
-    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String = "gemini-2.5-flash"
+    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
+        "gemini-2.5-flash"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
@@ -312,8 +313,9 @@ struct QuickAIView: View {
             let base = parts.first.map(String.init) ?? provider
             if let uuidStr = parts.last, let uuid = UUID(uuidString: String(uuidStr)) {
                 if base == "GitHub Copilot",
-                   let ghUser = GitHubCopilotService.shared.accountAuthState[uuid]?.userName,
-                   !ghUser.isEmpty {
+                    let ghUser = GitHubCopilotService.shared.accountAuthState[uuid]?.userName,
+                    !ghUser.isEmpty
+                {
                     return "Copilot (\(ghUser))"
                 }
             }
@@ -686,10 +688,13 @@ struct QuickAIView: View {
                         self.isLoading = false
                     }
                 }
-            } else if selectedProvider == "GitHub Copilot" || selectedProvider.hasPrefix("GitHub Copilot|") {
+            } else if selectedProvider == "GitHub Copilot"
+                || selectedProvider.hasPrefix("GitHub Copilot|")
+            {
                 var copilotAccountId: String? = nil
                 if selectedProvider.contains("|"),
-                   let uuidStr = selectedProvider.split(separator: "|").last.map(String.init) {
+                    let uuidStr = selectedProvider.split(separator: "|").last.map(String.init)
+                {
                     copilotAccountId = uuidStr
                 }
                 let aiMsgId = UUID()
@@ -745,7 +750,11 @@ struct QuickAIView: View {
                 }
             } else if selectedProvider == "Gemini CLI" {
                 let aiMsgId = UUID()
-                var aiMsg = Message(content: "", model: "Gemini CLI: \(GeminiCLIService.shared.displayName(for: selectedGeminiCLIModel))", isUser: false)
+                var aiMsg = Message(
+                    content: "",
+                    model:
+                        "Gemini CLI: \(GeminiCLIService.shared.displayName(for: selectedGeminiCLIModel))",
+                    isUser: false)
                 aiMsg.id = aiMsgId
                 aiMsg.isStreaming = true
 
@@ -1742,11 +1751,15 @@ extension QuickAIView {
                         let copilotAccounts = AccountManager.shared.copilotAccounts()
                         if copilotAccounts.count <= 1 {
                             Button(action: { selectedProvider = "GitHub Copilot" }) {
-                                Label("GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot"))
+                                Label(
+                                    "GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot")
+                                )
                             }
                         } else {
                             ForEach(copilotAccounts) { account in
-                                let acctName = copilotService.accountAuthState[account.id]?.userName ?? account.displayName
+                                let acctName =
+                                    copilotService.accountAuthState[account.id]?.userName
+                                    ?? account.displayName
                                 Button(action: {
                                     selectedProvider = "GitHub Copilot|\(account.id.uuidString)"
                                 }) {
@@ -2269,7 +2282,9 @@ extension QuickAIView {
                 }
 
                 // GitHub Copilot model picker
-                if selectedProvider == "GitHub Copilot" || selectedProvider.hasPrefix("GitHub Copilot|") {
+                if selectedProvider == "GitHub Copilot"
+                    || selectedProvider.hasPrefix("GitHub Copilot|")
+                {
                     Menu {
                         let providers = ["Anthropic", "OpenAI", "Google", "xAI"]
                         ForEach(providers, id: \.self) { provider in
