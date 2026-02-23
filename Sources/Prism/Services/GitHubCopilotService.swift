@@ -591,7 +591,6 @@ class GitHubCopilotModelManager: ObservableObject {
         "gemini-3-pro-preview",
         "gemini-3-flash-preview",
         "gemini-2.5-pro",
-        "gemini-2.5-flash-preview",
         // Grok & Others
         "grok-code-fast-1",
         // OSWE
@@ -632,7 +631,6 @@ class GitHubCopilotModelManager: ObservableObject {
         "gemini-3-pro-preview": "Gemini 3 Pro (Preview)",
         "gemini-3-flash-preview": "Gemini 3 Flash (Preview)",
         "gemini-2.5-pro": "Gemini 2.5 Pro",
-        "gemini-2.5-flash-preview": "Gemini 2.5 Flash Preview",
         "grok-code-fast-1": "Grok Code Fast 1",
         "oswe-vscode-prime": "OSWE Prime",
         "oswe-vscode-secondary": "OSWE Secondary",
