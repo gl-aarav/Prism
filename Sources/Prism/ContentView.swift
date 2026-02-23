@@ -4009,7 +4009,9 @@ struct InputView: View {
                     Menu {
                         let providers = ["Anthropic", "OpenAI", "Google", "xAI"]
                         ForEach(providers, id: \.self) { provider in
-                            let models = copilotModelManager.chatModels.filter { copilotModelManager.getProvider(for: $0) == provider }
+                            let models = copilotModelManager.chatModels.filter {
+                                copilotModelManager.getProvider(for: $0) == provider
+                            }
                             if !models.isEmpty {
                                 Section(provider) {
                                     ForEach(models, id: \.self) { model in

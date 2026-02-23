@@ -682,11 +682,13 @@ struct QuickAIView: View {
                     var fullContent = ""
                     var lastUpdateTime = Date()
 
-                    for try await (contentChunk, _) in GitHubCopilotService.shared.sendMessageStream(
-                        history: chatManager.getCurrentMessages(),
-                        model: selectedCopilotModel,
-                        systemPrompt: systemPrompt
-                    ) {
+                    for try await (contentChunk, _) in GitHubCopilotService.shared
+                        .sendMessageStream(
+                            history: chatManager.getCurrentMessages(),
+                            model: selectedCopilotModel,
+                            systemPrompt: systemPrompt
+                        )
+                    {
                         fullContent += contentChunk
 
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
@@ -2234,7 +2236,9 @@ extension QuickAIView {
                     Menu {
                         let providers = ["Anthropic", "OpenAI", "Google", "xAI"]
                         ForEach(providers, id: \.self) { provider in
-                            let models = copilotModelManager.chatModels.filter { copilotModelManager.getProvider(for: $0) == provider }
+                            let models = copilotModelManager.chatModels.filter {
+                                copilotModelManager.getProvider(for: $0) == provider
+                            }
                             if !models.isEmpty {
                                 Section(provider) {
                                     ForEach(models, id: \.self) { model in
@@ -2242,9 +2246,11 @@ extension QuickAIView {
                                             if selectedCopilotModel == model {
                                                 Label(
                                                     copilotModelManager.displayName(for: model),
-                                                    systemImage: "checkmark")
+                                                    systemImage: "checkmark"
+                                                )
                                                 .foregroundStyle(
-                                                    colorScheme == .dark ? Color.white : Color.primary)
+                                                    colorScheme == .dark
+                                                        ? Color.white : Color.primary)
                                             } else {
                                                 Text(copilotModelManager.displayName(for: model))
                                             }

@@ -39,9 +39,10 @@ class GeminiCLIService: ObservableObject {
             try task.run()
             task.waitUntilExit()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !path.isEmpty,
-               FileManager.default.isExecutableFile(atPath: path)
+            if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(
+                in: .whitespacesAndNewlines),
+                !path.isEmpty,
+                FileManager.default.isExecutableFile(atPath: path)
             {
                 cliPath = path
                 isAvailable = true
