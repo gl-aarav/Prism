@@ -1631,6 +1631,10 @@ struct ContentView: View {
     private let shortcutService = ShortcutService()
     private let appleFoundationService = AppleFoundationService()
 
+    @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
+    @ObservedObject private var copilotService = GitHubCopilotService.shared
+    @ObservedObject private var accountManager = AccountManager.shared
+
     var thinkingMode: ThinkingMode {
         if selectedProvider == "Gemini API" {
             let lower = geminiModel.lowercased()
@@ -1670,7 +1674,6 @@ struct ContentView: View {
             return thinkingLevel
         }
     }
-
 
     var body: some View {
         ZStack {
@@ -1816,6 +1819,7 @@ struct ContentView: View {
                                         thinkingMode: thinkingMode,
                                         isOllama: selectedProvider.contains("Ollama"),
                                         isGemini: selectedProvider == "Gemini API",
+                                        isCopilot: selectedProvider == "GitHub Copilot",
                                         webSearchEnabled: $webSearchEnabled,
                                         hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
                                         onSlashAction: handleSlashAction
@@ -2281,7 +2285,8 @@ struct ContentView: View {
 
                         let stream = await Task.detached {
                             return await geminiService.sendMessageStream(
-                                history: chatManager.getCurrentMessages(), apiKey: geminiKey, model: geminiModel,
+                                history: chatManager.getCurrentMessages(), apiKey: geminiKey,
+                                model: geminiModel,
                                 systemPrompt: systemPrompt,
                                 thinkingLevel: geminiThinkingLevel)
                         }.value
@@ -2432,6 +2437,110 @@ struct ContentView: View {
                             content: fullContent,
                             thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
                             isStreaming: false)
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "GitHub Copilot"
+                || selectedProvider.hasPrefix("GitHub Copilot|")
+            {
+                // GitHub Copilot
+                let copilotModel =
+                    UserDefaults.standard.string(forKey: "SelectedCopilotModel") ?? "gpt-4o"
+                let aiMsgId = UUID()
+                var aiMsg = Message(
+                    content: "",
+                    model:
+                        "Copilot: \(GitHubCopilotModelManager.shared.displayName(for: copilotModel))",
+                    isUser: false)
+                aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    var fullContent = ""
+                    var lastUpdateTime = Date()
+
+                    for try await (contentChunk, _) in GitHubCopilotService.shared
+                        .sendMessageStream(
+                            history: currentHistory, model: copilotModel, systemPrompt: systemPrompt
+                        )
+                    {
+                        fullContent += contentChunk
+
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentToUpdate = fullContent
+                            DispatchQueue.main.async {
+                                self.chatManager.updateMessage(
+                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                            }
+                            lastUpdateTime = Date()
+                        }
+                    }
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: fullContent, isStreaming: false)
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "Gemini CLI" {
+                // Gemini CLI
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "", model: "Gemini CLI", isUser: false)
+                aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    var fullContent = ""
+                    var lastUpdateTime = Date()
+
+                    for try await contentChunk in GeminiCLIService.shared.sendMessageStream(
+                        history: currentHistory, systemPrompt: systemPrompt
+                    ) {
+                        fullContent += contentChunk
+
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentToUpdate = fullContent
+                            DispatchQueue.main.async {
+                                self.chatManager.updateMessage(
+                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                            }
+                            lastUpdateTime = Date()
+                        }
+                    }
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: fullContent, isStreaming: false)
                         if let versions = existingVersions {
                             self.chatManager.attachVersions(versions, to: aiMsgId)
                         }
@@ -3311,6 +3420,8 @@ struct SidebarRow: View {
 struct HeaderView: View {
     @Binding var selectedProvider: String
     var onNewChat: () -> Void
+    @ObservedObject private var accountManager = AccountManager.shared
+    @ObservedObject private var copilotService = GitHubCopilotService.shared
 
     var body: some View {
         HStack {
@@ -3320,14 +3431,73 @@ struct HeaderView: View {
                         Label("Apple Foundation", systemImage: getProviderIcon("Apple Foundation"))
                     }
                 }
-                Section("API") {
-                    Button(action: { selectedProvider = "Gemini API" }) {
-                        Label("Gemini API", systemImage: getProviderIcon("Gemini API"))
-                    }
-                    Button(action: { selectedProvider = "Ollama" }) {
-                        Label("Ollama", systemImage: getProviderIcon("Ollama"))
+
+                // Only show Gemini if there are configured accounts with API keys
+                let geminiAccounts = accountManager.geminiAccounts().filter { !$0.apiKey.isEmpty }
+                if !geminiAccounts.isEmpty {
+                    Section("Gemini API") {
+                        if geminiAccounts.count == 1 {
+                            Button(action: { selectedProvider = "Gemini API" }) {
+                                Label(
+                                    geminiAccounts[0].displayName,
+                                    systemImage: getProviderIcon("Gemini API"))
+                            }
+                        } else {
+                            ForEach(Array(geminiAccounts.enumerated()), id: \.element.id) {
+                                index, account in
+                                Button(action: {
+                                    selectedProvider = "Gemini API|\(account.id.uuidString)"
+                                }) {
+                                    Label(
+                                        account.displayName,
+                                        systemImage: getProviderIcon("Gemini API"))
+                                }
+                            }
+                        }
                     }
                 }
+
+                // Only show Ollama if there are configured accounts
+                let ollamaAccounts = accountManager.ollamaAccounts()
+                if !ollamaAccounts.isEmpty {
+                    Section("Ollama") {
+                        if ollamaAccounts.count == 1 {
+                            Button(action: { selectedProvider = "Ollama" }) {
+                                Label(
+                                    ollamaAccounts[0].displayName,
+                                    systemImage: getProviderIcon("Ollama"))
+                            }
+                        } else {
+                            ForEach(Array(ollamaAccounts.enumerated()), id: \.element.id) {
+                                index, account in
+                                Button(action: {
+                                    selectedProvider = "Ollama|\(account.id.uuidString)"
+                                }) {
+                                    Label(
+                                        account.displayName, systemImage: getProviderIcon("Ollama"))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Only show GitHub Copilot if signed in
+                if copilotService.isAuthenticated {
+                    Section("GitHub Copilot") {
+                        Button(action: { selectedProvider = "GitHub Copilot" }) {
+                            Label("GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot"))
+                        }
+                    }
+                }
+
+                if GeminiCLIService.shared.isAvailable {
+                    Section("Gemini CLI") {
+                        Button(action: { selectedProvider = "Gemini CLI" }) {
+                            Label("Gemini CLI", systemImage: getProviderIcon("Gemini CLI"))
+                        }
+                    }
+                }
+
                 Section("Shortcuts") {
                     Button(action: { selectedProvider = "Private Cloud" }) {
                         Label("Private Cloud", systemImage: getProviderIcon("Private Cloud"))
@@ -3347,7 +3517,7 @@ struct HeaderView: View {
                             LinearGradient(
                                 colors: [.blue, .green], startPoint: .topLeading,
                                 endPoint: .bottomTrailing))
-                    Text(selectedProvider)
+                    Text(headerDisplayName(selectedProvider))
                         .font(.headline)
                         .foregroundStyle(.primary)
                     Image(systemName: "chevron.down")
@@ -3373,14 +3543,31 @@ struct HeaderView: View {
         .padding(.top, 8)
         .padding(.bottom, 4)
     }
+
+    func headerDisplayName(_ provider: String) -> String {
+        // Handle multi-account provider strings like "Gemini API|uuid"
+        if provider.contains("|") {
+            let parts = provider.split(separator: "|")
+            if let uuidStr = parts.last, let uuid = UUID(uuidString: String(uuidStr)),
+                let account = accountManager.accounts.first(where: { $0.id == uuid })
+            {
+                return account.displayName
+            }
+        }
+        return provider
+    }
+
     func getProviderIcon(_ provider: String) -> String {
-        switch provider {
+        let base = provider.split(separator: "|").first.map(String.init) ?? provider
+        switch base {
         case "Apple Foundation": return "apple.logo"
         case "On-Device": return "iphone"
         case "Private Cloud": return "lock.icloud"
         case "Gemini API": return "sparkles"
         case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
         case "ChatGPT": return "message"
+        case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
+        case "Gemini CLI": return "terminal"
         default: return "cpu"
         }
     }
@@ -3555,13 +3742,16 @@ struct InputView: View {
     var thinkingMode: ThinkingMode
     var isOllama: Bool = false
     var isGemini: Bool = false
+    var isCopilot: Bool = false
     @Binding var webSearchEnabled: Bool
     var hasOllamaAPIKey: Bool = false
     var onSlashAction: ((String) -> Void)? = nil  // callback for action commands (/clear, /quit, /new)
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
+    @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
+    @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
     @ObservedObject private var slashCommandManager = SlashCommandManager.shared
 
     @State private var isFocused: Bool = false
@@ -3770,7 +3960,9 @@ struct InputView: View {
                                                     geminiManager.displayName(for: model),
                                                     systemImage: "checkmark")
                                             } else {
-                                                Text(GeminiModelManager.shared.displayName(for: model))
+                                                Text(
+                                                    GeminiModelManager.shared.displayName(
+                                                        for: model))
                                             }
                                         }
                                     }
@@ -3781,7 +3973,8 @@ struct InputView: View {
                         Divider()
 
                         Menu("Manage Favorites") {
-                            ForEach(GeminiModelManager.shared.availableModels, id: \.self) { model in
+                            ForEach(GeminiModelManager.shared.availableModels, id: \.self) {
+                                model in
                                 Button(action: { geminiManager.toggleFavorite(model) }) {
                                     if geminiManager.isFavorite(model) {
                                         Label(
@@ -3810,6 +4003,44 @@ struct InputView: View {
                     }
                     .menuStyle(.borderlessButton)
                     .help("Select Gemini Model")
+                }
+
+                if isCopilot {
+                    Menu {
+                        let providers = ["Anthropic", "OpenAI", "Google", "xAI"]
+                        ForEach(providers, id: \.self) { provider in
+                            let models = copilotModelManager.chatModels.filter { copilotModelManager.getProvider(for: $0) == provider }
+                            if !models.isEmpty {
+                                Section(provider) {
+                                    ForEach(models, id: \.self) { model in
+                                        Button(action: { selectedCopilotModel = model }) {
+                                            if selectedCopilotModel == model {
+                                                Label(
+                                                    copilotModelManager.displayName(for: model),
+                                                    systemImage: "checkmark")
+                                            } else {
+                                                Text(copilotModelManager.displayName(for: model))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04))
+                            )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Select Copilot Model")
                 }
 
                 if thinkingMode != .none {
@@ -5216,7 +5447,8 @@ struct MessageView: View, Equatable {
                     if let attachments = message.attachments {
                         let imageAttachments = attachments.filter { $0.type == "image" }
                         if !imageAttachments.isEmpty {
-                            ForEach(Array(imageAttachments.enumerated()), id: \.element.id) { index, att in
+                            ForEach(Array(imageAttachments.enumerated()), id: \.element.id) {
+                                index, att in
                                 if let image = NSImage(data: att.data) {
                                     ThumbnailView(
                                         image: image, maxWidth: 200, maxHeight: 300,
@@ -5657,18 +5889,495 @@ struct SettingsView: View {
     @AppStorage("AIAutocompleteCustomInstruction") private var autocompletePersona: String = ""
     @AppStorage("AIAutocompleteBlacklist") private var autocompleteBlacklist: String = "[]"
     @AppStorage("AIAutocompleteMemoryEnabled") private var autocompleteMemory: Bool = true
-    @AppStorage("AIAutocompleteCompletionLength") private var autocompleteCompletionLength: String = "Medium (~ 2 - 4 words)"
+    @AppStorage("AIAutocompleteCompletionLength") private var autocompleteCompletionLength: String =
+        "Medium (~ 2 - 4 words)"
 
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
+    @ObservedObject var accountManager = AccountManager.shared
+    @ObservedObject var copilotService = GitHubCopilotService.shared
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
+    @State private var editingAccountId: UUID? = nil
+    @State private var editingAccountName: String = ""
+
+    // MARK: - Appearance Section
+
+    @ViewBuilder
+    private var appearanceSection: some View {
+        Section(header: Label("Appearance", systemImage: "paintbrush")) {
+            LabeledContent {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(AppTheme.allCases) { theme in
+                            VStack(spacing: 4) {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: theme.colors,
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 22, height: 22)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                    )
+                                    .padding(3)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(
+                                                Color.accentColor,
+                                                lineWidth: appTheme == theme ? 2 : 0)
+                                    )
+                                    .onTapGesture {
+                                        appTheme = theme
+                                        IconManager.shared.updateIcon(theme: theme)
+                                    }
+
+                                Text(theme.rawValue)
+                                    .font(.caption2)
+                                    .foregroundStyle(
+                                        appTheme == theme ? Color.secondary : Color.clear
+                                    )
+                                    .fixedSize()
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 2)
+                }
+            } label: {
+                Label("Theme Color", systemImage: "circle.lefthalf.filled")
+            }
+
+            LabeledContent {
+                HStack {
+                    TextField("Path", text: $backgroundImagePath)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Browse") {
+                        let panel = NSOpenPanel()
+                        panel.allowedContentTypes = [.image]
+                        if panel.runModal() == .OK {
+                            backgroundImagePath = panel.url?.path ?? ""
+                        }
+                    }
+                    if !backgroundImagePath.isEmpty {
+                        Button(action: { backgroundImagePath = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } label: {
+                Label("Background Image", systemImage: "photo")
+            }
+        }
+    }
+
+    // MARK: - General Section
+
+    @ViewBuilder
+    private var generalSection: some View {
+        Section(header: Label("General", systemImage: "gear")) {
+            Toggle(isOn: $showMenuBar) {
+                Label("Show Menu Bar Icon", systemImage: "menubar.rectangle")
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: $enableQuickAI) {
+                Label("Enable Quick AI Hotkey", systemImage: "bolt.fill")
+            }
+            .toggleStyle(.switch)
+
+            if enableQuickAI {
+                LabeledContent {
+                    KeyboardShortcuts.Recorder(for: .toggleQuickAI)
+                } label: {
+                    Label("Global Shortcut", systemImage: "command")
+                }
+            }
+        }
+    }
+
+    // MARK: - Quick AI Section
+
+    @ViewBuilder
+    private var quickAISection: some View {
+        Section(header: Label("Quick AI Appearance", systemImage: "window.shade.open")) {
+            LabeledContent {
+                HStack {
+                    Slider(
+                        value: Binding(
+                            get: { quickAIBackgroundOpacity },
+                            set: { quickAIBackgroundOpacity = min(max($0, 0.05), 1.0) }
+                        ),
+                        in: 0.05...1.0
+                    )
+                    Text("\(Int(min(max(quickAIBackgroundOpacity, 0.05), 1.0) * 100))%")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .trailing)
+                }
+            } label: {
+                Label("Background Opacity", systemImage: "circle.dotted")
+            }
+
+            LabeledContent {
+                HStack {
+                    Slider(
+                        value: Binding(
+                            get: { quickAICommandBarVibrancy },
+                            set: { quickAICommandBarVibrancy = min(max($0, 0.05), 1.0) }
+                        ),
+                        in: 0.05...1.0
+                    )
+                    Text("\(Int(min(max(quickAICommandBarVibrancy, 0.05), 1.0) * 100))%")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .trailing)
+                }
+            } label: {
+                Label("Chat Bar Vibrancy", systemImage: "sparkle")
+            }
+
+            LabeledContent {
+                HStack {
+                    Slider(
+                        value: Binding(
+                            get: { quickAIChatBarTintIntensity },
+                            set: { quickAIChatBarTintIntensity = min(max($0, 0.0), 1.0) }
+                        ),
+                        in: 0.0...1.0
+                    )
+                    Text("\(Int(min(max(quickAIChatBarTintIntensity, 0.0), 1.0) * 100))%")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .trailing)
+                }
+            } label: {
+                Label("Chat Bar Tint", systemImage: "paintbrush.pointed")
+            }
+
+            LabeledContent {
+                HStack {
+                    Slider(
+                        value: Binding(
+                            get: { quickAITintIntensity },
+                            set: { quickAITintIntensity = min(max($0, 0.0), 1.0) }
+                        ),
+                        in: 0.0...1.0
+                    )
+                    Text("\(Int(min(max(quickAITintIntensity, 0.0), 1.0) * 100))%")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .frame(width: 35, alignment: .trailing)
+                }
+            } label: {
+                Label("Glass Tint", systemImage: "rectangle.on.rectangle")
+            }
+        }
+    }
+
+    // MARK: - AI Providers Section
+
+    @ViewBuilder
+    private var geminiSection: some View {
+        let geminiAccts = accountManager.geminiAccounts()
+        Section(header: Label("Gemini API", systemImage: "diamond")) {
+            ForEach(geminiAccts) { (account: ProviderAccount) in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        if editingAccountId == account.id {
+                            TextField("Name", text: $editingAccountName)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 150)
+                            Button("Save") {
+                                accountManager.renameAccount(
+                                    id: account.id, newName: editingAccountName)
+                                editingAccountId = nil
+                            }
+                            .buttonStyle(.borderless)
+                        } else {
+                            Label(account.displayName, systemImage: "person.circle")
+                                .font(.headline)
+                            Spacer()
+                            Button {
+                                editingAccountName = account.displayName
+                                editingAccountId = account.id
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            if geminiAccts.count > 1 {
+                                Button(role: .destructive) {
+                                    accountManager.removeAccount(id: account.id)
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                    }
+                    SecureField(
+                        "API Key",
+                        text: Binding(
+                            get: { account.apiKey },
+                            set: { newKey in
+                                accountManager.updateAccount(id: account.id, apiKey: newKey)
+                            }
+                        )
+                    )
+                    .textFieldStyle(.roundedBorder)
+                }
+                .padding(.vertical, 4)
+            }
+
+            Picker(selection: $geminiModel) {
+                ForEach(GeminiModelManager.shared.availableModels, id: \.self) { model in
+                    Text(GeminiModelManager.shared.displayName(for: model)).tag(model)
+                }
+            } label: {
+                Label("Default Model", systemImage: "cpu")
+            }
+
+            Button {
+                accountManager.addAccount(
+                    providerType: .gemini, displayName: "Gemini \(geminiAccts.count + 1)")
+            } label: {
+                Label("Add Gemini Account", systemImage: "plus.circle")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var ollamaSection: some View {
+        let ollamaAccts = accountManager.ollamaAccounts()
+        Section(header: Label("Ollama", systemImage: "server.rack")) {
+            ForEach(ollamaAccts) { (account: ProviderAccount) in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        if editingAccountId == account.id {
+                            TextField("Name", text: $editingAccountName)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 150)
+                            Button("Save") {
+                                accountManager.renameAccount(
+                                    id: account.id, newName: editingAccountName)
+                                editingAccountId = nil
+                            }
+                            .buttonStyle(.borderless)
+                        } else {
+                            Label(account.displayName, systemImage: "person.circle")
+                                .font(.headline)
+                            Spacer()
+                            Button {
+                                editingAccountName = account.displayName
+                                editingAccountId = account.id
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            if ollamaAccts.count > 1 {
+                                Button(role: .destructive) {
+                                    accountManager.removeAccount(id: account.id)
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                    }
+                    TextField(
+                        "Endpoint URL",
+                        text: Binding(
+                            get: { account.endpoint },
+                            set: { newURL in
+                                accountManager.updateAccount(id: account.id, endpoint: newURL)
+                            }
+                        )
+                    )
+                    .textFieldStyle(.roundedBorder)
+
+                    SecureField(
+                        "API Key (optional, for web search)",
+                        text: Binding(
+                            get: { account.apiKey },
+                            set: { newKey in
+                                accountManager.updateAccount(id: account.id, apiKey: newKey)
+                            }
+                        )
+                    )
+                    .textFieldStyle(.roundedBorder)
+                }
+                .padding(.vertical, 4)
+            }
+
+            Button {
+                accountManager.addAccount(
+                    providerType: .ollama, displayName: "Ollama \(ollamaAccts.count + 1)",
+                    endpoint: "http://localhost:11434")
+            } label: {
+                Label("Add Ollama Account", systemImage: "plus.circle")
+            }
+        }
+
+        Section(header: Label("Ollama Custom Models", systemImage: "cube")) {
+            HStack {
+                TextField("Add model (e.g. llama3:70b)", text: $newCustomModelName)
+                    .textFieldStyle(.roundedBorder)
+                Button("Add") {
+                    ollamaManager.addCustomModel(newCustomModelName)
+                    newCustomModelName = ""
+                }
+            }
+
+            ForEach(ollamaManager.customModels, id: \.self) { model in
+                HStack {
+                    Text(model)
+                        .font(.system(.callout, design: .monospaced))
+                    Spacer()
+                    Button(role: .destructive) {
+                        ollamaManager.removeCustomModel(model)
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                .padding(8)
+                .background(Color.gray.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var copilotSection: some View {
+        Section(
+            header: Label("GitHub Copilot", systemImage: "chevron.left.forwardslash.chevron.right")
+        ) {
+            if copilotService.isAuthenticated {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Signed in to GitHub")
+                        .font(.headline)
+                    Spacer()
+                    Button("Sign Out") {
+                        copilotService.signOut()
+                    }
+                    .foregroundStyle(.red)
+                }
+
+                let copilotAccts = accountManager.copilotAccounts()
+                ForEach(copilotAccts) { (account: ProviderAccount) in
+                    HStack {
+                        if editingAccountId == account.id {
+                            TextField("Name", text: $editingAccountName)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 150)
+                            Button("Save") {
+                                accountManager.renameAccount(
+                                    id: account.id, newName: editingAccountName)
+                                editingAccountId = nil
+                            }
+                            .buttonStyle(.borderless)
+                        } else {
+                            Label(account.displayName, systemImage: "person.circle")
+                            Spacer()
+                            Button {
+                                editingAccountName = account.displayName
+                                editingAccountId = account.id
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+            } else if copilotService.isSigningIn {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Waiting for GitHub authorization...")
+                            .foregroundStyle(.secondary)
+                    }
+                    if let code = copilotService.deviceCode {
+                        HStack {
+                            Text("Enter code:")
+                                .foregroundStyle(.secondary)
+                            Text(code)
+                                .font(.system(.title2, design: .monospaced, weight: .bold))
+                                .textSelection(.enabled)
+                            Button {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(code, forType: .string)
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                        if let url = copilotService.verificationURL {
+                            Link("Open GitHub to enter code", destination: url)
+                        }
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Sign in with your GitHub account to use Copilot models.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        copilotService.startSignIn()
+                    } label: {
+                        Label("Sign in with GitHub", systemImage: "arrow.right.circle.fill")
+                            .font(.headline)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            if let error = copilotService.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    // MARK: - System Prompt Section
+
+    @ViewBuilder
+    private var systemPromptSection: some View {
+        Section(header: Label("System Prompt", systemImage: "text.quote")) {
+            TextEditor(text: $systemPrompt)
+                .font(.system(.body, design: .monospaced))
+                .frame(height: 80)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4).stroke(
+                        Color.gray.opacity(0.2), lineWidth: 1))
+            Text("Instructions for how the AI should behave across all chats.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Autocomplete Sections
 
     @ViewBuilder
     private var autocompleteSections: some View {
-            Section(header: Label("AI Autocomplete", systemImage: "text.cursor")) {
-                Toggle(isOn: Binding(
+        Section(header: Label("AI Autocomplete", systemImage: "text.cursor")) {
+            Toggle(
+                isOn: Binding(
                     get: { enableAutocomplete },
                     set: { newValue in
                         enableAutocomplete = newValue
@@ -5678,204 +6387,307 @@ struct SettingsView: View {
                             AutocompleteManager.shared.stop()
                         }
                     }
-                )) {
-                    Label("Enable AI Autocomplete", systemImage: "sparkles")
+                )
+            ) {
+                Label("Enable AI Autocomplete", systemImage: "sparkles")
+            }
+            .toggleStyle(.switch)
+
+            if enableAutocomplete {
+                LabeledContent {
+                    KeyboardShortcuts.Recorder(for: .toggleAIAutocomplete)
+                } label: {
+                    Label("Toggle Shortcut", systemImage: "command")
+                }
+            }
+        }
+
+        if enableAutocomplete {
+            Section(header: Label("Autocomplete Model", systemImage: "cpu")) {
+                Picker(selection: $autocompleteBackend) {
+                    ForEach(AutocompleteService.Backend.allCases) { backend in
+                        Text(backend.rawValue).tag(backend.rawValue)
+                    }
+                } label: {
+                    Label("AI Backend", systemImage: "server.rack")
+                }
+
+                if autocompleteBackend != "Apple Intelligence" {
+                    LabeledContent {
+                        Picker("Model", selection: $autocompleteModel) {
+                            if autocompleteModel.isEmpty {
+                                Text("Select a model...").tag("")
+                            }
+                            if autocompleteBackend == "Ollama" {
+                                ForEach(OllamaModelManager.shared.allModels, id: \.self) { model in
+                                    Text(model).tag(model)
+                                }
+                            } else if autocompleteBackend == "Gemini" {
+                                ForEach(GeminiModelManager.shared.availableModels, id: \.self) {
+                                    model in
+                                    Text(GeminiModelManager.shared.displayName(for: model)).tag(
+                                        model)
+                                }
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: 180)
+                    } label: {
+                        Label("Model Name", systemImage: "brain.head.profile")
+                    }
+                    Text("Select the model used for completions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section(header: Label("Completion Settings", systemImage: "text.alignleft")) {
+                Picker(selection: $autocompleteCompletionLength) {
+                    ForEach(
+                        ["Short (~ 1 - 2 words)", "Medium (~ 2 - 4 words)", "Long (~ 5+ words)"],
+                        id: \.self
+                    ) { length in
+                        Text(length).tag(length)
+                    }
+                } label: {
+                    Label("Maximum Length", systemImage: "ruler")
+                }
+                Text("Controls how long generated completions can be.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(header: Label("Autocomplete Behavior", systemImage: "slider.horizontal.3")) {
+                LabeledContent {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { Double(autocompleteDebounceMs) },
+                                set: { autocompleteDebounceMs = Int($0) }
+                            ),
+                            in: 0...1500,
+                            step: 50
+                        )
+                        Text("\(autocompleteDebounceMs)ms")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 55, alignment: .trailing)
+                    }
+                } label: {
+                    Label("Prediction Delay", systemImage: "timer")
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Custom Instructions", systemImage: "text.quote")
+                    TextEditor(text: $autocompletePersona)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(height: 80)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4).stroke(
+                                Color.gray.opacity(0.2), lineWidth: 1))
+                    Text("Additional instructions or persona for autocomplete to follow.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("App Blocklist", systemImage: "xmark.app")
+
+                    let blacklistedApps: [String] = {
+                        guard let data = autocompleteBlacklist.data(using: .utf8),
+                            let arr = try? JSONDecoder().decode([String].self, from: data)
+                        else { return [] }
+                        return arr
+                    }()
+
+                    if blacklistedApps.isEmpty {
+                        Text("No apps blocked.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 2)
+                    } else {
+                        VStack(spacing: 4) {
+                            ForEach(blacklistedApps, id: \.self) { bundleId in
+                                HStack {
+                                    Text(bundleId)
+                                        .font(.system(.callout, design: .monospaced))
+                                    Spacer()
+                                    Button(action: {
+                                        var apps = blacklistedApps
+                                        apps.removeAll { $0 == bundleId }
+                                        if let data = try? JSONEncoder().encode(apps),
+                                            let json = String(data: data, encoding: .utf8)
+                                        {
+                                            autocompleteBlacklist = json
+                                        }
+                                    }) {
+                                        Image(systemName: "minus.circle.fill")
+                                            .foregroundColor(.red.opacity(0.8))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(6)
+                                .background(Color(NSColor.controlBackgroundColor))
+                                .cornerRadius(6)
+                            }
+                        }
+                    }
+
+                    Button(action: {
+                        let panel = NSOpenPanel()
+                        panel.allowedContentTypes = [UTType.application]
+                        panel.allowsMultipleSelection = false
+                        panel.canChooseDirectories = false
+                        panel.canChooseFiles = true
+                        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+
+                        if panel.runModal() == .OK, let url = panel.url {
+                            if let bundle = Bundle(url: url), let bundleId = bundle.bundleIdentifier
+                            {
+                                var apps = blacklistedApps
+                                if !apps.contains(bundleId) {
+                                    apps.append(bundleId)
+                                    if let data = try? JSONEncoder().encode(apps),
+                                        let json = String(data: data, encoding: .utf8)
+                                    {
+                                        autocompleteBlacklist = json
+                                    }
+                                }
+                            }
+                        }
+                    }) {
+                        Label("Add App...", systemImage: "plus.circle")
+                    }
+                    .padding(.top, 4)
+
+                    Text("Disable autocomplete in specific apps by selecting them.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section(header: Label("Writing Memory", systemImage: "brain")) {
+                Toggle(isOn: $autocompleteMemory) {
+                    Label("Learn Writing Style", systemImage: "memorychip")
                 }
                 .toggleStyle(.switch)
 
-                if enableAutocomplete {
-                    LabeledContent {
-                        KeyboardShortcuts.Recorder(for: .toggleAIAutocomplete)
-                    } label: {
-                        Label("Toggle Shortcut", systemImage: "command")
-                    }
-                }
-            }
+                Text(
+                    "Remembers accepted suggestions to match your style. Auto-expires after 7 days."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
-            if enableAutocomplete {
-                Section(header: Label("AI Model", systemImage: "cpu")) {
-                    Picker(selection: $autocompleteBackend) {
-                        ForEach(AutocompleteService.Backend.allCases) { backend in
-                            Text(backend.rawValue).tag(backend.rawValue)
-                        }
-                    } label: {
-                        Label("AI Backend", systemImage: "server.rack")
-                    }
-
-                    if autocompleteBackend != "Apple Intelligence" {
-                        LabeledContent {
-                            Picker("Model", selection: $autocompleteModel) {
-                                if autocompleteModel.isEmpty {
-                                    Text("Select a model...").tag("")
-                                }
-                                if autocompleteBackend == "Ollama" {
-                                    ForEach(OllamaModelManager.shared.allModels, id: \.self) { model in
-                                        Text(model).tag(model)
-                                    }
-                                } else if autocompleteBackend == "Gemini" {
-                                    ForEach(GeminiModelManager.shared.availableModels, id: \.self) { model in
-                                        Text(GeminiModelManager.shared.displayName(for: model)).tag(model)
-                                    }
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .frame(maxWidth: 180)
+                if autocompleteMemory {
+                    HStack {
+                        Label("\(WritingMemory.shared.count) samples", systemImage: "doc.text")
+                            .foregroundStyle(.secondary)
+                            .font(.callout)
+                        Spacer()
+                        Button(role: .destructive) {
+                            WritingMemory.shared.clearAll()
                         } label: {
-                            Label("Model Name", systemImage: "brain.head.profile")
-                        }
-                        Text("Select the model used for completions.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section(header: Label("Completion Settings", systemImage: "text.alignleft")) {
-                    Picker(selection: $autocompleteCompletionLength) {
-                        ForEach(["Short (~ 1 - 2 words)", "Medium (~ 2 - 4 words)", "Long (~ 5+ words)"], id: \.self) { length in
-                            Text(length).tag(length)
-                        }
-                    } label: {
-                        Label("Maximum Length", systemImage: "ruler")
-                    }
-                    Text("Controls how long generated completions can be.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section(header: Label("Behavior", systemImage: "slider.horizontal.3")) {
-                    LabeledContent {
-                        HStack {
-                            Slider(
-                                value: Binding(
-                                    get: { Double(autocompleteDebounceMs) },
-                                    set: { autocompleteDebounceMs = Int($0) }
-                                ),
-                                in: 0...1500,
-                                step: 50
-                            )
-                            Text("\(autocompleteDebounceMs)ms")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 55, alignment: .trailing)
-                        }
-                    } label: {
-                        Label("Prediction Delay", systemImage: "timer")
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Custom Instructions", systemImage: "text.quote")
-                        TextEditor(text: $autocompletePersona)
-                            .font(.system(.body, design: .monospaced))
-                            .frame(height: 80)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4).stroke(
-                                    Color.gray.opacity(0.2), lineWidth: 1))
-                        Text("Additional instructions or persona for autocomplete to follow.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("App Blocklist", systemImage: "xmark.app")
-                        
-                        let blacklistedApps: [String] = {
-                            guard let data = autocompleteBlacklist.data(using: .utf8),
-                                  let arr = try? JSONDecoder().decode([String].self, from: data)
-                            else { return [] }
-                            return arr
-                        }()
-                        
-                        if blacklistedApps.isEmpty {
-                            Text("No apps blocked.")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .padding(.vertical, 2)
-                        } else {
-                            VStack(spacing: 4) {
-                                ForEach(blacklistedApps, id: \.self) { bundleId in
-                                    HStack {
-                                        Text(bundleId)
-                                            .font(.system(.callout, design: .monospaced))
-                                        Spacer()
-                                        Button(action: {
-                                            var apps = blacklistedApps
-                                            apps.removeAll { $0 == bundleId }
-                                            if let data = try? JSONEncoder().encode(apps),
-                                               let json = String(data: data, encoding: .utf8) {
-                                                autocompleteBlacklist = json
-                                            }
-                                        }) {
-                                            Image(systemName: "minus.circle.fill")
-                                                .foregroundColor(.red.opacity(0.8))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    .padding(6)
-                                    .background(Color(NSColor.controlBackgroundColor))
-                                    .cornerRadius(6)
-                                }
-                            }
-                        }
-                        
-                        Button(action: {
-                            let panel = NSOpenPanel()
-                            panel.allowedContentTypes = [UTType.application]
-                            panel.allowsMultipleSelection = false
-                            panel.canChooseDirectories = false
-                            panel.canChooseFiles = true
-                            panel.directoryURL = URL(fileURLWithPath: "/Applications")
-                            
-                            if panel.runModal() == .OK, let url = panel.url {
-                                if let bundle = Bundle(url: url), let bundleId = bundle.bundleIdentifier {
-                                    var apps = blacklistedApps
-                                    if !apps.contains(bundleId) {
-                                        apps.append(bundleId)
-                                        if let data = try? JSONEncoder().encode(apps),
-                                           let json = String(data: data, encoding: .utf8) {
-                                            autocompleteBlacklist = json
-                                        }
-                                    }
-                                }
-                            }
-                        }) {
-                            Label("Add App...", systemImage: "plus.circle")
-                        }
-                        .padding(.top, 4)
-
-                        Text("Disable autocomplete in specific apps by selecting them.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                Section(header: Label("Writing Memory", systemImage: "brain")) {
-                    Toggle(isOn: $autocompleteMemory) {
-                        Label("Learn Writing Style", systemImage: "memorychip")
-                    }
-                    .toggleStyle(.switch)
-
-                    Text("Remembers accepted suggestions to match your style. Auto-expires after 7 days.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if autocompleteMemory {
-                        HStack {
-                            Label("\(WritingMemory.shared.count) samples", systemImage: "doc.text")
-                                .foregroundStyle(.secondary)
-                                .font(.callout)
-                            Spacer()
-                            Button(role: .destructive) {
-                                WritingMemory.shared.clearAll()
-                            } label: {
-                                Label("Clear Memory", systemImage: "trash")
-                            }
+                            Label("Clear Memory", systemImage: "trash")
                         }
                     }
                 }
             }
+        }
     }
+
+    // MARK: - File Downloads Section
+
+    @ViewBuilder
+    private var fileDownloadsSection: some View {
+        Section(header: Label("File Downloads", systemImage: "arrow.down.doc")) {
+            LabeledContent {
+                HStack {
+                    TextField("", text: $imageDownloadPath)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Browse") {
+                        let panel = NSOpenPanel()
+                        panel.canChooseFiles = false
+                        panel.canChooseDirectories = true
+                        panel.allowsMultipleSelection = false
+                        if panel.runModal() == .OK {
+                            imageDownloadPath = panel.url?.path ?? ""
+                        }
+                    }
+                    if !imageDownloadPath.isEmpty {
+                        Button(action: { imageDownloadPath = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } label: {
+                Label("Save Path", systemImage: "folder")
+            }
+            Text(
+                "Generated files will be instantly saved to this folder. Leave empty to disable."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Apple Shortcuts Section
+
+    @ViewBuilder
+    private var shortcutsSection: some View {
+        Section(header: Label("Apple Shortcuts", systemImage: "command")) {
+            LabeledContent {
+                TextField("", text: $shortcutPrivateCloud)
+                    .textFieldStyle(.roundedBorder)
+            } label: {
+                Label("Private Cloud", systemImage: "cloud.fill")
+            }
+            LabeledContent {
+                TextField("", text: $shortcutOnDevice)
+                    .textFieldStyle(.roundedBorder)
+            } label: {
+                Label("On-Device", systemImage: "iphone")
+            }
+            LabeledContent {
+                TextField("", text: $shortcutChatGPT)
+                    .textFieldStyle(.roundedBorder)
+            } label: {
+                Label("ChatGPT", systemImage: "bubble.left.fill")
+            }
+            LabeledContent {
+                TextField("", text: $shortcutImageGen)
+                    .textFieldStyle(.roundedBorder)
+            } label: {
+                Label("Image Gen", systemImage: "photo.fill")
+            }
+            LabeledContent {
+                TextField("", text: $shortcutImageGenChatGPT)
+                    .textFieldStyle(.roundedBorder)
+            } label: {
+                Label("Image Gen (ChatGPT)", systemImage: "photo.badge.plus")
+            }
+        }
+    }
+
+    // MARK: - Data Section
+
+    @ViewBuilder
+    private var dataSection: some View {
+        Section(header: Label("Data & Privacy", systemImage: "externaldrive")) {
+            Button(role: .destructive) {
+                chatManager.deleteAllSessions()
+            } label: {
+                Label("Clear All Chat History", systemImage: "trash")
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    // MARK: - Body
+
     var body: some View {
         Form {
             Section {
@@ -5885,288 +6697,20 @@ struct SettingsView: View {
             }
             .listRowBackground(Color.clear)
 
-            Section(header: Text("Theme")) {
-                LabeledContent("Color") {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(AppTheme.allCases) { theme in
-                                VStack(spacing: 4) {
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: theme.colors,
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .frame(width: 22, height: 22)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                        )
-                                        .padding(3)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(
-                                                    Color.accentColor,
-                                                    lineWidth: appTheme == theme ? 2 : 0)
-                                        )
-                                        .onTapGesture {
-                                            appTheme = theme
-                                            IconManager.shared.updateIcon(theme: theme)
-                                        }
+            appearanceSection
+            generalSection
+            quickAISection
 
-                                    Text(theme.rawValue)
-                                        .font(.caption2)
-                                        .foregroundStyle(
-                                            appTheme == theme ? Color.secondary : Color.clear
-                                        )
-                                        .fixedSize()
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 2)
-                    }
-                }
-            }
+            // AI Providers
+            geminiSection
+            ollamaSection
+            copilotSection
 
-            Section(header: Text("General")) {
-                Toggle("Show Menu Bar Icon", isOn: $showMenuBar)
-                    .toggleStyle(.switch)
-                Toggle("Enable Quick AI Hotkey", isOn: $enableQuickAI)
-                    .toggleStyle(.switch)
-
-                if enableQuickAI {
-                    LabeledContent("Global Shortcut") {
-                        KeyboardShortcuts.Recorder(for: .toggleQuickAI)
-                    }
-                }
-
-                LabeledContent("Quick AI Background Opacity") {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Slider(
-                                value: Binding(
-                                    get: { quickAIBackgroundOpacity },
-                                    set: { quickAIBackgroundOpacity = min(max($0, 0.05), 1.0) }
-                                ),
-                                in: 0.05...1.0
-                            )
-                            Text("\(Int(min(max(quickAIBackgroundOpacity, 0.05), 1.0) * 100))%")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 35, alignment: .trailing)
-                        }
-                        HStack {
-                            Text("Clear").font(.caption).foregroundStyle(.secondary)
-                            Spacer()
-                            Text("Opaque").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                LabeledContent("Quick AI Chat Bar Vibrancy") {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Slider(
-                                value: Binding(
-                                    get: { quickAICommandBarVibrancy },
-                                    set: { quickAICommandBarVibrancy = min(max($0, 0.05), 1.0) }
-                                ),
-                                in: 0.05...1.0
-                            )
-                            Text(
-                                "\(Int(min(max(quickAICommandBarVibrancy, 0.05), 1.0) * 100))%"
-                            )
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 35, alignment: .trailing)
-                        }
-                        HStack {
-                            Text("Subtle").font(.caption).foregroundStyle(.secondary)
-                            Spacer()
-                            Text("Punchy").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                LabeledContent("Quick AI Chat Bar Tint Intensity") {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Slider(
-                                value: Binding(
-                                    get: { quickAIChatBarTintIntensity },
-                                    set: { quickAIChatBarTintIntensity = min(max($0, 0.0), 1.0) }
-                                ),
-                                in: 0.0...1.0
-                            )
-                            Text("\(Int(min(max(quickAIChatBarTintIntensity, 0.0), 1.0) * 100))%")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 35, alignment: .trailing)
-                        }
-                        HStack {
-                            Text("None").font(.caption).foregroundStyle(.secondary)
-                            Spacer()
-                            Text("Full").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                LabeledContent("Quick AI Glass Tint Intensity") {
-                    VStack(spacing: 8) {
-                        HStack {
-                            Slider(
-                                value: Binding(
-                                    get: { quickAITintIntensity },
-                                    set: { quickAITintIntensity = min(max($0, 0.0), 1.0) }
-                                ),
-                                in: 0.0...1.0
-                            )
-                            Text("\(Int(min(max(quickAITintIntensity, 0.0), 1.0) * 100))%")
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                                .frame(width: 35, alignment: .trailing)
-                        }
-                        HStack {
-                            Text("None").font(.caption).foregroundStyle(.secondary)
-                            Spacer()
-                            Text("Full").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                LabeledContent("Background Image") {
-                    HStack {
-                        TextField("Path", text: $backgroundImagePath)
-                            .textFieldStyle(.roundedBorder)
-                        Button("Browse") {
-                            let panel = NSOpenPanel()
-                            panel.allowedContentTypes = [.image]
-                            if panel.runModal() == .OK {
-                                backgroundImagePath = panel.url?.path ?? ""
-                            }
-                        }
-                    }
-                }
-            }
-
+            systemPromptSection
             autocompleteSections
-
-            Section(header: Text("File Downloads")) {
-                LabeledContent("File save path") {
-                    HStack {
-                        TextField("", text: $imageDownloadPath)
-                            .textFieldStyle(.roundedBorder)
-                        Button("Browse") {
-                            let panel = NSOpenPanel()
-                            panel.canChooseFiles = false
-                            panel.canChooseDirectories = true
-                            panel.allowsMultipleSelection = false
-                            if panel.runModal() == .OK {
-                                imageDownloadPath = panel.url?.path ?? ""
-                            }
-                        }
-                        if !imageDownloadPath.isEmpty {
-                            Button(action: { imageDownloadPath = "" }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                Text(
-                    "Generated files will be instantly saved to this folder. Leave empty to disable."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section(header: Text("Gemini API")) {
-                TextField("API Key", text: $geminiKey)
-                    .textFieldStyle(.roundedBorder)
-                Picker("Default Model", selection: $geminiModel) {
-                    ForEach(GeminiModelManager.shared.availableModels, id: \.self) { model in
-                        Text(GeminiModelManager.shared.displayName(for: model)).tag(model)
-                    }
-                }
-            }
-
-            Section(header: Text("System Prompt")) {
-                TextEditor(text: $systemPrompt)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(height: 80)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4).stroke(
-                            Color.gray.opacity(0.2), lineWidth: 1))
-                Text("Instructions for how the AI should behave.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section(header: Text("Ollama")) {
-                TextField("Endpoint URL", text: $ollamaURL)
-                    .textFieldStyle(.roundedBorder)
-
-                SecureField("Ollama API Key (for web search)", text: $ollamaAPIKey)
-                    .textFieldStyle(.roundedBorder)
-                Text("Get a key at ollama.com/settings/keys — enables the web search button.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text("Custom Models").font(.headline)
-                    .padding(.top, 8)
-
-                HStack {
-                    TextField("Add model (e.g. llama3:70b)", text: $newCustomModelName)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Add") {
-                        ollamaManager.addCustomModel(newCustomModelName)
-                        newCustomModelName = ""
-                    }
-                }
-
-                ForEach(ollamaManager.customModels, id: \.self) { model in
-                    HStack {
-                        Text(model)
-                        Spacer()
-                        Button(role: .destructive) {
-                            ollamaManager.removeCustomModel(model)
-                        } label: {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                    .padding(8)
-                    .background(Color.gray.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-            }
-
-            Section(header: Text("Shortcuts")) {
-                TextField("Private Cloud", text: $shortcutPrivateCloud)
-                    .textFieldStyle(.roundedBorder)
-                TextField("On-Device", text: $shortcutOnDevice)
-                    .textFieldStyle(.roundedBorder)
-                TextField("ChatGPT", text: $shortcutChatGPT)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Image Gen", text: $shortcutImageGen)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Image Gen (ChatGPT)", text: $shortcutImageGenChatGPT)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            Section {
-                Button(role: .destructive) {
-                    chatManager.deleteAllSessions()
-                } label: {
-                    Text("Clear All Chat History")
-                        .frame(maxWidth: .infinity)
-                }
-            }
+            fileDownloadsSection
+            shortcutsSection
+            dataSection
 
             Section {
                 Rectangle()

@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const contextCloseBtn = document.getElementById('contextCloseBtn');
     const contextToggleText = document.getElementById('contextToggleText');
     const webSearchBtn = document.getElementById('webSearchBtn');
+    const agentBrowserBtn = document.getElementById('agentBrowserBtn');
 
     // State
     let chatHistory = [];
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let abortController = null;
     let includeContext = true;
     let includeWebSearch = false;
+    let agentBrowserEnabled = false;
     let thinkingLevel = 'medium';
     let thinkingDropdownOpen = false;
     let hasInjectedContextThisSession = false;
@@ -44,17 +46,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const models = await res.json();
             modelSelect.innerHTML = '';
 
-            const groups = { 'Apple': [], 'Gemini': [], 'Ollama': [], 'Other': [] };
+            const groups = { 'Apple': [], 'Gemini': [], 'Ollama': [], 'Copilot': [], 'Other': [] };
             models.forEach(m => {
                 let name = m.name;
                 let group = 'Other';
                 if (name.startsWith('Apple')) { group = 'Apple'; }
-                else if (name.startsWith('Gemini:')) { group = 'Gemini'; name = name.replace('Gemini: ', ''); }
-                else if (name.startsWith('Ollama:')) { group = 'Ollama'; name = name.replace('Ollama: ', ''); }
+                else if (name.startsWith('Gemini:') || name.includes(': Gemini')) { group = 'Gemini'; name = name.replace(/^Gemini:\s*/, '').replace(/^[^:]+:\s*/, ''); }
+                else if (name.startsWith('Ollama:') || name.includes(': ')) {
+                    if (m.id.startsWith('ollama:')) { group = 'Ollama'; name = name.replace(/^Ollama:\s*/, '').replace(/^[^:]+:\s*/, ''); }
+                    else if (m.id.startsWith('copilot:')) { group = 'Copilot'; name = name.replace(/^Copilot:\s*/, ''); }
+                    else { name = name.replace(/^[^:]+:\s*/, ''); }
+                }
+                else if (name.startsWith('Copilot:')) { group = 'Copilot'; name = name.replace('Copilot: ', ''); }
                 groups[group].push({ id: m.id, name });
             });
 
-            ['Apple', 'Gemini', 'Ollama', 'Other'].forEach(groupName => {
+            ['Apple', 'Copilot', 'Gemini', 'Ollama', 'Other'].forEach(groupName => {
                 if (groups[groupName].length > 0) {
                     const optgroup = document.createElement('optgroup');
                     optgroup.label = groupName;
@@ -88,6 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><path d="M12 2L13.09 8.26L18 6L14.74 10.91L21 12L14.74 13.09L18 18L13.09 15.74L12 22L10.91 15.74L6 18L9.26 13.09L3 12L9.26 10.91L6 6L10.91 8.26L12 2Z"/></svg>';
         if (modelId.startsWith('ollama:'))
             return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>';
+        if (modelId.startsWith('copilot:'))
+            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><path d="M12 2L3 7l9 5 9-5-9-5zM3 17l9 5 9-5M3 12l9 5 9-5"/></svg>';
         return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>';
     }
 
@@ -213,6 +222,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ── AGENT BROWSER TOGGLE ────────────────────────────────
+    agentBrowserBtn.addEventListener('click', () => {
+        agentBrowserEnabled = !agentBrowserEnabled;
+        agentBrowserBtn.classList.toggle('active', agentBrowserEnabled);
+        agentBrowserBtn.title = agentBrowserEnabled ? 'Agent Browser: ON' : 'Agent Browser Control';
+        if (agentBrowserEnabled) {
+            promptInput.placeholder = 'Describe what you want the agent to do on this page...';
+        } else {
+            promptInput.placeholder = 'Ask about this page...';
+        }
+    });
+
     // ── SEND / STOP ─────────────────────────────────────────
     sendBtn.addEventListener('click', () => {
         if (isGenerating) { stopGeneration(); }
@@ -326,6 +347,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Inject agent browser system prompt when agent mode is enabled
+        if (agentBrowserEnabled) {
+            messagesForApi.unshift({
+                role: 'system',
+                content: 'You are a browser automation agent. You can control the browser by outputting JSON action blocks wrapped in ```agent-action markers. Available actions:\n' +
+                    '- {"type":"click","selector":"CSS selector"} - Click an element\n' +
+                    '- {"type":"type","selector":"CSS selector","text":"text to type"} - Type text into an input\n' +
+                    '- {"type":"scroll","direction":"up|down","amount":300} - Scroll the page\n' +
+                    '- {"type":"navigate","url":"https://..."} - Navigate to a URL\n' +
+                    '- {"type":"getElements"} - Get interactive elements on the page\n' +
+                    '- {"type":"scan"} - Take a screenshot of the current page\n' +
+                    'Output actions as: ```agent-action\n{"type":"...","selector":"..."}\n```\n' +
+                    'You can output multiple actions. Explain what you are doing before each action.'
+            });
+        }
+
         console.log("SENDING TO API:", JSON.stringify(messagesForApi, null, 2));
 
         abortController = new AbortController();
@@ -407,6 +444,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? modelSelect.options[modelSelect.selectedIndex].textContent : modelId;
             assistant.modelBadge.textContent = 'Model used: ' + displayName;
             assistant.modelBadge.style.display = 'block';
+
+            // Parse and execute agent actions if agent mode is enabled
+            if (agentBrowserEnabled && fullContent) {
+                const actionRegex = /```agent-action\s*\n([\s\S]*?)```/g;
+                let match;
+                while ((match = actionRegex.exec(fullContent)) !== null) {
+                    try {
+                        const action = JSON.parse(match[1].trim());
+                        appendAgentAction(action.type + ': ' + (action.selector || action.url || action.direction || 'executing...'));
+                        await executeAgentAction(action);
+                    } catch (parseErr) {
+                        console.warn('Failed to parse agent action:', parseErr);
+                    }
+                }
+            }
 
         } catch (e) {
             if (cursorInterval) clearInterval(cursorInterval);
@@ -560,4 +612,112 @@ document.addEventListener('DOMContentLoaded', () => {
         div.textContent = text;
         return div.innerHTML;
     }
+
+    // ── AGENT MODE ──────────────────────────────────────────
+    let agentActions = []; // track agent actions for forwarding
+
+    async function executeAgentAction(action) {
+        let result;
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+            switch (action.type) {
+                case 'click':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentClick', selector: action.selector });
+                    break;
+                case 'type':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentType', selector: action.selector, text: action.text });
+                    break;
+                case 'scroll':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentScroll', direction: action.direction, amount: action.amount });
+                    break;
+                case 'drag':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentDrag', selector: action.selector, dx: action.dx, dy: action.dy });
+                    break;
+                case 'openTab':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentOpenTab', url: action.url, active: action.active }, resolve);
+                    });
+                    break;
+                case 'navigate':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentNavigate', url: action.url }, resolve);
+                    });
+                    break;
+                case 'getElements':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentGetElements' });
+                    break;
+                case 'scan':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentScreenshot' });
+                    break;
+                default:
+                    result = { ok: false, error: 'Unknown action: ' + action.type };
+            }
+        } catch (e) {
+            result = { ok: false, error: e.message };
+        }
+
+        if (result && result.summary) {
+            agentActions.push({ type: action.type, summary: result.summary });
+        }
+        return result;
+    }
+
+    function appendAgentAction(summary) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'agent-action-item';
+        wrapper.innerHTML = '<span class="agent-action-icon">⚡</span><span class="agent-action-text">' + escapeHtml(summary) + '</span>';
+        chatContainer.appendChild(wrapper);
+        scrollToBottom();
+    }
+
+    // ── FORWARD TO PRISM APP ────────────────────────────────
+    async function forwardChatToApp() {
+        if (chatHistory.length === 0) return;
+
+        // Filter out internal context from messages
+        const cleanMessages = chatHistory.map(m => {
+            let content = m.content;
+            // Remove injected webpage context
+            content = content.replace(/\[Webpage Context\]:[\s\S]*?\[User Message\]:\n/g, '');
+            return { role: m.role, content: content.trim() };
+        }).filter(m => m.content.length > 0);
+
+        const modelName = modelSelect.options[modelSelect.selectedIndex]
+            ? modelSelect.options[modelSelect.selectedIndex].textContent : modelSelect.value;
+
+        try {
+            const res = await fetch('http://localhost:8080/api/forward-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: cleanMessages,
+                    model: modelName,
+                    agentActions: agentActions
+                })
+            });
+            if (res.ok) {
+                showForwardSuccess();
+            }
+        } catch (e) {
+            console.error('Failed to forward chat:', e);
+        }
+    }
+
+    function showForwardSuccess() {
+        const toast = document.createElement('div');
+        toast.className = 'forward-toast';
+        toast.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Sent to Prism';
+        document.body.appendChild(toast);
+        setTimeout(() => { toast.classList.add('visible'); }, 10);
+        setTimeout(() => { toast.classList.remove('visible'); setTimeout(() => toast.remove(), 300); }, 2500);
+    }
+
+    // Add forward button to header
+    const forwardBtn = document.createElement('button');
+    forwardBtn.className = 'header-icon-btn';
+    forwardBtn.title = 'Send chat to Prism App';
+    forwardBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17l9.2-9.2M17 17V7H7"/></svg>';
+    forwardBtn.addEventListener('click', forwardChatToApp);
+    document.querySelector('.header-right').insertBefore(forwardBtn, newChatBtn);
 });

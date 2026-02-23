@@ -10,7 +10,7 @@ class SuggestionOverlayPanel: NSPanel {
         let view = SuggestionOverlayView(suggestion: "Loading...", fontSize: 13, maxWidth: 800)
         let hostingView = NSHostingView(rootView: view)
         self.hostingView = hostingView
-        
+
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 400, height: 40),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -22,8 +22,10 @@ class SuggestionOverlayPanel: NSPanel {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        level = .floating
-        collectionBehavior = [.canJoinAllSpaces, .transient, .ignoresCycle]
+        // Use screenSaver level to ensure visibility above Chromium/Electron windows
+        // which use their own window hierarchy
+        level = .init(rawValue: Int(CGWindowLevelForKey(.statusWindow)) + 1)
+        collectionBehavior = [.canJoinAllSpaces, .transient, .ignoresCycle, .stationary]
 
         // Don't steal focus or appear in Mission Control
         hidesOnDeactivate = false
@@ -31,12 +33,17 @@ class SuggestionOverlayPanel: NSPanel {
         isReleasedWhenClosed = false
         ignoresMouseEvents = true
 
+        // Ensure panel stays visible even when our app isn't active
+        // This is critical for Electron/Chromium apps
+        animationBehavior = .none
+
         contentView = hostingView
     }
 
     /// Update the displayed suggestion text and font size.
     func update(text: String, fontSize: CGFloat, maxWidth: CGFloat = 800) {
-        hostingView.rootView = SuggestionOverlayView(suggestion: text, fontSize: fontSize, maxWidth: maxWidth)
+        hostingView.rootView = SuggestionOverlayView(
+            suggestion: text, fontSize: fontSize, maxWidth: maxWidth)
     }
 
     override var canBecomeKey: Bool { false }

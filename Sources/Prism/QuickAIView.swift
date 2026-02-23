@@ -39,8 +39,11 @@ struct QuickAIView: View {
     @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
+    @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
+    @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
+    @ObservedObject var copilotService = GitHubCopilotService.shared
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
     private var clampedBackgroundOpacity: Double {
@@ -294,6 +297,8 @@ struct QuickAIView: View {
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
         case "ChatGPT": return "message"
+        case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
+        case "Gemini CLI": return "terminal"
         default: return "cpu"
         }
     }
@@ -659,6 +664,103 @@ struct QuickAIView: View {
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "GitHub Copilot" {
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "", model: selectedCopilotModel, isUser: false)
+                aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    var fullContent = ""
+                    var lastUpdateTime = Date()
+
+                    for try await (contentChunk, _) in GitHubCopilotService.shared.sendMessageStream(
+                        history: chatManager.getCurrentMessages(),
+                        model: selectedCopilotModel,
+                        systemPrompt: systemPrompt
+                    ) {
+                        fullContent += contentChunk
+
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentToUpdate = fullContent
+                            DispatchQueue.main.async {
+                                self.chatManager.updateMessage(
+                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                            }
+                            lastUpdateTime = Date()
+                        }
+                    }
+
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: fullContent, isStreaming: false)
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "Gemini CLI" {
+                let aiMsgId = UUID()
+                var aiMsg = Message(content: "", model: "Gemini CLI", isUser: false)
+                aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    var fullContent = ""
+                    var lastUpdateTime = Date()
+
+                    for try await contentChunk in GeminiCLIService.shared.sendMessageStream(
+                        history: chatManager.getCurrentMessages(),
+                        systemPrompt: systemPrompt
+                    ) {
+                        fullContent += contentChunk
+
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentToUpdate = fullContent
+                            DispatchQueue.main.async {
+                                self.chatManager.updateMessage(
+                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                            }
+                            lastUpdateTime = Date()
+                        }
+                    }
+
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: fullContent, isStreaming: false)
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
@@ -1609,6 +1711,16 @@ extension QuickAIView {
                     Button(action: { selectedProvider = "Ollama" }) {
                         Label("Ollama", systemImage: getProviderIcon("Ollama"))
                     }
+                    if copilotService.isAuthenticated {
+                        Button(action: { selectedProvider = "GitHub Copilot" }) {
+                            Label("GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot"))
+                        }
+                    }
+                    if GeminiCLIService.shared.isAvailable {
+                        Button(action: { selectedProvider = "Gemini CLI" }) {
+                            Label("Gemini CLI", systemImage: getProviderIcon("Gemini CLI"))
+                        }
+                    }
                 }
                 Section("Shortcuts") {
                     Button(action: { selectedProvider = "Private Cloud" }) {
@@ -2115,6 +2227,43 @@ extension QuickAIView {
                         .tint(colorScheme == .dark ? .white : .black)
                         .help("Reasoning Effort")
                     }
+                }
+
+                // GitHub Copilot model picker
+                if selectedProvider == "GitHub Copilot" {
+                    Menu {
+                        let providers = ["Anthropic", "OpenAI", "Google", "xAI"]
+                        ForEach(providers, id: \.self) { provider in
+                            let models = copilotModelManager.chatModels.filter { copilotModelManager.getProvider(for: $0) == provider }
+                            if !models.isEmpty {
+                                Section(provider) {
+                                    ForEach(models, id: \.self) { model in
+                                        Button(action: { selectedCopilotModel = model }) {
+                                            if selectedCopilotModel == model {
+                                                Label(
+                                                    copilotModelManager.displayName(for: model),
+                                                    systemImage: "checkmark")
+                                                .foregroundStyle(
+                                                    colorScheme == .dark ? Color.white : Color.primary)
+                                            } else {
+                                                Text(copilotModelManager.displayName(for: model))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
+                            .font(.system(size: 16))
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .padding(6)
+                            .background(Circle().fill(Color.primary.opacity(0.06)))
+                            .glassEffect(.regular, in: .circle)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .tint(colorScheme == .dark ? .white : .black)
+                    .help("Select Copilot Model")
                 }
 
                 // Web Search Toggle (Ollama only)

@@ -31,21 +31,115 @@ class ExtensionServer {
             if request.method.uppercased() == "OPTIONS" {
                 return self.applyCORS(to: .ok(.html("")))
             }
-            let ollamaModels = OllamaModelManager.shared.allModels.map {
-                ["id": "ollama:\($0)", "name": "Ollama: \($0)"]
-            }
-            let geminiModels = GeminiModelManager.shared.availableModels.map {
-                [
-                    "id": "gemini:\($0)",
-                    "name": "Gemini: \(GeminiModelManager.shared.displayName(for: $0))",
-                ]
-            }
-            let appleModels = [["id": "apple:foundation", "name": "Apple Intelligence"]]
 
-            let allModels = appleModels + ollamaModels + geminiModels
+            var allModels: [[String: String]] = []
+
+            // Apple Intelligence (always available)
+            allModels.append(["id": "apple:foundation", "name": "Apple Intelligence"])
+
+            // Gemini accounts - only show if API key is configured
+            let geminiAccounts = AccountManager.shared.geminiAccounts().filter {
+                !$0.apiKey.isEmpty
+            }
+            for account in geminiAccounts {
+                let prefix = geminiAccounts.count > 1 ? "\(account.displayName): " : "Gemini: "
+                for model in GeminiModelManager.shared.availableModels {
+                    allModels.append([
+                        "id": "gemini:\(model)|\(account.id.uuidString)",
+                        "name": "\(prefix)\(GeminiModelManager.shared.displayName(for: model))",
+                    ])
+                }
+            }
+
+            // Ollama accounts - only show if configured
+            let ollamaAccounts = AccountManager.shared.ollamaAccounts()
+            for account in ollamaAccounts {
+                let prefix = ollamaAccounts.count > 1 ? "\(account.displayName): " : "Ollama: "
+                for model in OllamaModelManager.shared.allModels {
+                    allModels.append([
+                        "id": "ollama:\(model)|\(account.id.uuidString)",
+                        "name": "\(prefix)\(model)",
+                    ])
+                }
+            }
+
+            // GitHub Copilot - only show if authenticated
+            if GitHubCopilotService.shared.isAuthenticated {
+                for model in GitHubCopilotModelManager.shared.chatModels {
+                    allModels.append([
+                        "id": "copilot:\(model)",
+                        "name":
+                            "Copilot: \(GitHubCopilotModelManager.shared.displayName(for: model))",
+                    ])
+                }
+            }
 
             let response = HttpResponse.ok(.json(allModels))
             return self.applyCORS(to: response)
+        }
+
+        // Receive chat from extension to forward to app
+        server["/api/forward-chat"] = { request in
+            if request.method.uppercased() == "OPTIONS" {
+                return self.applyCORS(to: .ok(.html("")))
+            }
+
+            let body = Data(request.body)
+            guard
+                let json = try? JSONSerialization.jsonObject(with: body, options: [])
+                    as? [String: Any],
+                let messagesArr = json["messages"] as? [[String: Any]]
+            else {
+                return self.applyCORS(to: .badRequest(nil))
+            }
+
+            let agentActions = json["agentActions"] as? [[String: Any]] ?? []
+            let modelUsed = json["model"] as? String ?? "Extension"
+
+            // Convert to Message objects and add to a new chat session
+            DispatchQueue.main.async {
+                let chatManager = ChatManager.shared
+                chatManager.createNewSession()
+
+                for msgDict in messagesArr {
+                    guard let role = msgDict["role"] as? String,
+                        let content = msgDict["content"] as? String
+                    else { continue }
+
+                    let msg = Message(
+                        content: content,
+                        model: role == "assistant" ? modelUsed : nil,
+                        isUser: role == "user"
+                    )
+                    chatManager.addMessage(msg)
+                }
+
+                // If there were agent actions, add a summary message
+                if !agentActions.isEmpty {
+                    var summaryLines: [String] = ["**Browser Agent Actions:**"]
+                    for action in agentActions {
+                        if let summary = action["summary"] as? String {
+                            summaryLines.append("• \(summary)")
+                        }
+                    }
+                    let summaryMsg = Message(
+                        content: summaryLines.joined(separator: "\n"),
+                        model: "Browser Agent",
+                        isUser: false
+                    )
+                    chatManager.addMessage(summaryMsg)
+                }
+            }
+
+            let response: [String: Any] = ["status": "ok"]
+            let data = (try? JSONSerialization.data(withJSONObject: response)) ?? Data()
+            return self.applyCORS(
+                to: .raw(
+                    200, "OK",
+                    ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*"],
+                    { writer in
+                        try? writer.write(Array(data))
+                    }))
         }
 
         server["/api/chat"] = { request in
@@ -83,9 +177,14 @@ class ExtensionServer {
             let isOllama = modelId.hasPrefix("ollama:")
             let isGemini = modelId.hasPrefix("gemini:")
             let isApple = modelId.hasPrefix("apple:")
+            let isCopilot = modelId.hasPrefix("copilot:")
 
-            let actualModel = modelId.components(separatedBy: ":").dropFirst().joined(
+            // Parse model name and optional account ID (format: "provider:model|accountUUID")
+            let afterPrefix = modelId.components(separatedBy: ":").dropFirst().joined(
                 separator: ":")
+            let modelParts = afterPrefix.components(separatedBy: "|")
+            let actualModel = modelParts[0]
+            let accountId = modelParts.count > 1 ? modelParts[1] : nil
             let systemPrompt = UserDefaults.standard.string(forKey: "SystemPrompt") ?? ""
 
             // Stream response via SSE — extension manages its own chat history
@@ -112,20 +211,37 @@ class ExtensionServer {
                             }
                         } else if isOllama {
                             let ollama = OllamaService()
-                            let endpoint =
+                            // Resolve endpoint from account if multi-account
+                            var endpoint =
                                 UserDefaults.standard.string(forKey: "OllamaURL")
                                 ?? "http://localhost:11434"
+                            if let accId = accountId, let uuid = UUID(uuidString: accId),
+                                let account = AccountManager.shared.accounts.first(where: {
+                                    $0.id == uuid
+                                })
+                            {
+                                endpoint = account.endpoint
+                            }
 
                             var currentHistory = history
                             if webSearchEnabled {
-                                let ollamaAPIKey = UserDefaults.standard.string(forKey: "OllamaAPIKey") ?? ""
-                                if !ollamaAPIKey.isEmpty, let lastUserMsg = currentHistory.last(where: { $0.isUser }) {
+                                let ollamaAPIKey =
+                                    UserDefaults.standard.string(forKey: "OllamaAPIKey") ?? ""
+                                if !ollamaAPIKey.isEmpty,
+                                    let lastUserMsg = currentHistory.last(where: { $0.isUser })
+                                {
                                     let webSearchService = WebSearchService()
                                     do {
-                                        let searchResults = try await webSearchService.search(query: lastUserMsg.content, apiKey: ollamaAPIKey)
-                                        let searchContext = webSearchService.buildSearchContext(results: searchResults)
-                                        if let lastIndex = currentHistory.lastIndex(where: { $0.isUser }) {
-                                            currentHistory[lastIndex].content = searchContext + "\n" + currentHistory[lastIndex].content
+                                        let searchResults = try await webSearchService.search(
+                                            query: lastUserMsg.content, apiKey: ollamaAPIKey)
+                                        let searchContext = webSearchService.buildSearchContext(
+                                            results: searchResults)
+                                        if let lastIndex = currentHistory.lastIndex(where: {
+                                            $0.isUser
+                                        }) {
+                                            currentHistory[lastIndex].content =
+                                                searchContext + "\n"
+                                                + currentHistory[lastIndex].content
                                         }
                                     } catch {
                                         print("Web search failed: \(error)")
@@ -149,7 +265,15 @@ class ExtensionServer {
                             }
                         } else if isGemini {
                             let gemini = GeminiService()
-                            let apiKey = UserDefaults.standard.string(forKey: "GeminiKey") ?? ""
+                            // Resolve API key from account if multi-account
+                            var apiKey = UserDefaults.standard.string(forKey: "GeminiKey") ?? ""
+                            if let accId = accountId, let uuid = UUID(uuidString: accId),
+                                let account = AccountManager.shared.accounts.first(where: {
+                                    $0.id == uuid
+                                })
+                            {
+                                apiKey = account.apiKey
+                            }
                             if apiKey.isEmpty {
                                 let event =
                                     "data: \(try self.jsonEscapeDict(["error": "Gemini API Key missing. Set it in Prism Settings."]))\n\n"
@@ -164,6 +288,23 @@ class ExtensionServer {
                                             "data: \(try self.jsonEscapeDict(["thinking": thinking]))\n\n"
                                         try? writer.write(Array(thinkEvent.utf8))
                                     }
+                                    if !chunk.isEmpty {
+                                        let event = "data: \(try self.jsonEscape(chunk))\n\n"
+                                        try? writer.write(Array(event.utf8))
+                                    }
+                                }
+                            }
+                        } else if isCopilot {
+                            // GitHub Copilot
+                            if !GitHubCopilotService.shared.isAuthenticated {
+                                let event =
+                                    "data: \(try self.jsonEscapeDict(["error": "Not signed in to GitHub Copilot. Sign in from Prism Settings."]))\n\n"
+                                try? writer.write(Array(event.utf8))
+                            } else {
+                                let stream = GitHubCopilotService.shared.sendMessageStream(
+                                    history: history, model: actualModel, systemPrompt: systemPrompt
+                                )
+                                for try await (chunk, _) in stream {
                                     if !chunk.isEmpty {
                                         let event = "data: \(try self.jsonEscape(chunk))\n\n"
                                         try? writer.write(Array(event.utf8))

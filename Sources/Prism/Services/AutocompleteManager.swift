@@ -30,7 +30,8 @@ class AutocompleteManager: ObservableObject {
     @AppStorage("AIAutocompleteDebounceMs") var debounceMs: Int = 500
     @AppStorage("AIAutocompleteCustomInstruction") var customInstruction: String = ""
     @AppStorage("AIAutocompleteBlacklist") var blacklistJSON: String = "[]"
-    @AppStorage("AIAutocompleteCompletionLength") var completionLength: String = "Medium (~ 2 - 4 words)"
+    @AppStorage("AIAutocompleteCompletionLength") var completionLength: String =
+        "Medium (~ 2 - 4 words)"
 
     // MARK: - Internal
 
@@ -123,7 +124,9 @@ class AutocompleteManager: ObservableObject {
         CursorTracker.shared.$cursorFrame
             .receive(on: DispatchQueue.main)
             .sink { [weak self] frame in
-                self?.updateOverlayPosition(frame)
+                guard let self = self else { return }
+                // Use effectiveCursorFrame so Chromium/Electron apps get mouse fallback
+                self.updateOverlayPosition(frame != .zero ? frame : self.effectiveCursorFrame())
             }
             .store(in: &cancellables)
 
@@ -173,7 +176,7 @@ class AutocompleteManager: ObservableObject {
                     // Shorten the suggestion and DO NOT trigger a new prediction.
                     lastTextBeforeCursor = newText
                     let remaining = String(currentSuggestion.dropFirst(addedText.count))
-                    
+
                     if remaining.isEmpty {
                         suggestion = nil
                     } else {
@@ -198,9 +201,11 @@ class AutocompleteManager: ObservableObject {
         lastTextBeforeCursor = newText
 
         // Check if the focused app is blacklisted by user or hardcoded (browsers with extensions)
-        let hardcodedBlacklist = ["com.google.Chrome", "com.apple.Safari", "org.mozilla.firefox", "com.brave.Browser"]
+        let hardcodedBlacklist = [
+            "com.google.Chrome", "com.apple.Safari", "org.mozilla.firefox", "com.brave.Browser",
+        ]
         if let bundleId = CursorTracker.shared.focusedAppBundleId,
-            (blacklistedApps.contains(bundleId) || hardcodedBlacklist.contains(bundleId))
+            blacklistedApps.contains(bundleId) || hardcodedBlacklist.contains(bundleId)
         {
             return
         }
@@ -259,7 +264,8 @@ class AutocompleteManager: ObservableObject {
                     var cleaned = accumulated.trimmingCharacters(in: .whitespacesAndNewlines)
 
                     // If the model echoed back the end of the context, strip it
-                    let contextSuffix = String(context.suffix(50)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let contextSuffix = String(context.suffix(50)).trimmingCharacters(
+                        in: .whitespacesAndNewlines)
                     if !contextSuffix.isEmpty, cleaned.hasPrefix(contextSuffix) {
                         cleaned = String(cleaned.dropFirst(contextSuffix.count))
                             .trimmingCharacters(in: .whitespaces)
@@ -268,7 +274,7 @@ class AutocompleteManager: ObservableObject {
                     if !cleaned.isEmpty {
                         // Ensure single-line rendering for the UI by replacing newlines with spaces
                         let singleLine = cleaned.replacingOccurrences(of: "\n", with: " ")
-                                                .replacingOccurrences(of: "\r", with: "")
+                            .replacingOccurrences(of: "\r", with: "")
                         let completionText = singleLine
                         await MainActor.run {
                             self.suggestion = completionText
@@ -308,7 +314,7 @@ class AutocompleteManager: ObservableObject {
     /// Accept the full suggestion (Tab key).
     func acceptFull() {
         guard let text = suggestion, !text.isEmpty else { return }
-        
+
         // Record in writing memory if enabled
         if UserDefaults.standard.bool(forKey: "AIAutocompleteMemoryEnabled") {
             WritingMemory.shared.record(
@@ -317,7 +323,7 @@ class AutocompleteManager: ObservableObject {
                 appBundleId: CursorTracker.shared.focusedAppBundleId
             )
         }
-        
+
         TextInjector.shared.insertText(text)
         suggestion = nil
         lastTextBeforeCursor = ""  // Reset so next text change triggers prediction
@@ -333,9 +339,10 @@ class AutocompleteManager: ObservableObject {
         guard let firstWord = components.first, !firstWord.isEmpty else { return }
 
         // Insert the first word (with a trailing space if more words follow)
-        let remaining = String(trimmed.dropFirst(firstWord.count)).trimmingCharacters(in: .whitespaces)
+        let remaining = String(trimmed.dropFirst(firstWord.count)).trimmingCharacters(
+            in: .whitespaces)
         let insertText = remaining.isEmpty ? firstWord : firstWord + " "
-        
+
         isAcceptingPartialWord = true
         TextInjector.shared.insertText(insertText)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -365,9 +372,10 @@ class AutocompleteManager: ObservableObject {
     private func showOverlay(_ text: String) {
         guard let panel = overlayPanel else { return }
 
-        let cursorFrame = CursorTracker.shared.cursorFrame
+        let cursorFrame = effectiveCursorFrame()
         let x = cursorFrame.maxX - 8
-        let screenMaxX = NSScreen.main?.visibleFrame.maxX ?? NSScreen.screens.first?.frame.maxX ?? 1920
+        let screenMaxX =
+            NSScreen.main?.visibleFrame.maxX ?? NSScreen.screens.first?.frame.maxX ?? 1920
         let availableWidth = max(100.0, screenMaxX - x - 24)
 
         // Update the SwiftUI view
@@ -375,10 +383,12 @@ class AutocompleteManager: ObservableObject {
 
         // Give SwiftUI time to layout, then reposition using the intrinsic size
         panel.hostingView.layout()
-        updateOverlayPosition(CursorTracker.shared.cursorFrame)
+        updateOverlayPosition(cursorFrame)
 
         if !panel.isVisible {
-            panel.orderFront(nil)
+            // Use orderFrontRegardless so the panel shows even when another app is active
+            // (which is always the case during autocomplete in other apps)
+            panel.orderFrontRegardless()
         }
     }
 
@@ -386,14 +396,31 @@ class AutocompleteManager: ObservableObject {
         overlayPanel?.orderOut(nil)
     }
 
+    /// Returns the cursor frame from the accessibility API, or falls back to
+    /// the mouse pointer location when the AX API fails (common in Chromium/Electron).
+    private func effectiveCursorFrame() -> NSRect {
+        let frame = CursorTracker.shared.cursorFrame
+        if frame != .zero { return frame }
+
+        // Fallback: use the current mouse location as an approximation.
+        // Chromium/Electron apps often don't expose kAXBoundsForRangeParameterizedAttribute,
+        // so the cursor frame stays at .zero. The mouse is usually near the text cursor.
+        let mouseLocation = NSEvent.mouseLocation  // AppKit coordinates (bottom-left origin)
+        // Convert to AX/CG coordinates (top-left origin) to match what CursorTracker provides
+        let primaryScreenHeight = NSScreen.screens.first?.frame.height ?? 1080
+        let axY = primaryScreenHeight - mouseLocation.y
+        return NSRect(x: mouseLocation.x, y: axY, width: 1, height: 20)
+    }
+
     private func updateOverlayPosition(_ cursorFrame: NSRect) {
         guard let panel = overlayPanel, cursorFrame != .zero else { return }
 
         // Find the screen that actually contains the cursor
-        let targetScreen = NSScreen.screens.first { screen in
-            screen.frame.contains(cursorFrame)
-        } ?? NSScreen.main ?? NSScreen.screens[0]
-        
+        let targetScreen =
+            NSScreen.screens.first { screen in
+                screen.frame.contains(cursorFrame)
+            } ?? NSScreen.main ?? NSScreen.screens[0]
+
         // Use the specific screen's frame for coordinate mapping
         let x = cursorFrame.maxX - 8
         let availableWidth = max(100.0, targetScreen.visibleFrame.maxX - x - 24)
@@ -407,23 +434,27 @@ class AutocompleteManager: ObservableObject {
                 panel.hostingView.layout()
             }
         }
-        
+
         // Get the new fitting size of the liquid glass pill
         let fittingSize = panel.hostingView.fittingSize
         let panelWidth = min(fittingSize.width, availableWidth)
         let panelHeight = fittingSize.height
-        
+
         // The top of the cursor in AppKit coordinates (using the target screen's height)
         // Since CGEvent coordinates are global top-left, we must adjust Y relative to the screen
         let topAppKitY = targetScreen.frame.maxY - cursorFrame.minY
-        
+
         // The panel's y coordinate specifies its bottom edge.
         let y = topAppKitY - panelHeight + 12
-        
+
         // Ensure the text is constrained horizontally and vertically on the target screen
-        let clampedX = min(max(x, targetScreen.visibleFrame.minX + 4), targetScreen.visibleFrame.maxX - panelWidth - 4)
-        let clampedY = max(min(y, targetScreen.visibleFrame.maxY - panelHeight - 4), targetScreen.visibleFrame.minY + 4)
-        
+        let clampedX = min(
+            max(x, targetScreen.visibleFrame.minX + 4),
+            targetScreen.visibleFrame.maxX - panelWidth - 4)
+        let clampedY = max(
+            min(y, targetScreen.visibleFrame.maxY - panelHeight - 4),
+            targetScreen.visibleFrame.minY + 4)
+
         panel.setFrame(
             NSRect(x: clampedX, y: clampedY, width: panelWidth, height: panelHeight),
             display: true
