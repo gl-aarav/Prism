@@ -26,6 +26,13 @@ class TextInjector {
     /// This is the fastest method and doesn't disturb the clipboard.
     private func insertViaAccessibility(_ text: String) -> Bool {
         let helper = AccessibilityHelper.shared
+        
+        // Bypass accessibility insertion for the Messages app
+        // because it accepts the insertion silently without updating the UI.
+        if helper.getFrontmostAppBundleIdentifier() == "com.apple.MobileSMS" {
+            return false
+        }
+        
         guard let element = helper.getFocusedElement() else { return false }
         return helper.insertTextAtCursor(element, text: text)
     }
