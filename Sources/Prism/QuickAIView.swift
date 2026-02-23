@@ -2301,7 +2301,7 @@ extension QuickAIView {
                     || selectedProvider.hasPrefix("GitHub Copilot|")
                 {
                     Menu {
-                        let providers = ["Anthropic", "OpenAI", "Google", "xAI"]
+                        let providers = ["Anthropic", "OpenAI", "Google", "xAI", "Other"]
                         ForEach(providers, id: \.self) { provider in
                             let models = copilotModelManager.chatModels.filter {
                                 copilotModelManager.getProvider(for: $0) == provider

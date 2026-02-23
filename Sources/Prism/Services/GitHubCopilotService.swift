@@ -421,10 +421,73 @@ class GitHubCopilotService: ObservableObject {
 
                     messages.append(
                         contentsOf: history.map { msg in
-                            [
-                                "role": msg.isUser ? "user" : "assistant",
-                                "content": msg.content,
-                            ] as [String: Any]
+                            var msgDict: [String: Any] = ["role": msg.isUser ? "user" : "assistant"]
+
+                            // Helper to compress image size
+                            let compressImage: (Data) -> String? = { data in
+                                guard let image = NSImage(data: data) else { return nil }
+                                
+                                // Resize if larger than 1024px
+                                let maxDimension: CGFloat = 1024.0
+                                var targetSize = image.size
+                                
+                                if image.size.width > maxDimension || image.size.height > maxDimension {
+                                    let aspectRatio = image.size.width / image.size.height
+                                    if aspectRatio > 1 {
+                                        targetSize.width = maxDimension
+                                        targetSize.height = maxDimension / aspectRatio
+                                    } else {
+                                        targetSize.height = maxDimension
+                                        targetSize.width = maxDimension * aspectRatio
+                                    }
+                                }
+                                
+                                let newImage = NSImage(size: targetSize)
+                                newImage.lockFocus()
+                                image.draw(in: NSRect(origin: .zero, size: targetSize), from: NSRect(origin: .zero, size: image.size), operation: .copy, fraction: 1.0)
+                                newImage.unlockFocus()
+                                
+                                guard let tiff = newImage.tiffRepresentation,
+                                      let bitmap = NSBitmapImageRep(data: tiff),
+                                      let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.6]) else {
+                                    return nil
+                                }
+                                
+                                return jpegData.base64EncodedString()
+                            }
+
+                            if let imageData = msg.imageData, let base64String = compressImage(imageData) {
+                                msgDict["content"] = [
+                                    ["type": "text", "text": msg.content],
+                                    [
+                                        "type": "image_url",
+                                        "image_url": ["url": "data:image/jpeg;base64,\(base64String)"]
+                                    ]
+                                ]
+                            } else if let attachments = msg.attachments, !attachments.isEmpty {
+                                // Extract images from attachments array
+                                var contentArr: [[String: Any]] = [
+                                    ["type": "text", "text": msg.content]
+                                ]
+                                for attachment in attachments {
+                                    if attachment.type == "image", let base64String = compressImage(attachment.data) {
+                                        contentArr.append([
+                                            "type": "image_url",
+                                            "image_url": [
+                                                "url": "data:image/jpeg;base64,\(base64String)"
+                                            ]
+                                        ])
+                                    }
+                                }
+                                if contentArr.count > 1 {
+                                    msgDict["content"] = contentArr
+                                } else {
+                                    msgDict["content"] = msg.content
+                                }
+                            } else {
+                                msgDict["content"] = msg.content
+                            }
+                            return msgDict
                         })
 
                     let body: [String: Any] = [
@@ -498,13 +561,15 @@ class GitHubCopilotModelManager: ObservableObject {
         // Claude
         "claude-opus-4.6-fast",
         "claude-opus-4.6",
-        "claude-sonnet-4",
-        "claude-sonnet-4.5",
         "claude-opus-4.5",
+        "claude-sonnet-4.6",
+        "claude-sonnet-4.5",
+        "claude-sonnet-4",
         "claude-haiku-4.5",
         // GPT-5 Series
-        "gpt-5.2-codex",
+        "gpt-5.3-codex",
         "gpt-5.2",
+        "gpt-5.2-codex",
         "gpt-5.1",
         "gpt-5.1-codex",
         "gpt-5.1-codex-mini",
@@ -528,10 +593,12 @@ class GitHubCopilotModelManager: ObservableObject {
         "gpt-3.5-turbo",
         "gpt-3.5-turbo-0613",
         // Gemini
+        "gemini-3.1-pro-preview",
         "gemini-3-pro-preview",
         "gemini-3-flash-preview",
         "gemini-2.5-pro",
-        // Grok
+        "gemini-2.5-flash-preview",
+        // Grok & Others
         "grok-code-fast-1",
         // OSWE
         "oswe-vscode-prime",
@@ -545,15 +612,17 @@ class GitHubCopilotModelManager: ObservableObject {
     static let displayNames: [String: String] = [
         "claude-opus-4.6-fast": "Claude Opus 4.6 Fast",
         "claude-opus-4.6": "Claude Opus 4.6",
-        "claude-sonnet-4": "Claude Sonnet 4",
-        "claude-sonnet-4.5": "Claude Sonnet 4.5",
         "claude-opus-4.5": "Claude Opus 4.5",
+        "claude-sonnet-4.6": "Claude Sonnet 4.6",
+        "claude-sonnet-4.5": "Claude Sonnet 4.5",
+        "claude-sonnet-4": "Claude Sonnet 4",
         "claude-haiku-4.5": "Claude Haiku 4.5",
-        "gpt-5.2-codex": "GPT-5.2 Codex",
+        "gpt-5.3-codex": "GPT-5.3 Codex",
         "gpt-5.2": "GPT-5.2",
+        "gpt-5.2-codex": "GPT-5.2 Codex",
         "gpt-5.1": "GPT-5.1",
         "gpt-5.1-codex": "GPT-5.1 Codex",
-        "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini",
+        "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini (Preview)",
         "gpt-5.1-codex-max": "GPT-5.1 Codex Max",
         "gpt-5-mini": "GPT-5 Mini",
         "gpt-5": "GPT-5",
@@ -571,10 +640,12 @@ class GitHubCopilotModelManager: ObservableObject {
         "gpt-4-0125-preview": "GPT-4 (Jan 2025)",
         "gpt-3.5-turbo": "GPT-3.5 Turbo",
         "gpt-3.5-turbo-0613": "GPT-3.5 Turbo (Jun 2023)",
-        "gemini-3-pro-preview": "Gemini 3 Pro",
-        "gemini-3-flash-preview": "Gemini 3 Flash",
+        "gemini-3.1-pro-preview": "Gemini 3.1 Pro (Preview)",
+        "gemini-3-pro-preview": "Gemini 3 Pro (Preview)",
+        "gemini-3-flash-preview": "Gemini 3 Flash (Preview)",
         "gemini-2.5-pro": "Gemini 2.5 Pro",
-        "grok-code-fast-1": "Grok Code Fast",
+        "gemini-2.5-flash-preview": "Gemini 2.5 Flash Preview",
+        "grok-code-fast-1": "Grok Code Fast 1",
         "oswe-vscode-prime": "OSWE Prime",
         "oswe-vscode-secondary": "OSWE Secondary",
         "text-embedding-3-small": "Embedding 3 Small",
