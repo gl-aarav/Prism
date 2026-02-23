@@ -642,7 +642,7 @@ class GitHubCopilotModelManager: ObservableObject {
     ]
 
     var chatModels: [String] {
-        availableModels
+        availableModels.filter { !$0.hasPrefix("text-embedding") }
     }
 
     func displayName(for model: String) -> String {
