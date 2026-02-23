@@ -1819,7 +1819,8 @@ struct ContentView: View {
                                         thinkingMode: thinkingMode,
                                         isOllama: selectedProvider.contains("Ollama"),
                                         isGemini: selectedProvider == "Gemini API",
-                                        isCopilot: selectedProvider == "GitHub Copilot",
+                                        isCopilot: selectedProvider == "GitHub Copilot" || selectedProvider.hasPrefix("GitHub Copilot|"),
+                                        isGeminiCLI: selectedProvider == "Gemini CLI",
                                         webSearchEnabled: $webSearchEnabled,
                                         hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
                                         onSlashAction: handleSlashAction
@@ -2520,8 +2521,9 @@ struct ContentView: View {
                 }
             } else if selectedProvider == "Gemini CLI" {
                 // Gemini CLI
+                let geminiCLIModel = UserDefaults.standard.string(forKey: "SelectedGeminiCLIModel") ?? "gemini-2.5-flash"
                 let aiMsgId = UUID()
-                var aiMsg = Message(content: "", model: "Gemini CLI", isUser: false)
+                var aiMsg = Message(content: "", model: "Gemini CLI: \(GeminiCLIService.shared.displayName(for: geminiCLIModel))", isUser: false)
                 aiMsg.id = aiMsgId
                 aiMsg.isStreaming = true
 
@@ -2534,7 +2536,7 @@ struct ContentView: View {
                     var lastUpdateTime = Date()
 
                     for try await contentChunk in GeminiCLIService.shared.sendMessageStream(
-                        history: currentHistory, systemPrompt: systemPrompt
+                        history: currentHistory, model: geminiCLIModel, systemPrompt: systemPrompt
                     ) {
                         fullContent += contentChunk
 
@@ -3576,10 +3578,17 @@ struct HeaderView: View {
         // Handle multi-account provider strings like "Gemini API|uuid"
         if provider.contains("|") {
             let parts = provider.split(separator: "|")
-            if let uuidStr = parts.last, let uuid = UUID(uuidString: String(uuidStr)),
-                let account = accountManager.accounts.first(where: { $0.id == uuid })
-            {
-                return account.displayName
+            let base = parts.first.map(String.init) ?? provider
+            if let uuidStr = parts.last, let uuid = UUID(uuidString: String(uuidStr)) {
+                // For Copilot, prefer the GitHub username
+                if base == "GitHub Copilot",
+                   let ghUser = GitHubCopilotService.shared.accountAuthState[uuid]?.userName,
+                   !ghUser.isEmpty {
+                    return "Copilot (\(ghUser))"
+                }
+                if let account = accountManager.accounts.first(where: { $0.id == uuid }) {
+                    return account.displayName
+                }
             }
         }
         return provider
@@ -3771,15 +3780,18 @@ struct InputView: View {
     var isOllama: Bool = false
     var isGemini: Bool = false
     var isCopilot: Bool = false
+    var isGeminiCLI: Bool = false
     @Binding var webSearchEnabled: Bool
     var hasOllamaAPIKey: Bool = false
     var onSlashAction: ((String) -> Void)? = nil  // callback for action commands (/clear, /quit, /new)
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
+    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String = "gemini-2.5-flash"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
+    @ObservedObject var geminiCLIService = GeminiCLIService.shared
     @ObservedObject private var slashCommandManager = SlashCommandManager.shared
 
     @State private var isFocused: Bool = false
@@ -4071,6 +4083,34 @@ struct InputView: View {
                     }
                     .menuStyle(.borderlessButton)
                     .help("Select Copilot Model")
+                }
+
+                if isGeminiCLI {
+                    Menu {
+                        ForEach(GeminiCLIService.availableModels, id: \.id) { model in
+                            Button(action: { selectedGeminiCLIModel = model.id }) {
+                                if selectedGeminiCLIModel == model.id {
+                                    Label(model.name, systemImage: "checkmark")
+                                } else {
+                                    Text(model.name)
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "terminal")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04))
+                            )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Select Gemini CLI Model")
                 }
 
                 if thinkingMode != .none {

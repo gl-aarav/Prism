@@ -73,8 +73,20 @@ class GeminiCLIService: ObservableObject {
         }
     }
 
+    static let availableModels: [(id: String, name: String)] = [
+        ("gemini-3-pro-preview", "Gemini 3 Pro"),
+        ("gemini-3-flash-preview", "Gemini 3.0 Flash"),
+        ("gemini-2.5-pro", "Gemini 2.5 Pro"),
+        ("gemini-2.5-flash", "Gemini 2.5 Flash"),
+    ]
+
+    func displayName(for modelId: String) -> String {
+        return Self.availableModels.first(where: { $0.id == modelId })?.name ?? modelId
+    }
+
     func sendMessage(
         prompt: String,
+        model: String = "",
         systemPrompt: String = ""
     ) -> AsyncThrowingStream<String, Error> {
         return AsyncThrowingStream { continuation in
@@ -85,7 +97,7 @@ class GeminiCLIService: ObservableObject {
                             domain: "GeminiCLI", code: 1,
                             userInfo: [
                                 NSLocalizedDescriptionKey:
-                                    "Gemini CLI not found. Install it with: npm install -g @anthropic-ai/gemini-cli or pip install google-gemini-cli"
+                                    "Gemini CLI not found. Install it with: npm install -g @google/gemini-cli"
                             ]))
                     return
                 }
@@ -107,7 +119,11 @@ class GeminiCLIService: ObservableObject {
                 }
                 fullPrompt += prompt
 
-                task.arguments = ["-p", fullPrompt]
+                var args = ["-p", fullPrompt]
+                if !model.isEmpty {
+                    args += ["-m", model]
+                }
+                task.arguments = args
 
                 // Inherit PATH so gemini CLI can find its dependencies
                 var env = ProcessInfo.processInfo.environment
@@ -171,6 +187,7 @@ class GeminiCLIService: ObservableObject {
 
     func sendMessageStream(
         history: [Message],
+        model: String = "",
         systemPrompt: String = ""
     ) -> AsyncThrowingStream<String, Error> {
         // Build conversation transcript from history
@@ -186,6 +203,6 @@ class GeminiCLIService: ObservableObject {
         let lastUserMessage =
             history.last(where: { $0.isUser })?.content ?? transcript
 
-        return sendMessage(prompt: lastUserMessage, systemPrompt: systemPrompt)
+        return sendMessage(prompt: lastUserMessage, model: model, systemPrompt: systemPrompt)
     }
 }

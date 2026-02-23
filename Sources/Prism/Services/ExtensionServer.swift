@@ -63,13 +63,37 @@ class ExtensionServer {
                 }
             }
 
-            // GitHub Copilot - only show if authenticated
+            // GitHub Copilot - show per-account if multiple
             if GitHubCopilotService.shared.isAuthenticated {
-                for model in GitHubCopilotModelManager.shared.chatModels {
+                let copilotAccounts = AccountManager.shared.copilotAccounts()
+                if copilotAccounts.count <= 1 {
+                    for model in GitHubCopilotModelManager.shared.chatModels {
+                        allModels.append([
+                            "id": "copilot:\(model)",
+                            "name":
+                                "Copilot: \(GitHubCopilotModelManager.shared.displayName(for: model))",
+                        ])
+                    }
+                } else {
+                    for account in copilotAccounts {
+                        let acctName = GitHubCopilotService.shared.accountAuthState[account.id]?.userName ?? account.displayName
+                        for model in GitHubCopilotModelManager.shared.chatModels {
+                            allModels.append([
+                                "id": "copilot:\(model)|\(account.id.uuidString)",
+                                "name":
+                                    "\(acctName): \(GitHubCopilotModelManager.shared.displayName(for: model))",
+                            ])
+                        }
+                    }
+                }
+            }
+
+            // Gemini CLI - only show if available
+            if GeminiCLIService.shared.isAvailable {
+                for model in GeminiCLIService.availableModels {
                     allModels.append([
-                        "id": "copilot:\(model)",
-                        "name":
-                            "Copilot: \(GitHubCopilotModelManager.shared.displayName(for: model))",
+                        "id": "geminicli:\(model.id)",
+                        "name": "Gemini CLI: \(model.name)",
                     ])
                 }
             }
@@ -178,6 +202,7 @@ class ExtensionServer {
             let isGemini = modelId.hasPrefix("gemini:")
             let isApple = modelId.hasPrefix("apple:")
             let isCopilot = modelId.hasPrefix("copilot:")
+            let isGeminiCLI = modelId.hasPrefix("geminicli:")
 
             // Parse model name and optional account ID (format: "provider:model|accountUUID")
             let afterPrefix = modelId.components(separatedBy: ":").dropFirst().joined(
@@ -302,9 +327,26 @@ class ExtensionServer {
                                 try? writer.write(Array(event.utf8))
                             } else {
                                 let stream = GitHubCopilotService.shared.sendMessageStream(
-                                    history: history, model: actualModel, systemPrompt: systemPrompt
+                                    history: history, model: actualModel, systemPrompt: systemPrompt,
+                                    accountId: accountId
                                 )
                                 for try await (chunk, _) in stream {
+                                    if !chunk.isEmpty {
+                                        let event = "data: \(try self.jsonEscape(chunk))\n\n"
+                                        try? writer.write(Array(event.utf8))
+                                    }
+                                }
+                            }
+                        } else if isGeminiCLI {
+                            // Gemini CLI
+                            if !GeminiCLIService.shared.isAvailable {
+                                let event =
+                                    "data: \(try self.jsonEscapeDict(["error": "Gemini CLI not found. Install it first."]))\n\n"
+                                try? writer.write(Array(event.utf8))
+                            } else {
+                                for try await chunk in GeminiCLIService.shared.sendMessageStream(
+                                    history: history, model: actualModel, systemPrompt: systemPrompt
+                                ) {
                                     if !chunk.isEmpty {
                                         let event = "data: \(try self.jsonEscape(chunk))\n\n"
                                         try? writer.write(Array(event.utf8))

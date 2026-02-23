@@ -40,6 +40,7 @@ struct QuickAIView: View {
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
+    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String = "gemini-2.5-flash"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
@@ -291,7 +292,8 @@ struct QuickAIView: View {
     }
 
     func getProviderIcon(_ provider: String) -> String {
-        switch provider {
+        let base = provider.split(separator: "|").first.map(String.init) ?? provider
+        switch base {
         case "Apple Foundation": return "apple.logo"
         case "On-Device": return "iphone"
         case "Private Cloud": return "lock.icloud"
@@ -302,6 +304,21 @@ struct QuickAIView: View {
         case "Gemini CLI": return "terminal"
         default: return "cpu"
         }
+    }
+
+    func providerDisplayName(_ provider: String) -> String {
+        if provider.contains("|") {
+            let parts = provider.split(separator: "|")
+            let base = parts.first.map(String.init) ?? provider
+            if let uuidStr = parts.last, let uuid = UUID(uuidString: String(uuidStr)) {
+                if base == "GitHub Copilot",
+                   let ghUser = GitHubCopilotService.shared.accountAuthState[uuid]?.userName,
+                   !ghUser.isEmpty {
+                    return "Copilot (\(ghUser))"
+                }
+            }
+        }
+        return provider
     }
 
     // MARK: - Slash Command Helpers
@@ -669,7 +686,12 @@ struct QuickAIView: View {
                         self.isLoading = false
                     }
                 }
-            } else if selectedProvider == "GitHub Copilot" {
+            } else if selectedProvider == "GitHub Copilot" || selectedProvider.hasPrefix("GitHub Copilot|") {
+                var copilotAccountId: String? = nil
+                if selectedProvider.contains("|"),
+                   let uuidStr = selectedProvider.split(separator: "|").last.map(String.init) {
+                    copilotAccountId = uuidStr
+                }
                 let aiMsgId = UUID()
                 var aiMsg = Message(content: "", model: selectedCopilotModel, isUser: false)
                 aiMsg.id = aiMsgId
@@ -687,7 +709,8 @@ struct QuickAIView: View {
                         .sendMessageStream(
                             history: chatManager.getCurrentMessages(),
                             model: selectedCopilotModel,
-                            systemPrompt: systemPrompt
+                            systemPrompt: systemPrompt,
+                            accountId: copilotAccountId
                         )
                     {
                         fullContent += contentChunk
@@ -722,7 +745,7 @@ struct QuickAIView: View {
                 }
             } else if selectedProvider == "Gemini CLI" {
                 let aiMsgId = UUID()
-                var aiMsg = Message(content: "", model: "Gemini CLI", isUser: false)
+                var aiMsg = Message(content: "", model: "Gemini CLI: \(GeminiCLIService.shared.displayName(for: selectedGeminiCLIModel))", isUser: false)
                 aiMsg.id = aiMsgId
                 aiMsg.isStreaming = true
 
@@ -736,6 +759,7 @@ struct QuickAIView: View {
 
                     for try await contentChunk in GeminiCLIService.shared.sendMessageStream(
                         history: chatManager.getCurrentMessages(),
+                        model: selectedGeminiCLIModel,
                         systemPrompt: systemPrompt
                     ) {
                         fullContent += contentChunk
@@ -1715,8 +1739,20 @@ extension QuickAIView {
                         Label("Ollama", systemImage: getProviderIcon("Ollama"))
                     }
                     if copilotService.isAuthenticated {
-                        Button(action: { selectedProvider = "GitHub Copilot" }) {
-                            Label("GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot"))
+                        let copilotAccounts = AccountManager.shared.copilotAccounts()
+                        if copilotAccounts.count <= 1 {
+                            Button(action: { selectedProvider = "GitHub Copilot" }) {
+                                Label("GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot"))
+                            }
+                        } else {
+                            ForEach(copilotAccounts) { account in
+                                let acctName = copilotService.accountAuthState[account.id]?.userName ?? account.displayName
+                                Button(action: {
+                                    selectedProvider = "GitHub Copilot|\(account.id.uuidString)"
+                                }) {
+                                    Label(acctName, systemImage: getProviderIcon("GitHub Copilot"))
+                                }
+                            }
                         }
                     }
                     if geminiCLIService.isAvailable {
@@ -1743,7 +1779,7 @@ extension QuickAIView {
                 HStack(spacing: 6) {
                     Image(systemName: getProviderIcon(selectedProvider))
                         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                    Text(selectedProvider)
+                    Text(providerDisplayName(selectedProvider))
                         .font(.headline)
                         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                     Image(systemName: "chevron.down")
@@ -2233,7 +2269,7 @@ extension QuickAIView {
                 }
 
                 // GitHub Copilot model picker
-                if selectedProvider == "GitHub Copilot" {
+                if selectedProvider == "GitHub Copilot" || selectedProvider.hasPrefix("GitHub Copilot|") {
                     Menu {
                         let providers = ["Anthropic", "OpenAI", "Google", "xAI"]
                         ForEach(providers, id: \.self) { provider in
@@ -2271,6 +2307,34 @@ extension QuickAIView {
                     .menuStyle(.borderlessButton)
                     .tint(colorScheme == .dark ? .white : .black)
                     .help("Select Copilot Model")
+                }
+
+                // Gemini CLI model picker
+                if selectedProvider == "Gemini CLI" {
+                    Menu {
+                        ForEach(GeminiCLIService.availableModels, id: \.id) { model in
+                            Button(action: { selectedGeminiCLIModel = model.id }) {
+                                if selectedGeminiCLIModel == model.id {
+                                    Label(model.name, systemImage: "checkmark")
+                                        .foregroundStyle(
+                                            colorScheme == .dark
+                                                ? Color.white : Color.primary)
+                                } else {
+                                    Text(model.name)
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "terminal")
+                            .font(.system(size: 16))
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .padding(6)
+                            .background(Circle().fill(Color.primary.opacity(0.06)))
+                            .glassEffect(.regular, in: .circle)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .tint(colorScheme == .dark ? .white : .black)
+                    .help("Select Gemini CLI Model")
                 }
 
                 // Web Search Toggle (Ollama only)
