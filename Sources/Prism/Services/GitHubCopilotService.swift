@@ -641,11 +641,8 @@ class GitHubCopilotModelManager: ObservableObject {
         "text-embedding-ada-002": "Embedding Ada 002",
     ]
 
-    /// Chat-capable models only (exclude embedding models)
     var chatModels: [String] {
-        availableModels.filter { model in
-            !model.hasPrefix("text-embedding") && !model.hasPrefix("oswe")
-        }
+        availableModels
     }
 
     func displayName(for model: String) -> String {
