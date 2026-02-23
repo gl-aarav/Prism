@@ -2272,9 +2272,10 @@ struct ContentView: View {
                 // Resolve API key for multi-account
                 var apiKey = geminiKey
                 if selectedProvider.contains("|"),
-                   let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
-                   let uuid = UUID(uuidString: uuidStr),
-                   let account = accountManager.accounts.first(where: { $0.id == uuid }) {
+                    let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
+                    let uuid = UUID(uuidString: uuidStr),
+                    let account = accountManager.accounts.first(where: { $0.id == uuid })
+                {
                     apiKey = account.apiKey
                 }
                 if !apiKey.isEmpty {
@@ -3521,8 +3522,10 @@ struct HeaderView: View {
                             }
                         } else {
                             ForEach(copilotAccounts) { account in
-                                let ghUser = copilotService.accountAuthState[account.id]?.userName ?? ""
-                                let label = ghUser.isEmpty ? "GitHub Copilot" : "GitHub Copilot (\(ghUser))"
+                                let ghUser =
+                                    copilotService.accountAuthState[account.id]?.userName ?? ""
+                                let label =
+                                    ghUser.isEmpty ? "GitHub Copilot" : "GitHub Copilot (\(ghUser))"
                                 Button(action: {
                                     selectedProvider = "GitHub Copilot|\(account.id.uuidString)"
                                 }) {

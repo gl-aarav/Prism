@@ -89,12 +89,14 @@ class CursorTracker: ObservableObject {
 
         // Check if it's a text input element
         let role = helper.getRole(element)
-        let isStandardText = role == "AXTextArea" || role == "AXTextField" || role == "AXComboBox"
+        let isStandardText =
+            role == "AXTextArea" || role == "AXTextField" || role == "AXComboBox"
             || role == "AXSearchField"
         // Electron/Chromium apps expose text inputs as AXWebArea or AXGroup
-        let isWebText = (role == "AXWebArea" || role == "AXGroup") && helper.isElementEditable(element)
+        let isWebText =
+            (role == "AXWebArea" || role == "AXGroup") && helper.isElementEditable(element)
         let isText = isStandardText || isWebText
-            
+
         guard isText, helper.isElementEditable(element) else {
             updateState(focused: false, bundleId: bundleId)
             return
@@ -115,7 +117,8 @@ class CursorTracker: ObservableObject {
         let beforeCursor: String
         if safePosition > 0 {
             let startIndex = text.startIndex
-            let endIndex = text.index(startIndex, offsetBy: safePosition, limitedBy: text.endIndex)
+            let endIndex =
+                text.index(startIndex, offsetBy: safePosition, limitedBy: text.endIndex)
                 ?? text.endIndex
             beforeCursor = String(text[startIndex..<endIndex])
         } else {
