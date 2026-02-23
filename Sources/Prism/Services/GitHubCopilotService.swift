@@ -11,9 +11,13 @@ class GitHubCopilotService: ObservableObject {
     @Published var userName: String = ""
     @Published var avatarURL: String = ""
     @Published var isSigningIn: Bool = false
+    @Published var signingInAccountId: UUID? = nil
     @Published var deviceCode: String? = nil
     @Published var verificationURL: URL? = nil
     @Published var errorMessage: String? = nil
+
+    /// Per-account auth state: accountId -> (userName, avatarURL)
+    @Published var accountAuthState: [UUID: (userName: String, avatarURL: String)] = [:]
 
     private let clientId = "Iv1.b507a08c87ecfe98"  // GitHub Copilot's public client ID for device flow
     private let session: URLSession
@@ -29,21 +33,53 @@ class GitHubCopilotService: ObservableObject {
         config.timeoutIntervalForResource = 300
         self.session = URLSession(configuration: config)
 
-        // Restore saved auth state
+        // Restore saved auth state (legacy default account)
         if let token = getStoredToken(), !token.isEmpty {
             isAuthenticated = true
             userName = UserDefaults.standard.string(forKey: userNameKey) ?? ""
             avatarURL = UserDefaults.standard.string(forKey: avatarKey) ?? ""
         }
+
+        // Restore per-account auth state, deferred to avoid initialization cycle with AccountManager
+        Task { @MainActor in
+            self.restoreAccountAuthStates()
+        }
+    }
+
+    private func restoreAccountAuthStates() {
+        for account in AccountManager.shared.copilotAccounts() {
+            if let token = getStoredToken(accountId: account.id.uuidString), !token.isEmpty {
+                let name =
+                    UserDefaults.standard.string(forKey: "\(userNameKey)_\(account.id.uuidString)")
+                    ?? ""
+                let avatar =
+                    UserDefaults.standard.string(forKey: "\(avatarKey)_\(account.id.uuidString)")
+                    ?? ""
+                accountAuthState[account.id] = (userName: name, avatarURL: avatar)
+                if !isAuthenticated { isAuthenticated = true }
+            }
+        }
+    }
+
+    func isAccountAuthenticated(_ accountId: UUID) -> Bool {
+        if let token = getStoredToken(accountId: accountId.uuidString), !token.isEmpty {
+            return true
+        }
+        // Check default token for legacy/first account
+        if accountId == AccountManager.shared.copilotAccounts().first?.id {
+            if let token = getStoredToken(), !token.isEmpty { return true }
+        }
+        return false
     }
 
     // MARK: - Token Storage (Keychain)
 
-    func getStoredToken() -> String? {
+    func getStoredToken(accountId: String? = nil) -> String? {
+        let key = accountId.map { "\(tokenKey)_\($0)" } ?? tokenKey
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "com.prism.github-copilot",
-            kSecAttrAccount as String: tokenKey,
+            kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
@@ -53,14 +89,15 @@ class GitHubCopilotService: ObservableObject {
         return String(data: data, encoding: .utf8)
     }
 
-    private func storeToken(_ token: String) {
+    private func storeToken(_ token: String, accountId: String? = nil) {
+        let key = accountId.map { "\(tokenKey)_\($0)" } ?? tokenKey
         let data = token.data(using: .utf8)!
 
         // Delete existing
         let deleteQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "com.prism.github-copilot",
-            kSecAttrAccount as String: tokenKey,
+            kSecAttrAccount as String: key,
         ]
         SecItemDelete(deleteQuery as CFDictionary)
 
@@ -68,17 +105,18 @@ class GitHubCopilotService: ObservableObject {
         let addQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "com.prism.github-copilot",
-            kSecAttrAccount as String: tokenKey,
+            kSecAttrAccount as String: key,
             kSecValueData as String: data,
         ]
         SecItemAdd(addQuery as CFDictionary, nil)
     }
 
-    private func deleteToken() {
+    private func deleteToken(accountId: String? = nil) {
+        let key = accountId.map { "\(tokenKey)_\($0)" } ?? tokenKey
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "com.prism.github-copilot",
-            kSecAttrAccount as String: tokenKey,
+            kSecAttrAccount as String: key,
         ]
         SecItemDelete(query as CFDictionary)
     }
@@ -165,8 +203,9 @@ class GitHubCopilotService: ObservableObject {
     }
 
     /// Complete signin: store token, fetch user info
-    func completeSignIn(token: String) async throws {
-        storeToken(token)
+    func completeSignIn(token: String, accountId: UUID? = nil) async throws {
+        let acctIdStr = accountId?.uuidString
+        storeToken(token, accountId: acctIdStr)
 
         // Fetch user info
         guard let url = URL(string: "https://api.github.com/user") else { return }
@@ -180,27 +219,52 @@ class GitHubCopilotService: ObservableObject {
             let avatar = json["avatar_url"] as? String ?? ""
 
             await MainActor.run {
-                self.userName = login
-                self.avatarURL = avatar
+                if let acctId = accountId {
+                    self.accountAuthState[acctId] = (userName: login, avatarURL: avatar)
+                    UserDefaults.standard.set(
+                        login, forKey: "\(self.userNameKey)_\(acctId.uuidString)")
+                    UserDefaults.standard.set(
+                        avatar, forKey: "\(self.avatarKey)_\(acctId.uuidString)")
+                } else {
+                    self.userName = login
+                    self.avatarURL = avatar
+                    UserDefaults.standard.set(login, forKey: self.userNameKey)
+                    UserDefaults.standard.set(avatar, forKey: self.avatarKey)
+                }
                 self.isAuthenticated = true
-                UserDefaults.standard.set(login, forKey: self.userNameKey)
-                UserDefaults.standard.set(avatar, forKey: self.avatarKey)
             }
         }
     }
 
-    func signOut() {
-        deleteToken()
-        isAuthenticated = false
-        userName = ""
-        avatarURL = ""
-        UserDefaults.standard.removeObject(forKey: userNameKey)
-        UserDefaults.standard.removeObject(forKey: avatarKey)
+    func signOut(accountId: UUID? = nil) {
+        if let acctId = accountId {
+            deleteToken(accountId: acctId.uuidString)
+            accountAuthState.removeValue(forKey: acctId)
+            UserDefaults.standard.removeObject(forKey: "\(userNameKey)_\(acctId.uuidString)")
+            UserDefaults.standard.removeObject(forKey: "\(avatarKey)_\(acctId.uuidString)")
+            cachedCopilotTokens.removeValue(forKey: acctId.uuidString)
+            // Check if any accounts remain authenticated
+            let hasAnyAuth =
+                getStoredToken() != nil
+                || AccountManager.shared.copilotAccounts().contains {
+                    isAccountAuthenticated($0.id)
+                }
+            isAuthenticated = hasAnyAuth
+        } else {
+            deleteToken()
+            isAuthenticated = false
+            userName = ""
+            avatarURL = ""
+            UserDefaults.standard.removeObject(forKey: userNameKey)
+            UserDefaults.standard.removeObject(forKey: avatarKey)
+            cachedCopilotTokens.removeAll()
+        }
     }
 
     /// Convenience: orchestrate the full device flow sign-in from UI
-    func startSignIn() {
+    func startSignIn(forAccountId accountId: UUID? = nil) {
         isSigningIn = true
+        signingInAccountId = accountId
         errorMessage = nil
         deviceCode = nil
         verificationURL = nil
@@ -221,23 +285,27 @@ class GitHubCopilotService: ObservableObject {
                 // Poll for token
                 let token = try await pollForToken(
                     deviceCode: response.device_code, interval: response.interval)
-                try await completeSignIn(token: token)
+                try await completeSignIn(token: token, accountId: accountId)
 
                 await MainActor.run {
                     self.isSigningIn = false
+                    self.signingInAccountId = nil
                     self.deviceCode = nil
                     self.verificationURL = nil
 
-                    // Auto-create copilot account if needed
-                    if !AccountManager.shared.accounts.contains(where: {
-                        $0.providerType == "copilot"
-                    }) {
-                        AccountManager.shared.addAccount(.copilotAccount())
+                    // Auto-create copilot account if needed and no specific account was given
+                    if accountId == nil {
+                        if !AccountManager.shared.accounts.contains(where: {
+                            $0.providerType == "copilot"
+                        }) {
+                            AccountManager.shared.addAccount(.copilotAccount())
+                        }
                     }
                 }
             } catch {
                 await MainActor.run {
                     self.isSigningIn = false
+                    self.signingInAccountId = nil
                     self.errorMessage = error.localizedDescription
                 }
             }
@@ -246,16 +314,23 @@ class GitHubCopilotService: ObservableObject {
 
     // MARK: - Get Copilot Token (exchange GitHub token for Copilot API token)
 
-    private var cachedCopilotToken: String?
-    private var copilotTokenExpiry: Date?
+    private var cachedCopilotTokens: [String: (token: String, expiry: Date)] = [:]
 
-    func getCopilotToken() async throws -> String {
+    func getCopilotToken(accountId: String? = nil) async throws -> String {
+        let cacheKey = accountId ?? "__default__"
+
         // Return cached if still valid
-        if let token = cachedCopilotToken, let expiry = copilotTokenExpiry, Date() < expiry {
-            return token
+        if let cached = cachedCopilotTokens[cacheKey], Date() < cached.expiry {
+            return cached.token
         }
 
-        guard let githubToken = getStoredToken() else {
+        // Try account-specific token, then fall back to default
+        let githubToken: String
+        if let acctId = accountId, let token = getStoredToken(accountId: acctId) {
+            githubToken = token
+        } else if let token = getStoredToken(accountId: accountId) ?? getStoredToken() {
+            githubToken = token
+        } else {
             throw NSError(
                 domain: "GitHubCopilot", code: 3,
                 userInfo: [NSLocalizedDescriptionKey: "Not signed in to GitHub."])
@@ -278,7 +353,13 @@ class GitHubCopilotService: ObservableObject {
         }
 
         if httpResponse.statusCode == 401 {
-            await MainActor.run { self.signOut() }
+            await MainActor.run {
+                if let acctIdStr = accountId, let uuid = UUID(uuidString: acctIdStr) {
+                    self.signOut(accountId: uuid)
+                } else {
+                    self.signOut()
+                }
+            }
             throw NSError(
                 domain: "GitHubCopilot", code: 401,
                 userInfo: [NSLocalizedDescriptionKey: "GitHub token expired. Please sign in again."]
@@ -296,9 +377,8 @@ class GitHubCopilotService: ObservableObject {
                 ])
         }
 
-        cachedCopilotToken = token
         // Token typically valid for ~30 minutes, refresh at 25
-        copilotTokenExpiry = Date().addingTimeInterval(25 * 60)
+        cachedCopilotTokens[cacheKey] = (token: token, expiry: Date().addingTimeInterval(25 * 60))
 
         return token
     }
@@ -306,12 +386,12 @@ class GitHubCopilotService: ObservableObject {
     // MARK: - Chat Streaming
 
     func sendMessageStream(
-        history: [Message], model: String, systemPrompt: String = ""
+        history: [Message], model: String, systemPrompt: String = "", accountId: String? = nil
     ) -> AsyncThrowingStream<(String, String?), Error> {
         return AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let copilotToken = try await getCopilotToken()
+                    let copilotToken = try await getCopilotToken(accountId: accountId)
 
                     guard let url = URL(string: "https://api.githubcopilot.com/chat/completions")
                     else {

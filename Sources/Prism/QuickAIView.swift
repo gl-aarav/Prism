@@ -44,6 +44,7 @@ struct QuickAIView: View {
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
     @ObservedObject var copilotService = GitHubCopilotService.shared
+    @ObservedObject var geminiCLIService = GeminiCLIService.shared
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
     private var clampedBackgroundOpacity: Double {
@@ -1718,7 +1719,7 @@ extension QuickAIView {
                             Label("GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot"))
                         }
                     }
-                    if GeminiCLIService.shared.isAvailable {
+                    if geminiCLIService.isAvailable {
                         Button(action: { selectedProvider = "Gemini CLI" }) {
                             Label("Gemini CLI", systemImage: getProviderIcon("Gemini CLI"))
                         }

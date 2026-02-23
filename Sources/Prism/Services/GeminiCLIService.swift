@@ -7,15 +7,26 @@ class GeminiCLIService: ObservableObject {
     @Published var cliPath: String = ""
 
     init() {
-        detectCLI()
+        // Check for a user-configured custom path first
+        if let customPath = UserDefaults.standard.string(forKey: "GeminiCLIPath"),
+            !customPath.isEmpty,
+            FileManager.default.isExecutableFile(atPath: customPath)
+        {
+            cliPath = customPath
+            isAvailable = true
+        } else {
+            detectCLI()
+        }
     }
 
     func detectCLI() {
+        let homeDir = NSHomeDirectory()
         let searchPaths = [
-            "/usr/local/bin/gemini",
             "/opt/homebrew/bin/gemini",
-            "\(NSHomeDirectory())/.local/bin/gemini",
-            "\(NSHomeDirectory())/google-cloud-sdk/bin/gemini",
+            "/usr/local/bin/gemini",
+            "\(homeDir)/.local/bin/gemini",
+            "\(homeDir)/.npm-global/bin/gemini",
+            "\(homeDir)/google-cloud-sdk/bin/gemini",
             "/usr/bin/gemini",
         ]
 
@@ -27,13 +38,14 @@ class GeminiCLIService: ObservableObject {
             }
         }
 
-        // Try `which gemini`
+        // Use login shell to resolve PATH (picks up nvm, homebrew, etc.)
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let task = Process()
         let pipe = Pipe()
         task.standardOutput = pipe
         task.standardError = Pipe()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        task.arguments = ["which", "gemini"]
+        task.executableURL = URL(fileURLWithPath: shell)
+        task.arguments = ["-l", "-c", "which gemini"]
 
         do {
             try task.run()
@@ -49,6 +61,15 @@ class GeminiCLIService: ObservableObject {
             }
         } catch {
             isAvailable = false
+        }
+    }
+
+    /// Allow manually setting the CLI path from settings
+    func setCustomPath(_ path: String) {
+        if FileManager.default.isExecutableFile(atPath: path) {
+            cliPath = path
+            isAvailable = true
+            UserDefaults.standard.set(path, forKey: "GeminiCLIPath")
         }
     }
 

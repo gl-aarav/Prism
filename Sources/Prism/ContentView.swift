@@ -2458,6 +2458,13 @@ struct ContentView: View {
                 // GitHub Copilot
                 let copilotModel =
                     UserDefaults.standard.string(forKey: "SelectedCopilotModel") ?? "gpt-4o"
+                // Extract account UUID if multi-account
+                var copilotAccountId: String? = nil
+                if selectedProvider.contains("|"),
+                    let uuidStr = selectedProvider.split(separator: "|").last.map(String.init)
+                {
+                    copilotAccountId = uuidStr
+                }
                 let aiMsgId = UUID()
                 var aiMsg = Message(
                     content: "",
@@ -2477,7 +2484,9 @@ struct ContentView: View {
 
                     for try await (contentChunk, _) in GitHubCopilotService.shared
                         .sendMessageStream(
-                            history: currentHistory, model: copilotModel, systemPrompt: systemPrompt
+                            history: currentHistory, model: copilotModel,
+                            systemPrompt: systemPrompt,
+                            accountId: copilotAccountId
                         )
                     {
                         fullContent += contentChunk
@@ -3422,6 +3431,7 @@ struct HeaderView: View {
     var onNewChat: () -> Void
     @ObservedObject private var accountManager = AccountManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
+    @ObservedObject private var geminiCLIService = GeminiCLIService.shared
 
     var body: some View {
         HStack {
@@ -3483,14 +3493,32 @@ struct HeaderView: View {
 
                 // Only show GitHub Copilot if signed in
                 if copilotService.isAuthenticated {
+                    let copilotAccounts = accountManager.copilotAccounts()
                     Section("GitHub Copilot") {
-                        Button(action: { selectedProvider = "GitHub Copilot" }) {
-                            Label("GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot"))
+                        if copilotAccounts.count <= 1 {
+                            Button(action: { selectedProvider = "GitHub Copilot" }) {
+                                Label(
+                                    "GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot")
+                                )
+                            }
+                        } else {
+                            ForEach(copilotAccounts) { account in
+                                let acctName =
+                                    copilotService.accountAuthState[account.id]?.userName
+                                    ?? account.displayName
+                                Button(action: {
+                                    selectedProvider = "GitHub Copilot|\(account.id.uuidString)"
+                                }) {
+                                    Label(
+                                        acctName,
+                                        systemImage: getProviderIcon("GitHub Copilot"))
+                                }
+                            }
                         }
                     }
                 }
 
-                if GeminiCLIService.shared.isAvailable {
+                if geminiCLIService.isAvailable {
                     Section("Gemini CLI") {
                         Button(action: { selectedProvider = "Gemini CLI" }) {
                             Label("Gemini CLI", systemImage: getProviderIcon("Gemini CLI"))
@@ -6266,23 +6294,48 @@ struct SettingsView: View {
         Section(
             header: Label("GitHub Copilot", systemImage: "chevron.left.forwardslash.chevron.right")
         ) {
-            if copilotService.isAuthenticated {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text("Signed in to GitHub")
-                        .font(.headline)
-                    Spacer()
-                    Button("Sign Out") {
-                        copilotService.signOut()
-                    }
-                    .foregroundStyle(.red)
-                }
+            let copilotAccts = accountManager.copilotAccounts()
 
-                let copilotAccts = accountManager.copilotAccounts()
-                ForEach(copilotAccts) { (account: ProviderAccount) in
+            // Show each authenticated account
+            ForEach(copilotAccts) { (account: ProviderAccount) in
+                let isAcctAuth = copilotService.isAccountAuthenticated(account.id)
+                VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        if editingAccountId == account.id {
+                        if isAcctAuth {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            let ghUser = copilotService.accountAuthState[account.id]?.userName
+                            Text(ghUser ?? account.displayName)
+                                .font(.headline)
+                        } else {
+                            Image(systemName: "xmark.circle")
+                                .foregroundStyle(.secondary)
+                            Text(account.displayName)
+                                .font(.headline)
+                        }
+                        Spacer()
+                        if isAcctAuth {
+                            Button("Sign Out") {
+                                copilotService.signOut(accountId: account.id)
+                            }
+                            .foregroundStyle(.red)
+                        } else if copilotService.isSigningIn
+                            && copilotService.signingInAccountId == account.id
+                        {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Button("Sign In") {
+                                copilotService.startSignIn(forAccountId: account.id)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                    }
+
+                    // Rename
+                    if editingAccountId == account.id {
+                        HStack {
                             TextField("Name", text: $editingAccountName)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(maxWidth: 150)
@@ -6292,9 +6345,12 @@ struct SettingsView: View {
                                 editingAccountId = nil
                             }
                             .buttonStyle(.borderless)
-                        } else {
-                            Label(account.displayName, systemImage: "person.circle")
-                            Spacer()
+                        }
+                    } else {
+                        HStack {
+                            Text("Label: \(account.displayName)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             Button {
                                 editingAccountName = account.displayName
                                 editingAccountId = account.id
@@ -6303,10 +6359,23 @@ struct SettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.borderless)
+                            Spacer()
+                            Button {
+                                copilotService.signOut(accountId: account.id)
+                                accountManager.removeAccount(id: account.id)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.borderless)
                         }
                     }
                 }
-            } else if copilotService.isSigningIn {
+                .padding(.vertical, 4)
+            }
+
+            // Sign-in progress for new account (no specific account)
+            if copilotService.isSigningIn, let code = copilotService.deviceCode {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         ProgressView()
@@ -6314,27 +6383,43 @@ struct SettingsView: View {
                         Text("Waiting for GitHub authorization...")
                             .foregroundStyle(.secondary)
                     }
-                    if let code = copilotService.deviceCode {
-                        HStack {
-                            Text("Enter code:")
-                                .foregroundStyle(.secondary)
-                            Text(code)
-                                .font(.system(.title2, design: .monospaced, weight: .bold))
-                                .textSelection(.enabled)
-                            Button {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(code, forType: .string)
-                            } label: {
-                                Image(systemName: "doc.on.doc")
-                            }
-                            .buttonStyle(.borderless)
+                    HStack {
+                        Text("Enter code:")
+                            .foregroundStyle(.secondary)
+                        Text(code)
+                            .font(.system(.title2, design: .monospaced, weight: .bold))
+                            .textSelection(.enabled)
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(code, forType: .string)
+                        } label: {
+                            Image(systemName: "doc.on.doc")
                         }
-                        if let url = copilotService.verificationURL {
-                            Link("Open GitHub to enter code", destination: url)
-                        }
+                        .buttonStyle(.borderless)
+                    }
+                    if let url = copilotService.verificationURL {
+                        Link("Open GitHub to enter code", destination: url)
                     }
                 }
-            } else {
+            }
+
+            // Add another account button
+            if !copilotService.isSigningIn {
+                Button {
+                    let newAcct = ProviderAccount.copilotAccount(
+                        name: "GitHub Account \(copilotAccts.count + 1)")
+                    accountManager.addAccount(newAcct)
+                    copilotService.startSignIn(forAccountId: newAcct.id)
+                } label: {
+                    Label("Add GitHub Account", systemImage: "plus.circle")
+                }
+                .controlSize(.small)
+            }
+
+            // Sign in prompt when no accounts exist
+            if copilotAccts.isEmpty && !copilotService.isAuthenticated
+                && !copilotService.isSigningIn
+            {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Sign in with your GitHub account to use Copilot models.")
                         .font(.callout)
@@ -6348,6 +6433,7 @@ struct SettingsView: View {
                     .buttonStyle(.borderedProminent)
                 }
             }
+
             if let error = copilotService.errorMessage {
                 Text(error)
                     .font(.caption)
