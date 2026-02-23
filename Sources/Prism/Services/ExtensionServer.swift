@@ -42,7 +42,7 @@ class ExtensionServer {
                 !$0.apiKey.isEmpty
             }
             for account in geminiAccounts {
-                let prefix = geminiAccounts.count > 1 ? "\(account.displayName): " : "Gemini: "
+                let prefix = "\(account.displayName): "
                 for model in GeminiModelManager.shared.availableModels {
                     allModels.append([
                         "id": "gemini:\(model)|\(account.id.uuidString)",
@@ -76,14 +76,15 @@ class ExtensionServer {
                     }
                 } else {
                     for account in copilotAccounts {
-                        let acctName =
+                        let ghUser =
                             GitHubCopilotService.shared.accountAuthState[account.id]?.userName
-                            ?? account.displayName
+                            ?? ""
+                        let prefix = ghUser.isEmpty ? "Copilot" : "Copilot (\(ghUser))"
                         for model in GitHubCopilotModelManager.shared.chatModels {
                             allModels.append([
                                 "id": "copilot:\(model)|\(account.id.uuidString)",
                                 "name":
-                                    "\(acctName): \(GitHubCopilotModelManager.shared.displayName(for: model))",
+                                    "\(prefix): \(GitHubCopilotModelManager.shared.displayName(for: model))",
                             ])
                         }
                     }

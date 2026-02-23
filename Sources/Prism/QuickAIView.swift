@@ -316,7 +316,10 @@ struct QuickAIView: View {
                     let ghUser = GitHubCopilotService.shared.accountAuthState[uuid]?.userName,
                     !ghUser.isEmpty
                 {
-                    return "Copilot (\(ghUser))"
+                    return "GitHub Copilot (\(ghUser))"
+                }
+                if let account = AccountManager.shared.accounts.first(where: { $0.id == uuid }) {
+                    return account.displayName
                 }
             }
         }
@@ -480,8 +483,16 @@ struct QuickAIView: View {
         isLoading = true
 
         chatManager.currentTask = Task {
-            if selectedProvider == "Gemini API" {
-                if !geminiKey.isEmpty {
+            if selectedProvider == "Gemini API" || selectedProvider.hasPrefix("Gemini API|") {
+                // Resolve API key for multi-account
+                var apiKey = geminiKey
+                if selectedProvider.contains("|"),
+                   let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
+                   let uuid = UUID(uuidString: uuidStr),
+                   let account = AccountManager.shared.accounts.first(where: { $0.id == uuid }) {
+                    apiKey = account.apiKey
+                }
+                if !apiKey.isEmpty {
                     let aiMsgId = UUID()
                     var aiMsg = Message(content: "", model: geminiModel, isUser: false)
                     aiMsg.id = aiMsgId
@@ -499,7 +510,7 @@ struct QuickAIView: View {
 
                         for try await (contentChunk, thinkingChunk, imageData)
                             in geminiService.sendMessageStream(
-                                history: chatManager.getCurrentMessages(), apiKey: geminiKey,
+                                history: chatManager.getCurrentMessages(), apiKey: apiKey,
                                 model: geminiModel, systemPrompt: systemPrompt,
                                 thinkingLevel: geminiThinkingLevel)
                         {
@@ -1757,13 +1768,12 @@ extension QuickAIView {
                             }
                         } else {
                             ForEach(copilotAccounts) { account in
-                                let acctName =
-                                    copilotService.accountAuthState[account.id]?.userName
-                                    ?? account.displayName
+                                let ghUser = copilotService.accountAuthState[account.id]?.userName ?? ""
+                                let label = ghUser.isEmpty ? "GitHub Copilot" : "GitHub Copilot (\(ghUser))"
                                 Button(action: {
                                     selectedProvider = "GitHub Copilot|\(account.id.uuidString)"
                                 }) {
-                                    Label(acctName, systemImage: getProviderIcon("GitHub Copilot"))
+                                    Label(label, systemImage: getProviderIcon("GitHub Copilot"))
                                 }
                             }
                         }
@@ -2174,7 +2184,7 @@ extension QuickAIView {
                         .tint(colorScheme == .dark ? .white : .black)
                         .help("Reasoning Effort")
                     }
-                } else if selectedProvider == "Gemini API" {
+                } else if selectedProvider == "Gemini API" || selectedProvider.hasPrefix("Gemini API|") {
                     Menu {
                         Section("Favorites") {
                             ForEach(geminiManager.favoriteModels, id: \.self) { model in
