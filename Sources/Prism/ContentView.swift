@@ -2124,9 +2124,6 @@ struct ContentView: View {
                     model: aiMsg.model
                 )
                 if var vers = aiMsg.versions {
-                    if let idx = aiMsg.currentVersionIndex, idx < vers.count - 1 {
-                        vers.removeSubrange((idx + 1)...)
-                    }
                     if vers.last?.content != currentVersion.content
                         || vers.last?.imageData != currentVersion.imageData
                     {
@@ -2149,9 +2146,6 @@ struct ContentView: View {
                 model: lastMsg.model
             )
             if var vers = lastMsg.versions {
-                if let idx = lastMsg.currentVersionIndex, idx < vers.count - 1 {
-                    vers.removeSubrange((idx + 1)...)
-                }
                 if vers.last?.content != currentVersion.content
                     || vers.last?.imageData != currentVersion.imageData
                 {
@@ -7350,6 +7344,13 @@ struct Triangle: Shape {
     }
 }
 
+struct StringImageFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
 struct ImageGalleryView: View {
     @ObservedObject var chatManager: ChatManager
     @Binding var showImageGallery: Bool
@@ -7357,22 +7358,28 @@ struct ImageGalleryView: View {
     @State private var selectedImageForPreview: NSImage? = nil
     @State private var previewVisible: Bool = false
     @State private var previewSourceRect: CGRect = .zero
-    @State private var imageFrames: [UUID: CGRect] = [:]
+    @State private var imageFrames: [String: CGRect] = [:]
 
-    var images: [(UUID, UUID, NSImage, String)] {
-        var result: [(UUID, UUID, NSImage, String)] = []
+    var images: [(UUID, String, NSImage, String)] {
+        var result: [(UUID, String, NSImage, String)] = []
         // Chat images
         for session in chatManager.sessions {
             for message in session.messages {
-                if let image = message.image {
-                    result.append((session.id, message.id, image, message.content))
+                if let versions = message.versions, !versions.isEmpty {
+                    for (index, version) in versions.enumerated() {
+                        if let imageData = version.imageData, let image = NSImage(data: imageData) {
+                            result.append((session.id, "\(message.id.uuidString)-\(index)", image, version.content))
+                        }
+                    }
+                } else if let image = message.image {
+                    result.append((session.id, message.id.uuidString, image, message.content))
                 }
             }
         }
         // Generated images from Image Generation tool
         for item in imageGenStore.items {
             if let img = imageGenStore.image(for: item.id) {
-                result.append((item.id, item.id, img, item.prompt))
+                result.append((item.id, item.id.uuidString, img, item.prompt))
             }
         }
         return result
@@ -7396,7 +7403,7 @@ struct ImageGalleryView: View {
                                 .background(
                                     GeometryReader { imgGeo in
                                         Color.clear.preference(
-                                            key: ImageFramePreferenceKey.self,
+                                            key: StringImageFramePreferenceKey.self,
                                             value: [
                                                 item.1: imgGeo.frame(in: .named("galleryContainer"))
                                             ]
@@ -7444,7 +7451,7 @@ struct ImageGalleryView: View {
             }
         }
         .coordinateSpace(name: "galleryContainer")
-        .onPreferenceChange(ImageFramePreferenceKey.self) { frames in
+        .onPreferenceChange(StringImageFramePreferenceKey.self) { frames in
             imageFrames.merge(frames) { _, new in new }
         }
     }
