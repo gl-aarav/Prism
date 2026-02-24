@@ -3818,6 +3818,8 @@ struct InputView: View {
     @StateObject private var pasteMonitor = PasteMonitor()
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
+    @State private var showAddCustomGeminiModel = false
+    @State private var newCustomGeminiModelName = ""
     @State private var glassHover: Bool = false
     @State private var slashMatches: [SlashCommand] = []
     @State private var slashSelectedIndex: Int = 0
@@ -4048,6 +4050,10 @@ struct InputView: View {
                                 }
                             }
                         }
+
+                        Button(action: { showAddCustomGeminiModel = true }) {
+                            Label("Add Custom Model...", systemImage: "plus")
+                        }
                     } label: {
                         Image(systemName: "sparkles")
                             .font(.system(size: 14, weight: .medium))
@@ -4063,6 +4069,19 @@ struct InputView: View {
                     }
                     .menuStyle(.borderlessButton)
                     .help("Select Gemini Model")
+                    .alert("Add Custom Gemini Model", isPresented: $showAddCustomGeminiModel) {
+                        TextField("Model Name (e.g., gemini-3.1-pro-preview)", text: $newCustomGeminiModelName)
+                        Button("Add") {
+                            geminiManager.addCustomModel(newCustomGeminiModelName)
+                            geminiModel = newCustomGeminiModelName
+                            newCustomGeminiModelName = ""
+                        }
+                        Button("Cancel", role: .cancel) {
+                            newCustomGeminiModelName = ""
+                        }
+                    } message: {
+                        Text("Enter the name of the model as it appears in the Gemini API.")
+                    }
                 }
 
                 if isCopilot {

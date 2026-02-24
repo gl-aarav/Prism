@@ -5,6 +5,7 @@ class GeminiModelManager: ObservableObject {
     static let shared = GeminiModelManager()
 
     @AppStorage("GeminiFavorites") private var favoritesJSON: String = "[]"
+    @AppStorage("GeminiCustomModels") private var customModelsJSON: String = "[]"
 
     @Published var availableModels: [String] = [
         // Gemini 3
@@ -18,16 +19,9 @@ class GeminiModelManager: ObservableObject {
         "gemini-2.5-flash-lite",
         "gemini-2.5-flash-preview-tts",
         "gemini-2.5-pro-preview-tts",
-        "gemini-2.5-flash-preview-09-2025",
         "gemini-2.5-flash-lite-preview-09-2025",
         "gemini-2.5-flash-image",
         "gemini-2.5-computer-use-preview-10-2025",
-        // Gemini 2.0
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-001",
-        "gemini-2.0-flash-exp-image-generation",
-        "gemini-2.0-flash-lite-001",
-        "gemini-2.0-flash-lite",
         "gemini-exp-1206",
         // Gemma 3
         "gemma-3-1b-it",
@@ -55,15 +49,9 @@ class GeminiModelManager: ObservableObject {
         "gemini-2.5-flash-lite": "Gemini 2.5 Flash-Lite",
         "gemini-2.5-flash-preview-tts": "Gemini 2.5 Flash Preview TTS",
         "gemini-2.5-pro-preview-tts": "Gemini 2.5 Pro Preview TTS",
-        "gemini-2.5-flash-preview-09-2025": "Gemini 2.5 Flash Preview Sep 2025",
         "gemini-2.5-flash-lite-preview-09-2025": "Gemini 2.5 Flash-Lite Preview Sep 2025",
         "gemini-2.5-flash-image": "Nano Banana",
         "gemini-2.5-computer-use-preview-10-2025": "Gemini 2.5 Computer Use Preview 10-2025",
-        "gemini-2.0-flash": "Gemini 2.0 Flash",
-        "gemini-2.0-flash-001": "Gemini 2.0 Flash 001",
-        "gemini-2.0-flash-exp-image-generation": "Gemini 2.0 Flash (Image Generation) Experimental",
-        "gemini-2.0-flash-lite-001": "Gemini 2.0 Flash-Lite 001",
-        "gemini-2.0-flash-lite": "Gemini 2.0 Flash-Lite",
         "gemini-exp-1206": "Gemini Experimental 1206",
         "gemma-3-1b-it": "Gemma 3 1B",
         "gemma-3-4b-it": "Gemma 3 4B",
@@ -104,7 +92,50 @@ class GeminiModelManager: ObservableObject {
                 used.formUnion(models)
             }
         }
+        
+        let custom = shared.customModels
+        if !custom.isEmpty {
+            result.append(ModelGroup(name: "Custom", models: custom))
+        }
+
         return result
+    }
+
+    var customModels: [String] {
+        get {
+            guard let data = customModelsJSON.data(using: .utf8),
+                let decoded = try? JSONDecoder().decode([String].self, from: data)
+            else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue),
+                let json = String(data: data, encoding: .utf8)
+            {
+                customModelsJSON = json
+                objectWillChange.send()
+            }
+        }
+    }
+
+    func addCustomModel(_ model: String) {
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var current = customModels
+        if !current.contains(trimmed) {
+            current.append(trimmed)
+            customModels = current
+        }
+    }
+
+    func removeCustomModel(_ model: String) {
+        var current = customModels
+        if let index = current.firstIndex(of: model) {
+            current.remove(at: index)
+            customModels = current
+        }
     }
 
     func displayName(for model: String) -> String {
@@ -133,7 +164,8 @@ class GeminiModelManager: ObservableObject {
     var sortedModels: [String] {
         let favorites = favoriteModels
         let others = availableModels.filter { !favorites.contains($0) }
-        return (favorites + others).unique()
+        let customs = customModels.filter { !favorites.contains($0) }
+        return (favorites + others + customs).unique()
     }
 
     func toggleFavorite(_ model: String) {
