@@ -6008,6 +6008,8 @@ struct SettingsView: View {
     @ObservedObject var copilotService = GitHubCopilotService.shared
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
+    @State private var showAddCustomGeminiModel = false
+    @State private var newCustomGeminiModelName = ""
     @State private var editingAccountId: UUID? = nil
     @State private var editingAccountName: String = ""
 
@@ -6260,6 +6262,35 @@ struct SettingsView: View {
                     providerType: .gemini, displayName: "Gemini \(geminiAccts.count + 1)")
             } label: {
                 Label("Add Gemini Account", systemImage: "plus.circle")
+            }
+        }
+
+        Section(header: Label("Gemini Custom Models", systemImage: "sparkles")) {
+            HStack {
+                TextField("Add model (e.g. gemini-3.1-pro-preview)", text: $newCustomGeminiModelName)
+                    .textFieldStyle(.roundedBorder)
+                Button("Add") {
+                    geminiManager.addCustomModel(newCustomGeminiModelName)
+                    newCustomGeminiModelName = ""
+                }
+            }
+
+            ForEach(geminiManager.customModels, id: \.self) { model in
+                HStack {
+                    Text(model)
+                        .font(.system(.callout, design: .monospaced))
+                    Spacer()
+                    Button(role: .destructive) {
+                        geminiManager.removeCustomModel(model)
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                .padding(8)
+                .background(Color.gray.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
     }
