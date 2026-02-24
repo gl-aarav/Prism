@@ -2,7 +2,7 @@ import AppKit
 import CoreGraphics
 
 /// Global keyboard event monitor using a CGEvent tap.
-/// Intercepts Tab and Right Arrow ONLY when a suggestion is visible,
+/// Intercepts Tab ONLY when a suggestion is visible,
 /// otherwise passes them through normally.
 class KeyboardEventTap {
     static let shared = KeyboardEventTap()
@@ -11,8 +11,7 @@ class KeyboardEventTap {
     var isSuggestionVisible: (() -> Bool)?
 
     /// Callbacks for key actions.
-    var onTab: (() -> Void)?        // Accept entire suggestion
-    var onRightArrow: (() -> Void)? // Accept next word
+    var onTab: (() -> Void)?        // Accept entire suggestion/next word
 
     fileprivate var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -96,11 +95,6 @@ class KeyboardEventTap {
             }
             return nil  // Suppress the event
 
-        case 124:  // Right Arrow → accept next word
-            DispatchQueue.main.async { [weak self] in
-                self?.onRightArrow?()
-            }
-            return nil  // Suppress the event
 
         default:
             return event  // Pass through everything else

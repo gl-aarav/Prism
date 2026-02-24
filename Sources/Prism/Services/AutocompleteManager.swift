@@ -103,9 +103,8 @@ class AutocompleteManager: ObservableObject {
         tap.isSuggestionVisible = { [weak self] in
             self?.suggestion != nil
         }
-        // Swapped bindings: Tab accepts next word, Right Arrow accepts full text
+        // Bindings: Tab accepts next word. Full text completion is disabled.
         tap.onTab = { [weak self] in self?.acceptNextWord() }
-        tap.onRightArrow = { [weak self] in self?.acceptFull() }
         tap.install()
 
         // Create overlay panel
@@ -309,25 +308,7 @@ class AutocompleteManager: ObservableObject {
 
     // MARK: - Acceptance Controls
 
-    /// Accept the full suggestion (Tab key).
-    func acceptFull() {
-        guard let text = suggestion, !text.isEmpty else { return }
-
-        // Record in writing memory if enabled
-        if UserDefaults.standard.bool(forKey: "AIAutocompleteMemoryEnabled") {
-            WritingMemory.shared.record(
-                context: lastTextBeforeCursor,
-                accepted: text,
-                appBundleId: CursorTracker.shared.focusedAppBundleId
-            )
-        }
-
-        TextInjector.shared.insertText(text)
-        suggestion = nil
-        lastTextBeforeCursor = ""  // Reset so next text change triggers prediction
-    }
-
-    /// Accept only the next word from the suggestion (Right Arrow key).
+    /// Accept only the next word from the suggestion (Tab key).
     func acceptNextWord() {
         guard let text = suggestion, !text.isEmpty else { return }
 
