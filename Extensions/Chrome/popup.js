@@ -40,65 +40,93 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── MODEL SELECTOR ──────────────────────────────────────
     async function fetchModels() {
+        let models = [];
         try {
             const res = await fetch('http://localhost:8080/api/models');
-            if (!res.ok) throw new Error('Server not ready');
-            const models = await res.json();
-            modelSelect.innerHTML = '';
-
-            const groups = { 'Apple': [], 'Gemini': [], 'Ollama': [], 'Copilot': [], 'Other': [] };
-            models.forEach(m => {
-                let name = m.name;
-                let group = 'Other';
-                if (name.startsWith('Apple')) { group = 'Apple'; }
-                else if (m.id.startsWith('gemini:')) { group = 'Gemini'; name = name.replace(/^Gemini:\s*/, ''); }
-                else if (m.id.startsWith('ollama:')) { group = 'Ollama'; name = name.replace(/^Ollama:\s*/, ''); }
-                else if (m.id.startsWith('copilot:')) {
-                    group = 'Copilot';
-                    // Remove the default "Copilot: " prefix but keep the username if it exists.
-                    // For example "Copilot: Model Name" -> "Model Name"
-                    // "Copilot (username): Model Name" -> "(username): Model Name"
-                    // To make it look nice, we can just replace "Copilot: " or "Copilot "
-                    if (name.startsWith('Copilot: ')) {
-                        name = name.substring(9);
-                    } else if (name.startsWith('Copilot (')) {
-                        name = name.substring(8); // leaves "(username): Model Name"
-                    }
-                }
-                groups[group].push({ id: m.id, name });
-            });
-
-            ['Apple', 'Copilot', 'Gemini', 'Ollama', 'Other'].forEach(groupName => {
-                if (groups[groupName].length > 0) {
-                    const optgroup = document.createElement('optgroup');
-                    optgroup.label = groupName;
-                    groups[groupName].forEach(m => {
-                        const opt = document.createElement('option');
-                        opt.value = m.id;
-                        opt.textContent = m.name;
-                        optgroup.appendChild(opt);
-                    });
-                    modelSelect.appendChild(optgroup);
-                }
-            });
-
-            chrome.storage.local.get(['lastModelId'], result => {
-                if (result.lastModelId && Array.from(modelSelect.options).some(o => o.value === result.lastModelId)) {
-                    modelSelect.value = result.lastModelId;
-                }
-                updateModelDisplay();
-                updateModelCapabilities();
-            });
+            if (res.ok) {
+                models = await res.json();
+            }
         } catch (e) {
+            console.warn('Could not fetch external models:', e);
+        }
+
+        // Check for Gemini Nano
+        let nanoAvailable = false;
+        try {
+            const lm = typeof window.ai !== 'undefined' && window.ai.languageModel
+                ? window.ai.languageModel
+                : (typeof LanguageModel !== 'undefined' ? LanguageModel : null);
+            if (lm && lm.availability) {
+                const status = await lm.availability({ expectedLanguage: 'en' });
+                if (status === 'available') {
+                    nanoAvailable = true;
+                }
+            }
+        } catch (e) {
+            console.warn('Gemini Nano check failed:', e);
+        }
+
+        if (nanoAvailable) {
+            models.unshift({ id: 'nano:gemini-nano', name: 'Gemini Nano (Local Browser)' });
+        }
+
+        if (models.length === 0) {
             modelSelect.innerHTML = '<option value="">Cannot connect to Prism</option>';
             modelName.textContent = 'Cannot connect';
+            return;
         }
+
+        modelSelect.innerHTML = '';
+        const groups = { 'Apple': [], 'Gemini': [], 'Ollama': [], 'Copilot': [], 'Other': [] };
+        models.forEach(m => {
+            let name = m.name;
+            let group = 'Other';
+            if (m.id === 'nano:gemini-nano') { group = 'Gemini'; }
+            else if (name.startsWith('Apple')) { group = 'Apple'; }
+            else if (m.id.startsWith('gemini:')) { group = 'Gemini'; name = name.replace(/^Gemini:\s*/, ''); }
+            else if (m.id.startsWith('ollama:')) { group = 'Ollama'; name = name.replace(/^Ollama:\s*/, ''); }
+            else if (m.id.startsWith('copilot:')) {
+                group = 'Copilot';
+                // Remove the default "Copilot: " prefix but keep the username if it exists.
+                // For example "Copilot: Model Name" -> "Model Name"
+                // "Copilot (username): Model Name" -> "(username): Model Name"
+                // To make it look nice, we can just replace "Copilot: " or "Copilot "
+                if (name.startsWith('Copilot: ')) {
+                    name = name.substring(9);
+                } else if (name.startsWith('Copilot (')) {
+                    name = name.substring(8); // leaves "(username): Model Name"
+                }
+            }
+            groups[group].push({ id: m.id, name });
+        });
+
+        ['Apple', 'Copilot', 'Gemini', 'Ollama', 'Other'].forEach(groupName => {
+            if (groups[groupName].length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = groupName;
+                groups[groupName].forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.name;
+                    optgroup.appendChild(opt);
+                });
+                modelSelect.appendChild(optgroup);
+            }
+        });
+
+        chrome.storage.local.get(['lastModelId'], result => {
+            if (result.lastModelId && Array.from(modelSelect.options).some(o => o.value === result.lastModelId)) {
+                modelSelect.value = result.lastModelId;
+            }
+            updateModelDisplay();
+            updateModelCapabilities();
+        });
     }
 
     function getProviderIcon(modelId) {
         if (modelId.startsWith('apple:'))
             return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83"/><path d="M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg>';
-        if (modelId.startsWith('gemini:'))
+        if (modelId.startsWith('gemini:') || modelId.startsWith('nano:'))
             return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><path d="M12 2L13.09 8.26L18 6L14.74 10.91L21 12L14.74 13.09L18 18L13.09 15.74L12 22L10.91 15.74L6 18L9.26 13.09L3 12L9.26 10.91L6 6L10.91 8.26L12 2Z"/></svg>';
         if (modelId.startsWith('ollama:'))
             return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>';
@@ -388,65 +416,108 @@ document.addEventListener('DOMContentLoaded', () => {
         let cursorInterval = null;
 
         try {
-            const res = await fetch('http://localhost:8080/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model: modelId,
-                    messages: messagesForApi,
-                    thinkingLevel: thinkingLevel,
-                    webSearch: includeWebSearch
-                }),
-                signal: abortController.signal
-            });
-            if (!res.ok) throw new Error('Failed to fetch response');
+            if (modelId === 'nano:gemini-nano') {
+                const lm = typeof window.ai !== 'undefined' && window.ai.languageModel
+                    ? window.ai.languageModel
+                    : (typeof LanguageModel !== 'undefined' ? LanguageModel : null);
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder('utf-8');
+                if (!lm) throw new Error("Gemini Nano is not available in this browser.");
 
-            cursorInterval = setInterval(() => {
-                const cursor = assistant.contentDiv.querySelector('.cursor');
-                if (cursor) cursor.classList.toggle('blink-off');
-            }, 500);
+                let promptText = messagesForApi.map(m => {
+                    if (m.role === 'system') return 'System: ' + m.content;
+                    if (m.role === 'user') return 'User: ' + m.content;
+                    if (m.role === 'assistant') return 'Assistant: ' + m.content;
+                    return m.content;
+                }).join('\n\n') + '\n\nAssistant:';
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n');
-                for (const line of lines) {
-                    if (!line.startsWith('data: ')) continue;
-                    const dataStr = line.substring(6);
-                    if (dataStr === '[DONE]') break;
-                    try {
-                        const data = JSON.parse(dataStr);
-                        if (data.error) {
-                            fullContent = data.error;
-                            assistant.contentDiv.innerHTML = '<span class="error-text">' + escapeHtml(data.error) + '</span>';
-                        } else {
-                            if (data.thinking) {
-                                fullThinking += data.thinking;
-                                assistant.thinkingToggle.style.display = 'flex';
-                                assistant.thinkingDiv.style.display = 'block';
-                                assistant.thinkingDiv.querySelector('.thinking-text').textContent = fullThinking;
-                                if (!fullContent) {
-                                    assistant.thinkingDiv.classList.add('expanded');
-                                    assistant.thinkingToggle.classList.add('expanded');
+                cursorInterval = setInterval(() => {
+                    const cursor = assistant.contentDiv.querySelector('.cursor');
+                    if (cursor) cursor.classList.toggle('blink-off');
+                }, 500);
+
+                const session = await lm.create({ expectedLanguage: 'en' });
+
+                let stream;
+                try {
+                    stream = session.promptStreaming(promptText, { signal: abortController.signal });
+                } catch (e) {
+                    stream = session.promptStreaming(promptText);
+                }
+
+                let previousChunk = "";
+                for await (const chunk of stream) {
+                    if (abortController.signal.aborted) break;
+
+                    // Depending on the Chrome version, `chunk` might be the full accumulated string
+                    // or just the newly generated tokens. We handle both cases to prevent clearing.
+                    const newText = chunk.startsWith(previousChunk) ? chunk.slice(previousChunk.length) : chunk;
+                    fullContent += newText;
+                    previousChunk = chunk;
+
+                    renderContent(assistant.contentDiv, fullContent, true);
+                    scrollToBottom();
+                }
+            } else {
+                const res = await fetch('http://localhost:8080/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: modelId,
+                        messages: messagesForApi,
+                        thinkingLevel: thinkingLevel,
+                        webSearch: includeWebSearch
+                    }),
+                    signal: abortController.signal
+                });
+                if (!res.ok) throw new Error('Failed to fetch response');
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+
+                cursorInterval = setInterval(() => {
+                    const cursor = assistant.contentDiv.querySelector('.cursor');
+                    if (cursor) cursor.classList.toggle('blink-off');
+                }, 500);
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        const dataStr = line.substring(6);
+                        if (dataStr === '[DONE]') break;
+                        try {
+                            const data = JSON.parse(dataStr);
+                            if (data.error) {
+                                fullContent = data.error;
+                                assistant.contentDiv.innerHTML = '<span class="error-text">' + escapeHtml(data.error) + '</span>';
+                            } else {
+                                if (data.thinking) {
+                                    fullThinking += data.thinking;
+                                    assistant.thinkingToggle.style.display = 'flex';
+                                    assistant.thinkingDiv.style.display = 'block';
+                                    assistant.thinkingDiv.querySelector('.thinking-text').textContent = fullThinking;
+                                    if (!fullContent) {
+                                        assistant.thinkingDiv.classList.add('expanded');
+                                        assistant.thinkingToggle.classList.add('expanded');
+                                    }
                                 }
-                            }
-                            if (data.text) {
-                                fullContent += data.text;
-                                if (fullThinking) {
-                                    assistant.thinkingDiv.classList.remove('expanded');
-                                    assistant.thinkingToggle.classList.remove('expanded');
+                                if (data.text) {
+                                    fullContent += data.text;
+                                    if (fullThinking) {
+                                        assistant.thinkingDiv.classList.remove('expanded');
+                                        assistant.thinkingToggle.classList.remove('expanded');
+                                    }
                                 }
+                                renderContent(assistant.contentDiv, fullContent, true);
                             }
-                            renderContent(assistant.contentDiv, fullContent, true);
+                            scrollToBottom();
+                        } catch (e) {
+                            // Some SSE streams split the JSON string over multiple lines or chunks.
+                            // But we append data string by line, so incomplete lines are ignored until the buffer fills.
                         }
-                        scrollToBottom();
-                    } catch (e) {
-                        // Some SSE streams split the JSON string over multiple lines or chunks.
-                        // But we append data string by line, so incomplete lines are ignored until the buffer fills.
                     }
                 }
             }
