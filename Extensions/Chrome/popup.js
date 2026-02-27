@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const contextCloseBtn = document.getElementById('contextCloseBtn');
     const contextToggleText = document.getElementById('contextToggleText');
     const webSearchBtn = document.getElementById('webSearchBtn');
+    const contextBtn = document.getElementById('contextBtn');
     const agentBrowserBtn = document.getElementById('agentBrowserBtn');
     const screenshotBtn = document.getElementById('screenshotBtn');
     const attachBtn = document.getElementById('attachBtn');
@@ -551,6 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     fetchModels();
+    updateContextLabel();
 
     // ── NEW CHAT ────────────────────────────────────────────
     newChatBtn.addEventListener('click', () => {
@@ -602,9 +604,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── CONTEXT TOGGLE ──────────────────────────────────────
     function setContextState(enabled) {
         includeContext = enabled;
-        contextToggle.classList.toggle('disabled', !enabled);
-        contextToggleText.textContent = enabled ? 'Include website' : 'No context';
+        if (enabled) {
+            contextToggle.style.display = 'flex';
+            contextToggle.classList.remove('disabled');
+            contextBtn.style.display = 'none';
+            updateContextLabel();
+        } else {
+            contextToggle.style.display = 'none';
+            contextBtn.style.display = 'flex';
+        }
         updatePromptPlaceholder();
+    }
+
+    async function updateContextLabel() {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab && tab.title) {
+                const name = tab.title.length > 30 ? tab.title.substring(0, 30) + '…' : tab.title;
+                contextToggleText.textContent = name;
+            } else {
+                contextToggleText.textContent = 'Include website';
+            }
+        } catch (e) {
+            contextToggleText.textContent = 'Include website';
+        }
     }
 
     function setWebSearchState(enabled) {
@@ -624,8 +647,9 @@ document.addEventListener('DOMContentLoaded', () => {
         else promptInput.placeholder = 'Ask AI anything...';
     }
 
-    contextCloseBtn.addEventListener('click', e => { e.stopPropagation(); setContextState(!includeContext); });
-    contextToggle.addEventListener('click', () => setContextState(!includeContext));
+    contextCloseBtn.addEventListener('click', e => { e.stopPropagation(); setContextState(false); });
+    contextToggle.addEventListener('click', () => {}); // pill is informational when shown
+    contextBtn.addEventListener('click', () => setContextState(true));
     webSearchBtn.addEventListener('click', () => setWebSearchState(!includeWebSearch));
 
     // ── THINKING LEVEL ──────────────────────────────────────
