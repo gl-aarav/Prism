@@ -648,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     contextCloseBtn.addEventListener('click', e => { e.stopPropagation(); setContextState(false); });
-    contextToggle.addEventListener('click', () => {}); // pill is informational when shown
+    contextToggle.addEventListener('click', () => { }); // pill is informational when shown
     contextBtn.addEventListener('click', () => setContextState(true));
     webSearchBtn.addEventListener('click', () => setWebSearchState(!includeWebSearch));
 
