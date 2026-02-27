@@ -933,7 +933,10 @@ body {
 }
 
 @keyframes agentSlideIn {
-    to { opacity: 1; transform: translateX(0); }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 .agent-step-num {
@@ -972,7 +975,9 @@ body {
 }
 
 @keyframes statusFadeIn {
-    to { opacity: 1; }
+    to {
+        opacity: 1;
+    }
 }
 
 /* Agent inline action pill (in message body) */
@@ -1018,8 +1023,17 @@ body {
 }
 
 @keyframes agentPulse {
-    0%, 100% { opacity: 0.4; transform: scale(0.85); }
-    50% { opacity: 1; transform: scale(1.1); }
+
+    0%,
+    100% {
+        opacity: 0.4;
+        transform: scale(0.85);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
 }
 
 /* Agent complete banner */

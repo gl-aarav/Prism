@@ -983,14 +983,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getAgentActionDescription(action) {
         const sel = action.selector ? ('"' + (action.selector.length > 30 ? action.selector.substring(0, 30) + '...' : action.selector) + '"') : '';
-        function safeHost(url) { try { return new URL(url).hostname; } catch(e) { return url ? url.substring(0, 30) : 'page'; } }
+        function safeHost(url) { try { return new URL(url).hostname; } catch (e) { return url ? url.substring(0, 30) : 'page'; } }
         switch (action.type) {
             case 'click': return { icon: '👆', label: 'Clicked ' + sel };
             case 'type': return { icon: '⌨️', label: 'Typed "' + (action.text || '').substring(0, 40) + '"' + (sel ? ' into ' + sel : '') };
             case 'select': return { icon: '📋', label: 'Selected "' + (action.value || '') + '"' + (sel ? ' in ' + sel : '') };
             case 'scroll': return { icon: '📜', label: 'Scrolled ' + (action.direction || 'down') + ' ' + (action.amount || 300) + 'px' };
             case 'hover': return { icon: '🎯', label: 'Hovered over ' + sel };
-            case 'drag': return { icon: '✋', label: 'Dragged ' + sel + ' by (' + (action.dx||0) + ', ' + (action.dy||0) + ')' };
+            case 'drag': return { icon: '✋', label: 'Dragged ' + sel + ' by (' + (action.dx || 0) + ', ' + (action.dy || 0) + ')' };
             case 'toggleCheckbox': return { icon: '☑️', label: 'Toggled checkbox ' + sel };
             case 'fillForm': return { icon: '📝', label: 'Filled form with ' + (action.fields ? action.fields.length : 0) + ' fields' };
             case 'getElements': return { icon: '🔍', label: 'Scanned page elements' };
