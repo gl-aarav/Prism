@@ -109,6 +109,13 @@ struct QuickAIView: View {
                                         )
                                 }
                                 .buttonStyle(.plain)
+                                .onHover { hovering in
+                                    if hovering {
+                                        NSCursor.pointingHand.push()
+                                    } else {
+                                        NSCursor.pop()
+                                    }
+                                }
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
@@ -1844,6 +1851,9 @@ extension QuickAIView {
                     .glassEffect(.regular, in: .capsule)
             }
             .buttonStyle(.plain)
+            .onHover { hovering in
+                if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
             .help("New Chat")
         }
         .padding(.horizontal, 10)
@@ -1855,7 +1865,7 @@ extension QuickAIView {
     private var messagesSection: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     let messages = chatManager.getCurrentMessages()
                     ForEach(messages) { message in
                         let isLast = message.id == messages.last?.id
@@ -1889,7 +1899,9 @@ extension QuickAIView {
             }
             .scrollIndicators(.hidden)
             .onChange(of: chatManager.getCurrentMessages().count) { _, _ in
-                if let lastId = chatManager.getCurrentMessages().last?.id {
+                let messages = chatManager.getCurrentMessages()
+                guard let lastId = messages.last?.id else { return }
+                DispatchQueue.main.async {
                     withAnimation {
                         proxy.scrollTo(lastId, anchor: .bottom)
                     }
@@ -1897,21 +1909,27 @@ extension QuickAIView {
             }
             // Auto-scroll during generation
             .onChange(of: chatManager.getCurrentMessages().last?.content.count) { _, _ in
-                if let lastId = chatManager.getCurrentMessages().last?.id,
-                    chatManager.getCurrentMessages().last?.isStreaming == true
-                {
+                let messages = chatManager.getCurrentMessages()
+                guard let lastId = messages.last?.id,
+                    messages.last?.isStreaming == true
+                else { return }
+                DispatchQueue.main.async {
                     proxy.scrollTo(lastId, anchor: .bottom)
                 }
             }
             .onChange(of: streamBuffer) { _, _ in
-                if let lastId = chatManager.getCurrentMessages().last?.id, isLoading {
+                let messages = chatManager.getCurrentMessages()
+                guard let lastId = messages.last?.id, isLoading else { return }
+                DispatchQueue.main.async {
                     proxy.scrollTo(lastId, anchor: .bottom)
                 }
             }
             .onChange(of: isLoading) { _, loading in
                 if loading {
-                    withAnimation {
-                        proxy.scrollTo("loading", anchor: .bottom)
+                    DispatchQueue.main.async {
+                        withAnimation {
+                            proxy.scrollTo("loading", anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -2384,6 +2402,9 @@ extension QuickAIView {
                             .glassEffect(.regular, in: .circle)
                     }
                     .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                    }
                     .help(webSearchEnabled ? "Web Search: On" : "Web Search: Off")
                 }
 
@@ -2394,6 +2415,9 @@ extension QuickAIView {
                         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                 }
                 .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
                 .disabled((inputText.isEmpty && selectedAttachments.isEmpty) || isLoading)
             }
             .padding(16)
@@ -2493,6 +2517,7 @@ struct QuickAIAttachmentPreview: View {
 struct ThinkingIndicator: View {
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @State private var isAnimating = false
+    @State private var flareOffset: CGFloat = -1.0
 
     var body: some View {
         let colors = appTheme.colors
@@ -2530,16 +2555,39 @@ struct ThinkingIndicator: View {
                 isAnimating = true
             }
 
-            Text("Thinking...")
-                .font(.system(size: 14))
+            Text("Working...")
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [startColor.opacity(0.8), endColor.opacity(0.8)],
                         startPoint: .leading, endPoint: .trailing)
                 )
-                .opacity(0.8)
+                .opacity(0.85)
+                .overlay(
+                    GeometryReader { geo in
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: max(0, flareOffset - 0.15)),
+                                .init(color: .white.opacity(0.7), location: flareOffset),
+                                .init(color: .clear, location: min(1, flareOffset + 0.15)),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .blendMode(.softLight)
+                    }
+                    .mask(
+                        Text("Working...")
+                            .font(.system(size: 14, weight: .medium))
+                    )
+                )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, 4)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: false)) {
+                flareOffset = 2.0
+            }
+        }
     }
 }

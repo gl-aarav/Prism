@@ -75,6 +75,18 @@ class CursorTracker: ObservableObject {
 
     // MARK: - Polling
 
+    /// Known Electron/Chromium app bundle IDs that host contentEditable inputs.
+    private static let electronBundleIds: Set<String> = [
+        "com.hnc.Discord",  // Discord
+        "com.hnc.Discord.Canary",  // Discord Canary
+        "com.tinyspeck.slackmacgap",  // Slack
+        "com.microsoft.teams2",  // Microsoft Teams
+        "com.obsproject.obs-studio",  // OBS (Electron)
+        "com.figma.Desktop",  // Figma
+        "com.notion.id",  // Notion
+        "md.obsidian",  // Obsidian
+    ]
+
     private func poll() {
         let helper = AccessibilityHelper.shared
 
@@ -82,13 +94,13 @@ class CursorTracker: ObservableObject {
         let bundleId = helper.getFrontmostAppBundleIdentifier()
 
         // Get the focused element
-        guard let element = helper.getFocusedElement() else {
+        guard var element = helper.getFocusedElement() else {
             updateState(focused: false, bundleId: bundleId)
             return
         }
 
         // Check if it's a text input element
-        let role = helper.getRole(element)
+        var role = helper.getRole(element)
         let isStandardText =
             role == "AXTextArea" || role == "AXTextField" || role == "AXComboBox"
             || role == "AXSearchField" || role == "AXTextMarkedContent"
@@ -97,7 +109,17 @@ class CursorTracker: ObservableObject {
         let isWebText =
             (role == "AXWebArea" || role == "AXGroup" || role == "AXScrollArea")
             && helper.isElementEditable(element)
-        let isText = isStandardText || isWebText
+        var isText = isStandardText || isWebText
+
+        // For Electron apps like Discord, the focused element may be a non-editable
+        // container. Walk up to 3 children deep looking for an editable web element.
+        if !isText, let bid = bundleId, Self.electronBundleIds.contains(bid) {
+            if let editable = findEditableChild(element, helper: helper, depth: 3) {
+                element = editable
+                role = helper.getRole(element)
+                isText = true
+            }
+        }
 
         guard isText, helper.isElementEditable(element) else {
             updateState(focused: false, bundleId: bundleId)
@@ -152,5 +174,31 @@ class CursorTracker: ObservableObject {
                 self.cursorFrame = .zero
             }
         }
+    }
+
+    /// Recursively searches children of the given element for an editable
+    /// web-content element (AXWebArea / AXGroup with editable attributes).
+    private func findEditableChild(
+        _ element: AXUIElement, helper: AccessibilityHelper, depth: Int
+    ) -> AXUIElement? {
+        guard depth > 0 else { return nil }
+
+        var childrenRef: AnyObject?
+        let result = AXUIElementCopyAttributeValue(
+            element, kAXChildrenAttribute as CFString, &childrenRef)
+        guard result == .success, let children = childrenRef as? [AXUIElement] else { return nil }
+
+        for child in children {
+            let childRole = helper.getRole(child)
+            if (childRole == "AXWebArea" || childRole == "AXGroup" || childRole == "AXTextArea")
+                && helper.isElementEditable(child)
+            {
+                return child
+            }
+            if let found = findEditableChild(child, helper: helper, depth: depth - 1) {
+                return found
+            }
+        }
+        return nil
     }
 }

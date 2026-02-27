@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const contextToggleText = document.getElementById('contextToggleText');
     const webSearchBtn = document.getElementById('webSearchBtn');
     const agentBrowserBtn = document.getElementById('agentBrowserBtn');
+    const screenshotBtn = document.getElementById('screenshotBtn');
     const attachBtn = document.getElementById('attachBtn');
     const fileInput = document.getElementById('fileInput');
     const attachmentPreview = document.getElementById('attachmentPreview');
@@ -31,11 +32,164 @@ document.addEventListener('DOMContentLoaded', () => {
     let hasInjectedContextThisSession = false;
     let pendingAttachments = []; // { dataUrl, mimeType, name }
 
+    // ── SLASH COMMANDS ──────────────────────────────────────
+    const builtInCommands = [
+        { trigger: '/summarize', expansion: 'Summarize the following:' },
+        { trigger: '/explain', expansion: 'Explain the following in detail:' },
+        { trigger: '/translate', expansion: 'Translate the following to English:' },
+        { trigger: '/fix', expansion: 'Fix the grammar and spelling in:' },
+        { trigger: '/code', expansion: 'Write code for the following:' },
+        { trigger: '/rewrite', expansion: 'Rewrite the following to be clearer and more professional:' },
+        { trigger: '/bullets', expansion: 'Convert the following into bullet points:' },
+        { trigger: '/eli5', expansion: 'Explain like I\'m 5:' },
+        { trigger: '/pros-cons', expansion: 'List the pros and cons of:' },
+    ];
+
+    // Create command autocomplete dropdown
+    const cmdDropdown = document.createElement('div');
+    cmdDropdown.className = 'command-dropdown';
+    cmdDropdown.style.display = 'none';
+    document.querySelector('.input-bar').appendChild(cmdDropdown);
+
+    let cmdSelectedIndex = 0;
+    let cmdFiltered = [];
+
+    function updateCommandDropdown() {
+        const text = promptInput.value;
+        // Only match if text starts with / and is a single word
+        const slashMatch = text.match(/^\/(\S*)$/);
+        if (!slashMatch) {
+            cmdDropdown.style.display = 'none';
+            return;
+        }
+        const query = slashMatch[1].toLowerCase();
+        cmdFiltered = builtInCommands.filter(c => c.trigger.substring(1).startsWith(query));
+        if (cmdFiltered.length === 0) {
+            cmdDropdown.style.display = 'none';
+            return;
+        }
+        cmdSelectedIndex = 0;
+        renderCommandDropdown();
+        cmdDropdown.style.display = 'flex';
+    }
+
+    function renderCommandDropdown() {
+        cmdDropdown.innerHTML = '';
+        cmdFiltered.forEach((cmd, i) => {
+            const item = document.createElement('div');
+            item.className = 'command-item' + (i === cmdSelectedIndex ? ' selected' : '');
+            item.innerHTML = '<span class="command-trigger">' + cmd.trigger + '</span><span class="command-desc">' + cmd.expansion + '</span>';
+            item.addEventListener('mousedown', e => {
+                e.preventDefault();
+                selectCommand(i);
+            });
+            item.addEventListener('mouseenter', () => {
+                cmdSelectedIndex = i;
+                renderCommandDropdown();
+            });
+            cmdDropdown.appendChild(item);
+        });
+    }
+
+    function selectCommand(index) {
+        const cmd = cmdFiltered[index];
+        if (cmd) {
+            promptInput.value = cmd.expansion + ' ';
+            promptInput.style.height = 'auto';
+            promptInput.style.height = Math.min(promptInput.scrollHeight, 140) + 'px';
+            updateSendBtn();
+        }
+        cmdDropdown.style.display = 'none';
+    }
+
+    // ── @ TAB MENTIONS ──────────────────────────────────────
+    const tabDropdown = document.createElement('div');
+    tabDropdown.className = 'command-dropdown tab-mention-dropdown';
+    tabDropdown.style.display = 'none';
+    document.querySelector('.input-bar').appendChild(tabDropdown);
+
+    let tabSelectedIndex = 0;
+    let tabFiltered = [];
+    let mentionedTabs = []; // {title, url, tabId}
+
+    async function updateTabDropdown() {
+        const text = promptInput.value;
+        const cursorPos = promptInput.selectionStart;
+        const textBeforeCursor = text.substring(0, cursorPos);
+        // Match @query at cursor position (no space before @ or start of line)
+        const atMatch = textBeforeCursor.match(/(^|[\s])@([^\s]*)$/);
+        if (!atMatch) {
+            tabDropdown.style.display = 'none';
+            return;
+        }
+        const query = atMatch[2].toLowerCase();
+        try {
+            const tabs = await chrome.tabs.query({});
+            tabFiltered = tabs.filter(t =>
+                t.title.toLowerCase().includes(query) ||
+                (t.url && t.url.toLowerCase().includes(query))
+            ).slice(0, 8);
+        } catch (e) {
+            tabFiltered = [];
+        }
+        if (tabFiltered.length === 0) {
+            tabDropdown.style.display = 'none';
+            return;
+        }
+        tabSelectedIndex = 0;
+        renderTabDropdown();
+        tabDropdown.style.display = 'flex';
+    }
+
+    function renderTabDropdown() {
+        tabDropdown.innerHTML = '';
+        tabFiltered.forEach((tab, i) => {
+            const item = document.createElement('div');
+            item.className = 'command-item' + (i === tabSelectedIndex ? ' selected' : '');
+            const favicon = tab.favIconUrl ? '<img src="' + tab.favIconUrl + '" width="14" height="14" style="border-radius:3px;margin-right:6px;vertical-align:middle;" onerror="this.style.display=\'none\'">' : '';
+            const title = (tab.title || '').substring(0, 50);
+            item.innerHTML = favicon + '<span class="command-trigger" style="color:var(--text-primary);font-weight:500;">' + title + '</span>';
+            item.addEventListener('mousedown', e => {
+                e.preventDefault();
+                selectTab(i);
+            });
+            item.addEventListener('mouseenter', () => {
+                tabSelectedIndex = i;
+                renderTabDropdown();
+            });
+            tabDropdown.appendChild(item);
+        });
+    }
+
+    function selectTab(index) {
+        const tab = tabFiltered[index];
+        if (!tab) return;
+        const cursorPos = promptInput.selectionStart;
+        const text = promptInput.value;
+        const textBeforeCursor = text.substring(0, cursorPos);
+        const atMatch = textBeforeCursor.match(/(^|[\s])@([^\s]*)$/);
+        if (atMatch) {
+            const matchStart = textBeforeCursor.lastIndexOf('@');
+            const before = text.substring(0, matchStart);
+            const after = text.substring(cursorPos);
+            const mention = '@[' + tab.title + '] ';
+            promptInput.value = before + mention + after;
+            promptInput.selectionStart = promptInput.selectionEnd = before.length + mention.length;
+            mentionedTabs.push({ title: tab.title, url: tab.url, tabId: tab.id });
+        }
+        tabDropdown.style.display = 'none';
+        promptInput.style.height = 'auto';
+        promptInput.style.height = Math.min(promptInput.scrollHeight, 140) + 'px';
+        updateSendBtn();
+    }
+
     // Auto-resize textarea
     promptInput.addEventListener('input', () => {
         promptInput.style.height = 'auto';
         promptInput.style.height = Math.min(promptInput.scrollHeight, 140) + 'px';
         updateSendBtn();
+        updateCommandDropdown();
+        updateTabDropdown();
     });
 
     function updateSendBtn() {
@@ -227,14 +381,91 @@ document.addEventListener('DOMContentLoaded', () => {
             setWebSearchState(false);
         }
 
-        // Hide thinking button for Copilot and Apple models as they don't support reasoning logs via this API
-        if (modelSelect.value.startsWith('copilot:') || modelSelect.value.startsWith('apple:')) {
+        // Dynamic thinking options based on model
+        const modelId = modelSelect.value.toLowerCase();
+        const thinkingDropdown = document.getElementById('thinkingDropdown');
+        if (!thinkingDropdown) return;
+
+        if (modelId.startsWith('copilot:') || modelId.startsWith('apple:') || modelId.startsWith('nano:')) {
+            // Hide thinking for Copilot, Apple, and Nano models
             thinkingBtn.style.display = 'none';
             thinkingDropdownOpen = false;
-            const thinkingDropdown = document.getElementById('thinkingDropdown');
-            if (thinkingDropdown) thinkingDropdown.style.display = 'none';
+            thinkingDropdown.style.display = 'none';
         } else {
             thinkingBtn.style.display = 'flex';
+
+            // Determine thinking levels based on model
+            let levels = [];
+            if (modelId.startsWith('gemini:')) {
+                const model = modelId.replace('gemini:', '');
+                if (model.startsWith('gemini-3-pro')) {
+                    levels = [{ value: 'low', label: 'Low' }, { value: 'high', label: 'High' }];
+                } else if (model.startsWith('gemini-3') || model.startsWith('gemini-2.5')) {
+                    levels = [
+                        { value: 'off', label: 'Off' },
+                        { value: 'low', label: 'Low' },
+                        { value: 'medium', label: 'Medium' },
+                        { value: 'high', label: 'High' }
+                    ];
+                } else {
+                    // Older Gemini models - no thinking
+                    thinkingBtn.style.display = 'none';
+                    thinkingDropdownOpen = false;
+                    thinkingDropdown.style.display = 'none';
+                    return;
+                }
+            } else if (modelId.startsWith('ollama:')) {
+                const model = modelId.replace('ollama:', '');
+                if (model.includes('gpt-oss')) {
+                    levels = [
+                        { value: 'low', label: 'Low' },
+                        { value: 'medium', label: 'Medium' },
+                        { value: 'high', label: 'High' }
+                    ];
+                } else if (model.includes('deepseek')) {
+                    levels = [{ value: 'off', label: 'Off' }, { value: 'high', label: 'On' }];
+                } else {
+                    // Other Ollama models - no thinking
+                    thinkingBtn.style.display = 'none';
+                    thinkingDropdownOpen = false;
+                    thinkingDropdown.style.display = 'none';
+                    return;
+                }
+            } else {
+                // Default fallback levels
+                levels = [
+                    { value: 'low', label: 'Low' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'high', label: 'High' }
+                ];
+            }
+
+            // Rebuild dropdown options
+            thinkingDropdown.innerHTML = '';
+            let foundActive = false;
+            levels.forEach(l => {
+                const btn = document.createElement('button');
+                btn.className = 'thinking-level-option';
+                btn.dataset.level = l.value;
+                btn.textContent = l.label;
+                if (l.value === thinkingLevel) {
+                    btn.classList.add('active');
+                    foundActive = true;
+                }
+                btn.addEventListener('click', () => {
+                    thinkingLevel = btn.dataset.level;
+                    thinkingDropdownOpen = false;
+                    thinkingDropdown.style.display = 'none';
+                    thinkingDropdown.querySelectorAll('.thinking-level-option').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                });
+                thinkingDropdown.appendChild(btn);
+            });
+            // If current thinking level isn't in the new options, select the first one
+            if (!foundActive && levels.length > 0) {
+                thinkingLevel = levels[0].value;
+                thinkingDropdown.querySelector('.thinking-level-option').classList.add('active');
+            }
         }
     }
 
@@ -357,6 +588,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ── SCREENSHOT ──────────────────────────────────────────
+    screenshotBtn.addEventListener('click', async () => {
+        screenshotBtn.style.color = 'var(--accent)';
+        try {
+            const result = await new Promise(resolve => {
+                chrome.runtime.sendMessage({ action: 'agentCaptureTab' }, resolve);
+            });
+            if (result && result.ok && result.image) {
+                pendingAttachments.push({ name: 'screenshot.png', dataUrl: result.image });
+                renderAttachmentPreviews();
+                promptInput.focus();
+            }
+        } catch (e) {
+            console.warn('Screenshot failed:', e);
+        }
+        setTimeout(() => { screenshotBtn.style.color = ''; }, 300);
+    });
+
     // ── SEND / STOP ─────────────────────────────────────────
     sendBtn.addEventListener('click', () => {
         if (isGenerating) { stopGeneration(); }
@@ -366,6 +615,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     promptInput.addEventListener('keydown', e => {
+        // Command dropdown navigation
+        if (cmdDropdown.style.display !== 'none') {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                cmdSelectedIndex = Math.min(cmdSelectedIndex + 1, cmdFiltered.length - 1);
+                renderCommandDropdown();
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                cmdSelectedIndex = Math.max(cmdSelectedIndex - 1, 0);
+                renderCommandDropdown();
+                return;
+            }
+            if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+                e.preventDefault();
+                selectCommand(cmdSelectedIndex);
+                return;
+            }
+            if (e.key === 'Escape') {
+                cmdDropdown.style.display = 'none';
+                return;
+            }
+        }
+        // Tab mention dropdown navigation
+        if (tabDropdown.style.display !== 'none') {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                tabSelectedIndex = Math.min(tabSelectedIndex + 1, tabFiltered.length - 1);
+                renderTabDropdown();
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                tabSelectedIndex = Math.max(tabSelectedIndex - 1, 0);
+                renderTabDropdown();
+                return;
+            }
+            if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+                e.preventDefault();
+                selectTab(tabSelectedIndex);
+                return;
+            }
+            if (e.key === 'Escape') {
+                tabDropdown.style.display = 'none';
+                return;
+            }
+        }
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             if (isGenerating) return;
@@ -479,6 +776,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 hasInjectedContextThisSession = true;
             }
+        }
+
+        // Fetch and inject @mentioned tab content
+        if (mentionedTabs.length > 0) {
+            let tabContexts = [];
+            for (const mt of mentionedTabs) {
+                try {
+                    const tabContent = await new Promise(resolve => {
+                        chrome.tabs.sendMessage(mt.tabId, { action: 'getPageContext' }, res => {
+                            if (chrome.runtime.lastError) {
+                                chrome.scripting.executeScript(
+                                    { target: { tabId: mt.tabId }, files: ['content.js'] },
+                                    () => chrome.tabs.sendMessage(mt.tabId, { action: 'getPageContext' }, r => resolve(r))
+                                );
+                            } else { resolve(res); }
+                        });
+                    });
+                    if (tabContent && tabContent.content) {
+                        const truncContent = tabContent.content.length > 20000 ? tabContent.content.substring(0, 20000) + '...' : tabContent.content;
+                        tabContexts.push('[Tab: ' + mt.title + ' (' + mt.url + ')]:\n' + truncContent);
+                    }
+                } catch (e) {
+                    console.warn('Could not get tab content for:', mt.title, e);
+                }
+            }
+            if (tabContexts.length > 0) {
+                const lastIdx = messagesForApi.length - 1;
+                if (lastIdx >= 0 && messagesForApi[lastIdx].role === 'user') {
+                    messagesForApi[lastIdx].content = tabContexts.join('\n\n') + '\n\n' + messagesForApi[lastIdx].content;
+                }
+            }
+            mentionedTabs = [];
         }
 
         // Inject agent browser system prompt when agent mode is enabled
@@ -707,8 +1036,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     // Build results summary for AI
+                    let screenshotImages = [];
                     const resultText = results.map(r => {
                         const res = r.result;
+                        // Collect screenshot images for vision
+                        if (r.type === 'captureTab' && res.ok && res.image) {
+                            screenshotImages.push(res.image);
+                        }
                         let info = res.summary || res.error || '';
                         for (const key of ['elements', 'tabs', 'data', 'text', 'links', 'pageInfo', 'meta', 'content', 'definition', 'weather', 'translation', 'bookmarks', 'value']) {
                             if (res[key]) {
@@ -721,10 +1055,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Feed results back to AI
                     messagesForApi.push({ role: 'assistant', content: loopContent });
-                    messagesForApi.push({
+                    const resultMsg = {
                         role: 'user',
                         content: '[Agent Action Results]:\n' + resultText + '\n\nContinue with the task. If done, provide a final summary without any agent-action blocks.'
-                    });
+                    };
+                    if (screenshotImages.length > 0) {
+                        resultMsg.images = screenshotImages;
+                    }
+                    messagesForApi.push(resultMsg);
 
                     // Create new assistant message for next iteration
                     const nextAssistant = createAssistantMessage();
@@ -941,7 +1279,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── MARKDOWN + MATH ─────────────────────────────────────
     function renderContent(element, text, showCursor) {
         if (!text) {
-            if (showCursor) element.innerHTML = '<div class="thinking-indicator"><span></span><span></span><span></span></div>';
+            if (showCursor) element.innerHTML = '<div class="thinking-indicator"><span class="working-orb"></span><span class="working-text">Working\u2026</span></div>';
             return;
         }
         // Strip agent-action code blocks and replace with friendly action pills

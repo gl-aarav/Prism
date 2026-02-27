@@ -26,14 +26,22 @@ class TextInjector {
     /// This is the fastest method and doesn't disturb the clipboard.
     private func insertViaAccessibility(_ text: String) -> Bool {
         let helper = AccessibilityHelper.shared
-        
+
         // Bypass accessibility insertion for the Messages app
         // because it accepts the insertion silently without updating the UI.
         if helper.getFrontmostAppBundleIdentifier() == "com.apple.MobileSMS" {
             return false
         }
-        
+
         guard let element = helper.getFocusedElement() else { return false }
+
+        // For web-content elements (browsers, Electron apps), AX insertion
+        // often reports success but silently fails. Fall back to clipboard paste.
+        let role = helper.getRole(element)
+        if role == "AXWebArea" || role == "AXGroup" || role == "AXScrollArea" {
+            return false
+        }
+
         return helper.insertTextAtCursor(element, text: text)
     }
 

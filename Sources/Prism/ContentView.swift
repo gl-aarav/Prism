@@ -205,10 +205,15 @@ struct Message: Identifiable, Codable, Equatable {
 
             if trimmedLine.hasPrefix("```") {
                 if inCodeBlock {
-                    blocks.append(
-                        MarkdownBlock(
-                            type: .code(
-                                codeBlockContent.trimmingCharacters(in: .newlines), codeLanguage)))
+                    // Skip agent-action blocks entirely — they are internal
+                    // browser automation instructions, not user-visible code
+                    if codeLanguage != "agent-action" {
+                        blocks.append(
+                            MarkdownBlock(
+                                type: .code(
+                                    codeBlockContent.trimmingCharacters(in: .newlines), codeLanguage
+                                )))
+                    }
                     codeBlockContent = ""
                     codeLanguage = ""
                     inCodeBlock = false
@@ -1740,7 +1745,8 @@ struct ContentView: View {
 
                                 HeaderView(
                                     selectedProvider: $selectedProvider,
-                                    onNewChat: chatManager.createNewSession
+                                    onNewChat: chatManager.createNewSession,
+                                    columnVisibility: columnVisibility
                                 )
                             }
                         } else {
@@ -1804,7 +1810,8 @@ struct ContentView: View {
                                 .safeAreaInset(edge: .top) {
                                     HeaderView(
                                         selectedProvider: $selectedProvider,
-                                        onNewChat: chatManager.createNewSession
+                                        onNewChat: chatManager.createNewSession,
+                                        columnVisibility: columnVisibility
                                     )
                                 }
                                 .safeAreaInset(edge: .bottom) {
@@ -1836,16 +1843,19 @@ struct ContentView: View {
                                     handleScroll(proxy: proxy)
                                 }
                                 .onChange(of: streamBuffer) { _, _ in
-                                    if isLoading,
-                                        let lastId = chatManager.getCurrentMessages().last?.id
-                                    {
+                                    guard isLoading else { return }
+                                    let messages = chatManager.getCurrentMessages()
+                                    guard let lastId = messages.last?.id else { return }
+                                    DispatchQueue.main.async {
                                         proxy.scrollTo(lastId, anchor: .bottom)
                                     }
                                 }
                                 .onChange(of: isLoading) { _, loading in
                                     if loading {
-                                        withAnimation {
-                                            proxy.scrollTo("typingIndicator", anchor: .bottom)
+                                        DispatchQueue.main.async {
+                                            withAnimation {
+                                                proxy.scrollTo("typingIndicator", anchor: .bottom)
+                                            }
                                         }
                                     }
                                 }
@@ -1978,7 +1988,9 @@ struct ContentView: View {
     }
 
     func handleScroll(proxy: ScrollViewProxy, newCount: Int? = nil) {
-        let currentCount = newCount ?? chatManager.getCurrentMessages().count
+        let messages = chatManager.getCurrentMessages()
+        let currentCount = newCount ?? messages.count
+        guard currentCount > 0 else { return }
 
         if chatManager.currentSessionId != lastSessionId {
             // Session Switch
@@ -1986,16 +1998,20 @@ struct ContentView: View {
             lastMessageCount = currentCount
 
             // Jump to bottom (No Animation) to prevent freeze on large lists
-            if let lastId = chatManager.getCurrentMessages().last?.id {
-                proxy.scrollTo(lastId, anchor: .bottom)
+            if let lastId = messages.last?.id {
+                DispatchQueue.main.async {
+                    proxy.scrollTo(lastId, anchor: .bottom)
+                }
             }
         } else {
             // Same Session
             if currentCount > lastMessageCount {
                 // New Message -> Animate
-                if let lastId = chatManager.getCurrentMessages().last?.id {
-                    withAnimation {
-                        proxy.scrollTo(lastId, anchor: .bottom)
+                if let lastId = messages.last?.id {
+                    DispatchQueue.main.async {
+                        withAnimation {
+                            proxy.scrollTo(lastId, anchor: .bottom)
+                        }
                     }
                 }
             }
@@ -3330,6 +3346,9 @@ struct SidebarItem: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
         .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.8))
     }
 }
@@ -3442,6 +3461,7 @@ struct SidebarRow: View {
 struct HeaderView: View {
     @Binding var selectedProvider: String
     var onNewChat: () -> Void
+    var columnVisibility: NavigationSplitViewVisibility = .automatic
     @ObservedObject private var accountManager = AccountManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var geminiCLIService = GeminiCLIService.shared
@@ -3580,6 +3600,25 @@ struct HeaderView: View {
             .padding(.horizontal, 4)
 
             Spacer()
+
+            if columnVisibility == .detailOnly {
+                Button(action: onNewChat) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .padding(8)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                        )
+                        .glassEffect(.regular, in: .circle)
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
+                .help("New Chat")
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -4064,7 +4103,9 @@ struct InputView: View {
                     .menuStyle(.borderlessButton)
                     .help("Select Gemini Model")
                     .alert("Add Custom Gemini Model", isPresented: $showAddCustomGeminiModel) {
-                        TextField("Model Name (e.g., gemini-3.1-pro-preview)", text: $newCustomGeminiModelName)
+                        TextField(
+                            "Model Name (e.g., gemini-3.1-pro-preview)",
+                            text: $newCustomGeminiModelName)
                         Button("Add") {
                             geminiManager.addCustomModel(newCustomGeminiModelName)
                             geminiModel = newCustomGeminiModelName
@@ -5506,8 +5547,12 @@ struct ExpandingActionButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(PointingHandCursor())
         .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
             isHovered = hovering
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isHovered)
@@ -6261,8 +6306,10 @@ struct SettingsView: View {
 
         Section(header: Label("Gemini Custom Models", systemImage: "sparkles")) {
             HStack {
-                TextField("Add model (e.g. gemini-3.1-pro-preview)", text: $newCustomGeminiModelName)
-                    .textFieldStyle(.roundedBorder)
+                TextField(
+                    "Add model (e.g. gemini-3.1-pro-preview)", text: $newCustomGeminiModelName
+                )
+                .textFieldStyle(.roundedBorder)
                 Button("Add") {
                     geminiManager.addCustomModel(newCustomGeminiModelName)
                     newCustomGeminiModelName = ""
@@ -7368,7 +7415,11 @@ struct ImageGalleryView: View {
                 if let versions = message.versions, !versions.isEmpty {
                     for (index, version) in versions.enumerated() {
                         if let imageData = version.imageData, let image = NSImage(data: imageData) {
-                            result.append((session.id, "\(message.id.uuidString)-\(index)", image, version.content))
+                            result.append(
+                                (
+                                    session.id, "\(message.id.uuidString)-\(index)", image,
+                                    version.content
+                                ))
                         }
                     }
                 } else if let image = message.image {
