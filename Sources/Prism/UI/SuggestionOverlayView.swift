@@ -9,9 +9,8 @@ struct SuggestionOverlayView: View {
 
     var body: some View {
         Text(suggestion)
-            .font(.system(size: 14, weight: .regular, design: .default))
+            .font(.system(size: fontSize, weight: .regular, design: .monospaced))
             .foregroundStyle(.primary.opacity(0.85))
-            // Limit to a reasonable max number of lines (e.g. 10) so it doesn't span the whole screen
             .lineLimit(10)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)

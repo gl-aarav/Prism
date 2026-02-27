@@ -103,8 +103,12 @@ class AutocompleteManager: ObservableObject {
         tap.isSuggestionVisible = { [weak self] in
             self?.suggestion != nil
         }
-        // Bindings: Tab accepts next word. Full text completion is disabled.
-        tap.onTab = { [weak self] in self?.acceptNextWord() }
+        // Tab accepts the full suggestion
+        tap.onTab = { [weak self] in self?.acceptFullSuggestion() }
+        // Escape dismisses
+        tap.onEscape = { [weak self] in self?.dismiss() }
+        // Option+Right Arrow accepts next word
+        tap.onRightArrow = { [weak self] in self?.acceptNextWord() }
         tap.install()
 
         // Create overlay panel
@@ -170,18 +174,25 @@ class AutocompleteManager: ObservableObject {
         if let currentSuggestion = suggestion {
             if newText.hasPrefix(lastTextBeforeCursor) {
                 let addedText = String(newText.dropFirst(lastTextBeforeCursor.count))
-                if !addedText.isEmpty, currentSuggestion.hasPrefix(addedText) {
-                    // User typed exactly what was suggested!
-                    // Shorten the suggestion and DO NOT trigger a new prediction.
-                    lastTextBeforeCursor = newText
-                    let remaining = String(currentSuggestion.dropFirst(addedText.count))
+                if !addedText.isEmpty {
+                    // Normalize whitespace for comparison (collapse multiple spaces)
+                    let normalizedAdded = addedText.replacingOccurrences(of: "  ", with: " ")
+                    let normalizedSuggestion = currentSuggestion.replacingOccurrences(of: "  ", with: " ")
 
-                    if remaining.isEmpty {
-                        suggestion = nil
-                    } else {
-                        suggestion = remaining
+                    // Check if added text matches start of suggestion (case-insensitive for first char)
+                    if normalizedSuggestion.hasPrefix(normalizedAdded) ||
+                       (normalizedAdded.count == 1 && normalizedSuggestion.lowercased().hasPrefix(normalizedAdded.lowercased())) {
+                        // User typed exactly what was suggested!
+                        lastTextBeforeCursor = newText
+                        let remaining = String(currentSuggestion.dropFirst(addedText.count))
+
+                        if remaining.isEmpty {
+                            suggestion = nil
+                        } else {
+                            suggestion = remaining
+                        }
+                        return
                     }
-                    return
                 }
             }
         }
@@ -260,19 +271,34 @@ class AutocompleteManager: ObservableObject {
                     // Post-process: strip any echoed context from the LLM response
                     var cleaned = accumulated.trimmingCharacters(in: .whitespacesAndNewlines)
 
-                    // If the model echoed back the end of the context, strip it
-                    let contextSuffix = String(context.suffix(50)).trimmingCharacters(
-                        in: .whitespacesAndNewlines)
-                    if !contextSuffix.isEmpty, cleaned.hasPrefix(contextSuffix) {
-                        cleaned = String(cleaned.dropFirst(contextSuffix.count))
-                            .trimmingCharacters(in: .whitespaces)
+                    // Strip echoed context using progressively shorter suffixes
+                    for suffixLen in [200, 100, 50, 20] {
+                        let contextSuffix = String(context.suffix(suffixLen)).trimmingCharacters(
+                            in: .whitespacesAndNewlines)
+                        if !contextSuffix.isEmpty, cleaned.hasPrefix(contextSuffix) {
+                            cleaned = String(cleaned.dropFirst(contextSuffix.count))
+                            break
+                        }
+                    }
+
+                    // Also strip if the model started with a quote of the last line
+                    if let lastLine = context.split(separator: "\n").last {
+                        let lastLineStr = String(lastLine).trimmingCharacters(in: .whitespaces)
+                        if !lastLineStr.isEmpty, cleaned.hasPrefix(lastLineStr) {
+                            cleaned = String(cleaned.dropFirst(lastLineStr.count))
+                        }
+                    }
+
+                    // Remove leading whitespace only (preserve internal newlines for multi-line completions)
+                    cleaned = cleaned.replacingOccurrences(of: "^\\s+", with: "", options: .regularExpression)
+
+                    // If it still starts with " " that's intentional (space before next word)
+                    if accumulated.hasPrefix(" ") && !cleaned.hasPrefix(" ") && !cleaned.isEmpty {
+                        cleaned = " " + cleaned
                     }
 
                     if !cleaned.isEmpty {
-                        // Ensure single-line rendering for the UI by replacing newlines with spaces
-                        let singleLine = cleaned.replacingOccurrences(of: "\n", with: " ")
-                            .replacingOccurrences(of: "\r", with: "")
-                        let completionText = singleLine
+                        let completionText = cleaned
                         await MainActor.run {
                             self.suggestion = completionText
                         }
@@ -308,7 +334,29 @@ class AutocompleteManager: ObservableObject {
 
     // MARK: - Acceptance Controls
 
-    /// Accept only the next word from the suggestion (Tab key).
+    /// Accept the entire remaining suggestion (Tab key).
+    func acceptFullSuggestion() {
+        guard let text = suggestion, !text.isEmpty else { return }
+
+        // Record to writing memory
+        if UserDefaults.standard.bool(forKey: "AIAutocompleteMemoryEnabled") {
+            WritingMemory.shared.record(
+                context: lastTextBeforeCursor,
+                accepted: text,
+                appBundleId: CursorTracker.shared.focusedAppBundleId
+            )
+        }
+
+        isAcceptingPartialWord = true
+        TextInjector.shared.insertText(text)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.isAcceptingPartialWord = false
+        }
+
+        suggestion = nil
+    }
+
+    /// Accept only the next word from the suggestion (Option+Right Arrow).
     func acceptNextWord() {
         guard let text = suggestion, !text.isEmpty else { return }
 
@@ -322,9 +370,18 @@ class AutocompleteManager: ObservableObject {
             in: .whitespaces)
         let insertText = remaining.isEmpty ? firstWord : firstWord + " "
 
+        // Record to writing memory
+        if UserDefaults.standard.bool(forKey: "AIAutocompleteMemoryEnabled") {
+            WritingMemory.shared.record(
+                context: lastTextBeforeCursor,
+                accepted: insertText,
+                appBundleId: CursorTracker.shared.focusedAppBundleId
+            )
+        }
+
         isAcceptingPartialWord = true
         TextInjector.shared.insertText(insertText)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             self?.isAcceptingPartialWord = false
         }
 

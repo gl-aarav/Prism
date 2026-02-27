@@ -14,21 +14,26 @@ class AutocompleteService {
         You are NOT a chatbot. You must NEVER behave like a conversational AI. \
         \
         CRITICAL RULES: \
-        1. Output ONLY the exact continuation. Do NOT output any greetings, pleasantries, or AI conversational filler (e.g. NEVER output "how can I help you?"). \
-        2. Do NOT repeat any part of the input text. Output ONLY the new continuation. \
-        3. Do NOT add quotes, markdown formatting, explanations, or metadata. \
-        4. Keep completions extremely short — finish the current word, phrase, or sentence (1 sentence maximum). \
-        5. If the last word is incomplete, first complete that word, then continue naturally. \
+        1. Output ONLY the exact continuation text. Do NOT output any greetings, pleasantries, or conversational filler. \
+        2. Do NOT repeat, echo, or re-state ANY part of the input text. Output ONLY the NEW continuation. \
+        3. Do NOT add quotes, markdown formatting, explanations, code fences, or metadata. \
+        4. If the input looks like code, continue the code naturally (completing the line, adding the next line, etc.). \
+        5. If the input looks like prose/email/chat, continue the sentence or thought naturally. \
+        6. If the last word is incomplete, FIRST complete that word, then optionally continue. \
+        7. NEVER start your output with text that already appears at the end of the input. \
+        8. Do NOT output empty lines or leading whitespace unless continuing an indented code block. \
         \
-        Example — Input: "Thank you for your" → Output: " email regarding the project timeline." \
-        Example — Input: "Hi Alex,\\n\\nI wanted to fol" → Output: "low up on our conversation from yesterday." \
-        Example — Input: "def calculate_" → Output: "total(items):\\n    return sum(item.price for item in items)" \
-        Example — Input: "hi" → Output: " there! I hope you're having a good day."
+        Examples: \
+        Input: "Thank you for your" → Output: " email regarding the project timeline." \
+        Input: "Hi Alex,\\n\\nI wanted to fol" → Output: "low up on our conversation from yesterday." \
+        Input: "def calculate_" → Output: "total(items):\\n    return sum(item.price for item in items)" \
+        Input: "const result = arr.fil" → Output: "ter(item => item.active)" \
+        Input: "import " → Output: "Foundation"
         """
 
     private init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10  // Short timeout for responsiveness
+        config.timeoutIntervalForRequest = 10
         config.timeoutIntervalForResource = 15
         self.session = URLSession(configuration: config)
     }
@@ -58,11 +63,11 @@ class AutocompleteService {
 
         // Adjust prompt based on requested length
         if length.contains("Short") {
-            systemPrompt += "\n\nCRITICAL: Keep the completion VERY SHORT (1-2 words max). Stop immediately after."
+            systemPrompt += "\n\nCRITICAL LENGTH CONSTRAINT: Keep the completion VERY SHORT — 1-2 words maximum. Stop immediately after completing the current thought fragment."
         } else if length.contains("Long") {
-            systemPrompt += "\n\nCRITICAL: You may write slightly longer completions (up to a full sentence or ~10 words) if it naturally finishes the thought."
+            systemPrompt += "\n\nLENGTH GUIDANCE: You may write longer completions — up to a full sentence or two (~10-20 words) if it naturally finishes the thought. Include line breaks for code."
         } else {
-            systemPrompt += "\n\nCRITICAL: Keep the completion brief, around 2-4 words."
+            systemPrompt += "\n\nLENGTH GUIDANCE: Keep the completion brief — around 2-4 words, finishing the current phrase or statement."
         }
 
         // Append custom instruction if present
@@ -78,7 +83,8 @@ class AutocompleteService {
             }
         }
 
-        let userPrompt = String(context.suffix(500))  // Last 500 chars of context
+        // Send more context (last 1500 chars) for better predictions
+        let userPrompt = String(context.suffix(1500))
 
         switch backend {
         case .ollama:
@@ -116,8 +122,10 @@ class AutocompleteService {
                     "system": systemPrompt,
                     "stream": true,
                     "options": [
-                        "num_predict": 80,  // Limit output length
-                        "temperature": 0.3,  // Lower temp for more predictable completions
+                        "num_predict": 120,
+                        "temperature": 0.25,
+                        "top_p": 0.9,
+                        "repeat_penalty": 1.2,
                     ],
                 ]
 
@@ -204,8 +212,9 @@ class AutocompleteService {
                         ]
                     ],
                     "generationConfig": [
-                        "maxOutputTokens": 80,
-                        "temperature": 0.3,
+                        "maxOutputTokens": 120,
+                        "temperature": 0.25,
+                        "topP": 0.9,
                     ],
                 ]
 

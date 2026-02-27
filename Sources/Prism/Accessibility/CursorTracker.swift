@@ -91,10 +91,12 @@ class CursorTracker: ObservableObject {
         let role = helper.getRole(element)
         let isStandardText =
             role == "AXTextArea" || role == "AXTextField" || role == "AXComboBox"
-            || role == "AXSearchField"
+            || role == "AXSearchField" || role == "AXTextMarkedContent"
         // Electron/Chromium apps expose text inputs as AXWebArea or AXGroup
+        // JetBrains IDEs may use AXScrollArea
         let isWebText =
-            (role == "AXWebArea" || role == "AXGroup") && helper.isElementEditable(element)
+            (role == "AXWebArea" || role == "AXGroup" || role == "AXScrollArea")
+            && helper.isElementEditable(element)
         let isText = isStandardText || isWebText
 
         guard isText, helper.isElementEditable(element) else {
