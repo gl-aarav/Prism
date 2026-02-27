@@ -18,6 +18,16 @@ struct PDFDocumentItem: Identifiable, Codable {
         switch format ?? "pdf" {
         case "md": return "md"
         case "docx": return "docx"
+        case "txt": return "txt"
+        case "html": return "html"
+        case "swift": return "swift"
+        case "py": return "py"
+        case "js": return "js"
+        case "css": return "css"
+        case "json": return "json"
+        case "csv": return "csv"
+        case "xml": return "xml"
+        case "yaml": return "yaml"
         default: return "pdf"
         }
     }
@@ -26,6 +36,16 @@ struct PDFDocumentItem: Identifiable, Codable {
         switch format ?? "pdf" {
         case "md": return "Markdown"
         case "docx": return "DOCX"
+        case "txt": return "Text"
+        case "html": return "HTML"
+        case "swift": return "Swift"
+        case "py": return "Python"
+        case "js": return "JavaScript"
+        case "css": return "CSS"
+        case "json": return "JSON"
+        case "csv": return "CSV"
+        case "xml": return "XML"
+        case "yaml": return "YAML"
         default: return "PDF"
         }
     }
@@ -34,6 +54,12 @@ struct PDFDocumentItem: Identifiable, Codable {
         switch format ?? "pdf" {
         case "md": return "doc.plaintext"
         case "docx": return "doc.text"
+        case "txt": return "doc.text"
+        case "html": return "globe"
+        case "swift", "py", "js": return "chevron.left.forwardslash.chevron.right"
+        case "css": return "paintbrush"
+        case "json", "xml", "yaml": return "curlybraces"
+        case "csv": return "tablecells"
         default: return "doc.richtext.fill"
         }
     }
@@ -84,7 +110,7 @@ class PDFCreatorStore: ObservableObject {
 
     func deleteItem(_ item: PDFDocumentItem) {
         items.removeAll { $0.id == item.id }
-        for ext in ["pdf", "md", "docx"] {
+        for ext in ["pdf", "md", "docx", "txt", "html", "swift", "py", "js", "css", "json", "csv", "xml", "yaml"] {
             let path = saveDir.appendingPathComponent("\(item.id.uuidString).\(ext)")
             try? FileManager.default.removeItem(at: path)
         }
@@ -93,7 +119,7 @@ class PDFCreatorStore: ObservableObject {
 
     func clearAll() {
         for item in items {
-            for ext in ["pdf", "md", "docx"] {
+            for ext in ["pdf", "md", "docx", "txt", "html", "swift", "py", "js", "css", "json", "csv", "xml", "yaml"] {
                 let path = saveDir.appendingPathComponent("\(item.id.uuidString).\(ext)")
                 try? FileManager.default.removeItem(at: path)
             }
@@ -1373,6 +1399,60 @@ struct PDFCreatorView: View {
                 }
                 .padding(.top, 2)
 
+                // Template suggestions
+                VStack(spacing: 8) {
+                    Text("Quick Start")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary.opacity(0.5))
+                        .padding(.top, 8)
+
+                    let templates: [(String, String, String)] = [
+                        ("doc.text", "Essay", "Write a well-structured essay about"),
+                        ("list.bullet", "Study Guide", "Create a comprehensive study guide for"),
+                        ("chart.bar", "Report", "Generate a professional report with data on"),
+                        ("chevron.left.forwardslash.chevron.right", "Code File", "Write clean, well-documented code for"),
+                        ("globe", "Web Page", "Create an HTML page with CSS for"),
+                        ("tablecells", "CSV Data", "Generate a CSV dataset with sample data for"),
+                    ]
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8)], spacing: 8) {
+                        ForEach(templates, id: \.1) { icon, label, promptPrefix in
+                            Button(action: {
+                                prompt = promptPrefix + " "
+                                // Auto-set format based on template
+                                switch label {
+                                case "Code File": selectedFormat = "swift"
+                                case "Web Page": selectedFormat = "html"
+                                case "CSV Data": selectedFormat = "csv"
+                                default: selectedFormat = "pdf"
+                                }
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                    isInputExpanded = true
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    isPromptFocused = true
+                                }
+                            }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: icon)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(startColor)
+                                    Text(label)
+                                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.primary.opacity(0.7))
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .glassEffect(.regular, in: .rect(cornerRadius: 10))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .frame(maxWidth: 400)
+                }
+                .padding(.top, 4)
+
                 if let error = generationError {
                     Text(error)
                         .font(.system(size: 12))
@@ -1482,6 +1562,11 @@ struct PDFCreatorView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     HStack(spacing: 6) {
+                        Text(item.formatLabel)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary.opacity(0.6))
+                        Text("·")
+                            .foregroundStyle(.secondary.opacity(0.4))
                         Text(item.pageSize)
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary.opacity(0.6))
@@ -1524,6 +1609,37 @@ struct PDFCreatorView: View {
                             selectedPDFPreview = item.id
                             previewItem = item
                             showPDFPreview = true
+                        }
+                    }
+                )
+
+                ExpandingActionButton(
+                    title: "Copy",
+                    icon: "doc.on.doc",
+                    color: .secondary,
+                    font: .system(size: 12),
+                    action: {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(item.content, forType: .string)
+                    }
+                )
+
+                ExpandingActionButton(
+                    title: "Regenerate",
+                    icon: "arrow.clockwise",
+                    color: .secondary,
+                    font: .system(size: 12),
+                    action: {
+                        // Re-generate using the same content as the prompt
+                        let titlePrompt = item.title.isEmpty ? String(item.content.prefix(100)) : item.title
+                        prompt = "Regenerate: \(titlePrompt)"
+                        selectedFormat = item.format ?? "pdf"
+                        selectedPageSize = item.pageSize
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            isInputExpanded = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            isPromptFocused = true
                         }
                     }
                 )
@@ -1581,6 +1697,10 @@ struct PDFCreatorView: View {
                     previewItem = item
                     showPDFPreview = true
                 }
+            }
+            Button("Copy Content") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(item.content, forType: .string)
             }
             Button("Export...") { exportFile(item) }
             Divider()
@@ -1731,25 +1851,101 @@ struct PDFCreatorView: View {
 
                 // Format selector button
                 Menu {
-                    Button(action: { selectedFormat = "pdf" }) {
-                        if selectedFormat == "pdf" {
-                            Label("PDF", systemImage: "checkmark")
-                        } else {
-                            Text("PDF")
+                    Section("Documents") {
+                        Button(action: { selectedFormat = "pdf" }) {
+                            if selectedFormat == "pdf" {
+                                Label("PDF", systemImage: "checkmark")
+                            } else {
+                                Text("PDF")
+                            }
+                        }
+                        Button(action: { selectedFormat = "md" }) {
+                            if selectedFormat == "md" {
+                                Label("Markdown", systemImage: "checkmark")
+                            } else {
+                                Text("Markdown")
+                            }
+                        }
+                        Button(action: { selectedFormat = "docx" }) {
+                            if selectedFormat == "docx" {
+                                Label("DOCX", systemImage: "checkmark")
+                            } else {
+                                Text("DOCX")
+                            }
+                        }
+                        Button(action: { selectedFormat = "txt" }) {
+                            if selectedFormat == "txt" {
+                                Label("Plain Text", systemImage: "checkmark")
+                            } else {
+                                Text("Plain Text")
+                            }
+                        }
+                        Button(action: { selectedFormat = "html" }) {
+                            if selectedFormat == "html" {
+                                Label("HTML", systemImage: "checkmark")
+                            } else {
+                                Text("HTML")
+                            }
                         }
                     }
-                    Button(action: { selectedFormat = "md" }) {
-                        if selectedFormat == "md" {
-                            Label("Markdown", systemImage: "checkmark")
-                        } else {
-                            Text("Markdown")
+                    Section("Code") {
+                        Button(action: { selectedFormat = "swift" }) {
+                            if selectedFormat == "swift" {
+                                Label("Swift", systemImage: "checkmark")
+                            } else {
+                                Text("Swift")
+                            }
+                        }
+                        Button(action: { selectedFormat = "py" }) {
+                            if selectedFormat == "py" {
+                                Label("Python", systemImage: "checkmark")
+                            } else {
+                                Text("Python")
+                            }
+                        }
+                        Button(action: { selectedFormat = "js" }) {
+                            if selectedFormat == "js" {
+                                Label("JavaScript", systemImage: "checkmark")
+                            } else {
+                                Text("JavaScript")
+                            }
+                        }
+                        Button(action: { selectedFormat = "css" }) {
+                            if selectedFormat == "css" {
+                                Label("CSS", systemImage: "checkmark")
+                            } else {
+                                Text("CSS")
+                            }
                         }
                     }
-                    Button(action: { selectedFormat = "docx" }) {
-                        if selectedFormat == "docx" {
-                            Label("DOCX", systemImage: "checkmark")
-                        } else {
-                            Text("DOCX")
+                    Section("Data") {
+                        Button(action: { selectedFormat = "json" }) {
+                            if selectedFormat == "json" {
+                                Label("JSON", systemImage: "checkmark")
+                            } else {
+                                Text("JSON")
+                            }
+                        }
+                        Button(action: { selectedFormat = "csv" }) {
+                            if selectedFormat == "csv" {
+                                Label("CSV", systemImage: "checkmark")
+                            } else {
+                                Text("CSV")
+                            }
+                        }
+                        Button(action: { selectedFormat = "xml" }) {
+                            if selectedFormat == "xml" {
+                                Label("XML", systemImage: "checkmark")
+                            } else {
+                                Text("XML")
+                            }
+                        }
+                        Button(action: { selectedFormat = "yaml" }) {
+                            if selectedFormat == "yaml" {
+                                Label("YAML", systemImage: "checkmark")
+                            } else {
+                                Text("YAML")
+                            }
                         }
                     }
                 } label: {
@@ -1757,7 +1953,13 @@ struct PDFCreatorView: View {
                         Image(
                             systemName: selectedFormat == "pdf"
                                 ? "doc.richtext"
-                                : selectedFormat == "md" ? "doc.plaintext" : "doc.text"
+                                : selectedFormat == "md" ? "doc.plaintext"
+                                : selectedFormat == "html" ? "globe"
+                                : selectedFormat == "csv" ? "tablecells"
+                                : ["swift", "py", "js"].contains(selectedFormat) ? "chevron.left.forwardslash.chevron.right"
+                                : selectedFormat == "css" ? "paintbrush"
+                                : ["json", "xml", "yaml"].contains(selectedFormat) ? "curlybraces"
+                                : "doc.text"
                         )
                         .font(.system(size: 12, weight: .medium))
                         Text(selectedFormat.uppercased())
@@ -1954,21 +2156,104 @@ struct PDFCreatorView: View {
         isGenerating = true
         generationError = nil
 
-        let systemPrompt = """
-            You are a PDF content generator. The user will describe what they want in a PDF document. \
-            Generate well-formatted content using Markdown syntax. You can use:
-            - # Headings (##, ###, etc.)
-            - **bold** and *italic* text
-            - Bullet points (- or *) and numbered lists (1. 2. 3.)
-            - Code blocks with ```language
-            - LaTeX math with $$ delimiters for block math or $ for inline math
-            - Tables with | column | syntax
-            - > blockquotes
-            - --- horizontal rules
+        let systemPrompt: String
+        switch selectedFormat {
+        case "html":
+            systemPrompt = """
+                You are an HTML file generator. The user will describe what they want. \
+                Generate a complete, valid HTML5 document with embedded CSS styling. \
+                Include a proper <!DOCTYPE html>, <head> with <style>, and <body>. \
+                Make it visually polished with modern CSS (flexbox, grid, good typography, colors). \
+                Generate ONLY the HTML code. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "swift":
+            systemPrompt = """
+                You are a Swift code generator. The user will describe what they want. \
+                Generate clean, idiomatic Swift code with proper structure, types, and error handling. \
+                Include necessary imports. Use modern Swift conventions (async/await, value types, etc.). \
+                Add brief inline comments for complex logic. \
+                Generate ONLY the Swift code. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "py":
+            systemPrompt = """
+                You are a Python code generator. The user will describe what they want. \
+                Generate clean, idiomatic Python code following PEP 8 conventions. \
+                Include necessary imports and type hints where appropriate. \
+                Add brief docstrings for functions/classes. \
+                Generate ONLY the Python code. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "js":
+            systemPrompt = """
+                You are a JavaScript code generator. The user will describe what they want. \
+                Generate clean, modern JavaScript (ES2020+) with proper structure. \
+                Use const/let, arrow functions, async/await, and modern APIs where appropriate. \
+                Add brief JSDoc comments for functions. \
+                Generate ONLY the JavaScript code. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "css":
+            systemPrompt = """
+                You are a CSS stylesheet generator. The user will describe what they want. \
+                Generate clean, well-organized CSS with modern features (custom properties, flexbox, grid). \
+                Use a logical structure with comments separating sections. \
+                Generate ONLY the CSS code. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "json":
+            systemPrompt = """
+                You are a JSON data generator. The user will describe what they want. \
+                Generate valid, well-structured JSON data. Use proper nesting and arrays. \
+                Generate ONLY the raw JSON. Do NOT wrap in code fences. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "csv":
+            systemPrompt = """
+                You are a CSV data generator. The user will describe what they want. \
+                Generate valid CSV data with a header row and data rows. \
+                Use proper escaping for fields containing commas or quotes. \
+                Generate ONLY the raw CSV data. Do NOT wrap in code fences. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "xml":
+            systemPrompt = """
+                You are an XML document generator. The user will describe what they want. \
+                Generate valid, well-formed XML with proper nesting and attributes. \
+                Include an XML declaration. \
+                Generate ONLY the XML. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "yaml":
+            systemPrompt = """
+                You are a YAML file generator. The user will describe what they want. \
+                Generate clean, properly indented YAML with appropriate structure. \
+                Use comments to document sections where helpful. \
+                Generate ONLY the YAML. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "txt":
+            systemPrompt = """
+                You are a plain text document generator. The user will describe what they want. \
+                Generate well-formatted plain text with clear structure using spacing and simple formatting. \
+                Use dashes, equals signs, or spaces for visual structure — no Markdown or HTML. \
+                Generate ONLY the document content. Do NOT include any preamble, explanation, or commentary.
+                """
+        case "md":
+            systemPrompt = """
+                You are a Markdown document generator. The user will describe what they want. \
+                Generate well-formatted Markdown content using headings, lists, code blocks, tables, and emphasis. \
+                Generate ONLY the Markdown content. Do NOT include any preamble, explanation, or commentary.
+                """
+        default:
+            systemPrompt = """
+                You are a PDF content generator. The user will describe what they want in a PDF document. \
+                Generate well-formatted content using Markdown syntax. You can use:
+                - # Headings (##, ###, etc.)
+                - **bold** and *italic* text
+                - Bullet points (- or *) and numbered lists (1. 2. 3.)
+                - Code blocks with ```language
+                - LaTeX math with $$ delimiters for block math or $ for inline math
+                - Tables with | column | syntax
+                - > blockquotes
+                - --- horizontal rules
 
-            Generate ONLY the document content in Markdown format. Do NOT include any preamble, \
-            explanation, or commentary outside the document content. Start directly with the content.
-            """
+                Generate ONLY the document content in Markdown format. Do NOT include any preamble, \
+                explanation, or commentary outside the document content. Start directly with the content.
+                """
+        }
 
         let userMsg = Message(content: trimmed, isUser: true)
         let history = [userMsg]
@@ -2054,7 +2339,7 @@ struct PDFCreatorView: View {
                 // Generate file data based on selected format
                 let fileData: Data
                 switch format {
-                case "md":
+                case "md", "txt", "swift", "py", "js", "css", "json", "csv", "xml", "yaml", "html":
                     fileData = Data(content.utf8)
                 case "docx":
                     fileData = Self.renderDOCX(from: content, title: title)

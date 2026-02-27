@@ -251,6 +251,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isGenerating) stopGeneration();
         chatHistory = [];
         hasInjectedContextThisSession = false;
+        agentStepCount = 0;
+        agentActions = [];
         chatContainer.innerHTML = '';
         chatContainer.appendChild(createEmptyState());
         promptInput.value = '';
@@ -346,9 +348,10 @@ document.addEventListener('DOMContentLoaded', () => {
     agentBrowserBtn.addEventListener('click', () => {
         agentBrowserEnabled = !agentBrowserEnabled;
         agentBrowserBtn.classList.toggle('active', agentBrowserEnabled);
-        agentBrowserBtn.title = agentBrowserEnabled ? 'Agent Browser: ON' : 'Agent Browser Control';
+        agentBrowserBtn.title = agentBrowserEnabled ? 'Agent Browser: ON — AI can interact with pages' : 'Agent Browser Control';
         if (agentBrowserEnabled) {
-            promptInput.placeholder = 'Describe what you want the agent to do on this page...';
+            promptInput.placeholder = 'Tell the agent what to do (e.g. "Fill out the form", "Find the price")...';
+            agentStepCount = 0;
         } else {
             promptInput.placeholder = 'Ask about this page...';
         }
@@ -659,9 +662,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (agentBrowserEnabled && fullContent) {
                 let loopContent = fullContent;
                 const MAX_AGENT_LOOPS = 10;
+                agentStepCount = 0; // reset step counter for new agent session
+
+                // Show agent progress banner
+                const agentBanner = document.createElement('div');
+                agentBanner.className = 'agent-progress-banner';
+                agentBanner.innerHTML = '<div class="agent-progress-dot"></div><span>Agent is working\u2026</span>';
+                chatContainer.appendChild(agentBanner);
+                scrollToBottom();
 
                 for (let loop = 0; loop < MAX_AGENT_LOOPS; loop++) {
                     if (!abortController || abortController.signal.aborted) break;
+
+                    // Update banner with loop count
+                    agentBanner.querySelector('span').textContent = 'Agent is working\u2026 (loop ' + (loop + 1) + '/' + MAX_AGENT_LOOPS + ')';
 
                     // Parse agent actions from current response (fenced + bare JSON fallback)
                     let actions = [];
@@ -687,8 +701,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Execute all actions and collect results
                     let results = [];
                     for (const action of actions) {
-                        const label = action.type + ': ' + (action.selector || action.url || action.query || action.direction || action.word || action.location || action.title || action.text || '...');
-                        appendAgentAction(label);
+                        appendAgentAction(null, action);
                         const result = await executeAgentAction(action);
                         results.push({ type: action.type, result: result || {} });
                     }
@@ -785,6 +798,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         break;
                     }
+                }
+
+                // Remove agent progress banner
+                agentBanner.remove();
+
+                // Add completion summary
+                if (agentStepCount > 0) {
+                    const summary = document.createElement('div');
+                    summary.className = 'agent-complete-banner';
+                    summary.innerHTML = '<span class="agent-complete-icon">\u2705</span><span>Agent completed ' + agentStepCount + ' action' + (agentStepCount > 1 ? 's' : '') + '</span>';
+                    chatContainer.appendChild(summary);
+                    scrollToBottom();
                 }
             }
 
@@ -919,16 +944,87 @@ document.addEventListener('DOMContentLoaded', () => {
             if (showCursor) element.innerHTML = '<div class="thinking-indicator"><span></span><span></span><span></span></div>';
             return;
         }
+        // Strip agent-action code blocks and replace with friendly action pills
+        let cleaned = text;
+        if (agentBrowserEnabled) {
+            cleaned = cleaned.replace(/```agent-action\s*\n([\s\S]*?)```/g, (match, jsonStr) => {
+                try {
+                    const action = JSON.parse(jsonStr.trim());
+                    return '\n' + formatAgentActionInline(action) + '\n';
+                } catch (e) {
+                    return '';
+                }
+            });
+            // Also strip bare JSON action blocks
+            cleaned = cleaned.replace(/(?:^|\n)\s*(\{"type"\s*:\s*"[^"]+?"[^}]*\})/g, (match, jsonStr) => {
+                try {
+                    const action = JSON.parse(jsonStr.trim());
+                    if (action.type) return '\n' + formatAgentActionInline(action) + '\n';
+                } catch (e) { }
+                return match;
+            });
+        }
         // Protect math tokens
         let mathTokens = [];
-        let processed = text.replace(
+        let processed = cleaned.replace(
             /\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$|\\\(([\s\S]*?)\\\)|\$((?:[^$\\]|\\.)+)\$/g,
             (match) => { const id = '@@MATH' + mathTokens.length + '@@'; mathTokens.push(match); return id; }
         );
         let rawHtml = marked.parse(processed, { breaks: true, gfm: true });
         mathTokens.forEach((match, i) => { rawHtml = rawHtml.replace('@@MATH' + i + '@@', match); });
-        const safeHtml = DOMPurify.sanitize(rawHtml);
+        const safeHtml = DOMPurify.sanitize(rawHtml, { ADD_ATTR: ['class'] });
         element.innerHTML = safeHtml + (showCursor ? '<span class="cursor">\u258B</span>' : '');
+    }
+
+    function formatAgentActionInline(action) {
+        const desc = getAgentActionDescription(action);
+        return '<span class="agent-inline-action">' + desc.icon + ' ' + escapeHtml(desc.label) + '</span>';
+    }
+
+    function getAgentActionDescription(action) {
+        const sel = action.selector ? ('"' + (action.selector.length > 30 ? action.selector.substring(0, 30) + '...' : action.selector) + '"') : '';
+        function safeHost(url) { try { return new URL(url).hostname; } catch(e) { return url ? url.substring(0, 30) : 'page'; } }
+        switch (action.type) {
+            case 'click': return { icon: '👆', label: 'Clicked ' + sel };
+            case 'type': return { icon: '⌨️', label: 'Typed "' + (action.text || '').substring(0, 40) + '"' + (sel ? ' into ' + sel : '') };
+            case 'select': return { icon: '📋', label: 'Selected "' + (action.value || '') + '"' + (sel ? ' in ' + sel : '') };
+            case 'scroll': return { icon: '📜', label: 'Scrolled ' + (action.direction || 'down') + ' ' + (action.amount || 300) + 'px' };
+            case 'hover': return { icon: '🎯', label: 'Hovered over ' + sel };
+            case 'drag': return { icon: '✋', label: 'Dragged ' + sel + ' by (' + (action.dx||0) + ', ' + (action.dy||0) + ')' };
+            case 'toggleCheckbox': return { icon: '☑️', label: 'Toggled checkbox ' + sel };
+            case 'fillForm': return { icon: '📝', label: 'Filled form with ' + (action.fields ? action.fields.length : 0) + ' fields' };
+            case 'getElements': return { icon: '🔍', label: 'Scanned page elements' };
+            case 'extractText': return { icon: '📄', label: 'Extracted text from ' + sel };
+            case 'extractLinks': return { icon: '🔗', label: 'Extracted all links' };
+            case 'extractTable': return { icon: '📊', label: 'Extracted table data' };
+            case 'highlight': return { icon: '🖍️', label: 'Highlighted ' + sel };
+            case 'waitFor': return { icon: '⏳', label: 'Waiting for ' + sel };
+            case 'getAttribute': return { icon: '🏷️', label: 'Read attribute "' + (action.attribute || '') + '" from ' + sel };
+            case 'readSelection': return { icon: '✂️', label: 'Read selected text' };
+            case 'readPageMeta': return { icon: '📑', label: 'Read page metadata' };
+            case 'scan': return { icon: '📐', label: 'Scanned page layout' };
+            case 'navigate': return { icon: '🌐', label: 'Navigated to ' + safeHost(action.url) };
+            case 'openTab': return { icon: '➕', label: 'Opened new tab' + (action.url ? ': ' + safeHost(action.url) : '') };
+            case 'closeTab': return { icon: '✖️', label: 'Closed tab' };
+            case 'switchTab': return { icon: '🔀', label: 'Switched to tab ' + (action.tabId || '') };
+            case 'getTabs': return { icon: '📑', label: 'Listed all tabs' };
+            case 'goBack': return { icon: '⬅️', label: 'Went back' };
+            case 'goForward': return { icon: '➡️', label: 'Went forward' };
+            case 'reloadTab': return { icon: '🔄', label: 'Reloaded page' };
+            case 'duplicateTab': return { icon: '📋', label: 'Duplicated tab' };
+            case 'pinTab': return { icon: '📌', label: 'Pinned tab' };
+            case 'groupTabs': return { icon: '📁', label: 'Grouped ' + (action.tabIds ? action.tabIds.length : '') + ' tabs' };
+            case 'captureTab': return { icon: '📸', label: 'Took screenshot' };
+            case 'createBookmark': return { icon: '🔖', label: 'Bookmarked "' + (action.title || '') + '"' };
+            case 'searchBookmarks': return { icon: '🔍', label: 'Searched bookmarks for "' + (action.query || '') + '"' };
+            case 'webSearch': return { icon: '🌍', label: 'Searched web for "' + (action.query || '').substring(0, 40) + '"' };
+            case 'fetchUrl': return { icon: '📥', label: 'Fetched ' + safeHost(action.url) };
+            case 'wikipedia': return { icon: '📚', label: 'Looked up "' + (action.title || '') + '" on Wikipedia' };
+            case 'weather': return { icon: '🌤️', label: 'Checked weather in ' + (action.location || '') };
+            case 'translate': return { icon: '🌐', label: 'Translated text' + (action.to ? ' to ' + action.to : '') };
+            case 'dictionary': return { icon: '📖', label: 'Looked up "' + (action.word || '') + '"' };
+            default: return { icon: '⚡', label: action.type };
+        }
     }
 
     function renderMath(element) {
@@ -958,6 +1054,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── AGENT MODE ──────────────────────────────────────────
     let agentActions = []; // track agent actions for forwarding
+    let agentStepCount = 0; // step counter for agent actions
 
     async function executeAgentAction(action) {
         let result;
@@ -1138,10 +1235,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return result;
     }
 
-    function appendAgentAction(summary) {
+    function appendAgentAction(summary, action) {
+        agentStepCount++;
+        const desc = action ? getAgentActionDescription(action) : { icon: '⚡', label: summary };
         const wrapper = document.createElement('div');
         wrapper.className = 'agent-action-item';
-        wrapper.innerHTML = '<span class="agent-action-icon">⚡</span><span class="agent-action-text">' + escapeHtml(summary) + '</span>';
+        wrapper.innerHTML = '<span class="agent-step-num">' + agentStepCount + '</span>' +
+            '<span class="agent-action-icon">' + desc.icon + '</span>' +
+            '<span class="agent-action-text">' + escapeHtml(desc.label) + '</span>' +
+            '<span class="agent-action-status">✓</span>';
         chatContainer.appendChild(wrapper);
         scrollToBottom();
     }
