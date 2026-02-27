@@ -203,8 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
             '  <div class="suggestion-chips">' +
             '    <button class="suggestion-chip" data-text="Summarize this page">Summarize</button>' +
             '    <button class="suggestion-chip" data-text="Explain this page in simple terms">Explain</button>' +
-            '    <button class="suggestion-chip" data-text="What are the key points of this page?">Key Points</button>' +
-            '    <button class="suggestion-chip" data-text="Help me write about this topic">Write</button>' +
+            '    <button class="suggestion-chip" data-text="Extract all the links from this page">Extract Links</button>' +
+            '    <button class="suggestion-chip" data-text="Search the web for the latest news today">Web Search</button>' +
             '  </div>' +
             '</div>';
         el.querySelectorAll('.suggestion-chip').forEach(chip => {
@@ -396,15 +396,50 @@ document.addEventListener('DOMContentLoaded', () => {
         if (agentBrowserEnabled) {
             messagesForApi.unshift({
                 role: 'system',
-                content: 'You are a browser automation agent. You can control the browser by outputting JSON action blocks wrapped in ```agent-action markers. Available actions:\n' +
-                    '- {"type":"click","selector":"CSS selector"} - Click an element\n' +
-                    '- {"type":"type","selector":"CSS selector","text":"text to type"} - Type text into an input\n' +
-                    '- {"type":"scroll","direction":"up|down","amount":300} - Scroll the page\n' +
-                    '- {"type":"navigate","url":"https://..."} - Navigate to a URL\n' +
-                    '- {"type":"getElements"} - Get interactive elements on the page\n' +
-                    '- {"type":"scan"} - Take a screenshot of the current page\n' +
-                    'Output actions as: ```agent-action\n{"type":"...","selector":"..."}\n```\n' +
-                    'You can output multiple actions. Explain what you are doing before each action.'
+                content: 'You are a powerful browser automation agent. You control the browser by outputting JSON action blocks wrapped in ```agent-action markers. After actions execute, you receive results and can take more actions.\n\n' +
+                    '## Page Interaction:\n' +
+                    '- {"type":"click","selector":"CSS or text"} - Click element\n' +
+                    '- {"type":"type","selector":"CSS or text","text":"..."} - Type into input\n' +
+                    '- {"type":"select","selector":"CSS","value":"..."} - Choose dropdown option\n' +
+                    '- {"type":"scroll","direction":"up|down","amount":300} - Scroll page\n' +
+                    '- {"type":"hover","selector":"CSS or text"} - Hover over element\n' +
+                    '- {"type":"drag","selector":"CSS","dx":100,"dy":0} - Drag element\n' +
+                    '- {"type":"toggleCheckbox","selector":"CSS"} - Toggle checkbox/radio\n' +
+                    '- {"type":"fillForm","fields":[{"selector":"#id","value":"..."}]} - Fill multiple form fields\n' +
+                    '- {"type":"getElements"} - List interactive elements on page\n' +
+                    '- {"type":"extractText","selector":"CSS"} - Get text from elements\n' +
+                    '- {"type":"extractLinks"} - Get all page links\n' +
+                    '- {"type":"extractTable","selector":"table"} - Extract table as JSON\n' +
+                    '- {"type":"highlight","selector":"CSS","color":"yellow"} - Highlight elements\n' +
+                    '- {"type":"waitFor","selector":"CSS","timeout":5000} - Wait for element\n' +
+                    '- {"type":"getAttribute","selector":"CSS","attribute":"href"} - Get attribute\n' +
+                    '- {"type":"readSelection"} - Get user-selected text\n' +
+                    '- {"type":"readPageMeta"} - Get page metadata (title, description, etc.)\n' +
+                    '- {"type":"scan"} - Get page dimensions & scroll info\n\n' +
+                    '## Browser Control:\n' +
+                    '- {"type":"navigate","url":"https://..."} - Go to URL\n' +
+                    '- {"type":"openTab","url":"https://...","active":true} - Open new tab\n' +
+                    '- {"type":"closeTab","tabId":123} - Close tab\n' +
+                    '- {"type":"switchTab","tabId":123} - Switch to tab\n' +
+                    '- {"type":"getTabs"} - List all tabs\n' +
+                    '- {"type":"goBack"} - Browser back\n' +
+                    '- {"type":"goForward"} - Browser forward\n' +
+                    '- {"type":"reloadTab"} - Reload current tab\n' +
+                    '- {"type":"duplicateTab"} - Duplicate tab\n' +
+                    '- {"type":"pinTab"} - Pin/unpin tab\n' +
+                    '- {"type":"groupTabs","tabIds":[1,2],"title":"Name"} - Group tabs\n' +
+                    '- {"type":"captureTab"} - Screenshot visible tab\n' +
+                    '- {"type":"createBookmark","title":"...","url":"..."} - Add bookmark\n' +
+                    '- {"type":"searchBookmarks","query":"..."} - Search bookmarks\n\n' +
+                    '## Web & Information:\n' +
+                    '- {"type":"webSearch","query":"..."} - Search DuckDuckGo\n' +
+                    '- {"type":"fetchUrl","url":"https://..."} - Read any webpage content\n' +
+                    '- {"type":"wikipedia","title":"..."} - Wikipedia article summary\n' +
+                    '- {"type":"weather","location":"City"} - Current weather\n' +
+                    '- {"type":"translate","text":"...","from":"en","to":"es"} - Translate text\n' +
+                    '- {"type":"dictionary","word":"..."} - Word definition\n\n' +
+                    'Output: ```agent-action\n{"type":"..."}\n```\n' +
+                    'You may output multiple action blocks. Explain each step briefly. When done, give final summary without action blocks.'
             });
         }
 
@@ -533,17 +568,124 @@ document.addEventListener('DOMContentLoaded', () => {
             assistant.modelBadge.textContent = 'Model used: ' + displayName;
             assistant.modelBadge.style.display = 'block';
 
-            // Parse and execute agent actions if agent mode is enabled
+            // Agentic loop: execute actions, send results back to AI, continue
             if (agentBrowserEnabled && fullContent) {
-                const actionRegex = /```agent-action\s*\n([\s\S]*?)```/g;
-                let match;
-                while ((match = actionRegex.exec(fullContent)) !== null) {
+                let loopContent = fullContent;
+                const MAX_AGENT_LOOPS = 10;
+
+                for (let loop = 0; loop < MAX_AGENT_LOOPS; loop++) {
+                    if (!abortController || abortController.signal.aborted) break;
+
+                    // Parse agent actions from current response
+                    const actionRegex = /```agent-action\s*\n([\s\S]*?)```/g;
+                    let match;
+                    let actions = [];
+                    while ((match = actionRegex.exec(loopContent)) !== null) {
+                        try { actions.push(JSON.parse(match[1].trim())); } catch (e) { }
+                    }
+
+                    if (actions.length === 0) break; // No actions = agent is done
+
+                    // Execute all actions and collect results
+                    let results = [];
+                    for (const action of actions) {
+                        const label = action.type + ': ' + (action.selector || action.url || action.query || action.direction || action.word || action.location || action.title || action.text || '...');
+                        appendAgentAction(label);
+                        const result = await executeAgentAction(action);
+                        results.push({ type: action.type, result: result || {} });
+                    }
+
+                    // Build results summary for AI
+                    const resultText = results.map(r => {
+                        const res = r.result;
+                        let info = res.summary || res.error || '';
+                        for (const key of ['elements', 'tabs', 'data', 'text', 'links', 'pageInfo', 'meta', 'content', 'definition', 'weather', 'translation', 'bookmarks', 'value']) {
+                            if (res[key]) {
+                                const val = typeof res[key] === 'string' ? res[key] : JSON.stringify(res[key]);
+                                info += '\n' + val.substring(0, 3000);
+                            }
+                        }
+                        return `[${r.type}] ${res.ok ? 'OK' : 'FAILED'}: ${info}`;
+                    }).join('\n\n');
+
+                    // Feed results back to AI
+                    messagesForApi.push({ role: 'assistant', content: loopContent });
+                    messagesForApi.push({
+                        role: 'user',
+                        content: '[Agent Action Results]:\n' + resultText + '\n\nContinue with the task. If done, provide a final summary without any agent-action blocks.'
+                    });
+
+                    // Create new assistant message for next iteration
+                    const nextAssistant = createAssistantMessage();
+                    loopContent = '';
+                    let nextThinking = '';
+
+                    abortController = new AbortController();
+                    let nextCursorInterval = setInterval(() => {
+                        const cursor = nextAssistant.contentDiv.querySelector('.cursor');
+                        if (cursor) cursor.classList.toggle('blink-off');
+                    }, 500);
+
                     try {
-                        const action = JSON.parse(match[1].trim());
-                        appendAgentAction(action.type + ': ' + (action.selector || action.url || action.direction || 'executing...'));
-                        await executeAgentAction(action);
-                    } catch (parseErr) {
-                        console.warn('Failed to parse agent action:', parseErr);
+                        const loopRes = await fetch('http://localhost:8080/api/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                model: modelId,
+                                messages: messagesForApi,
+                                thinkingLevel: thinkingLevel
+                            }),
+                            signal: abortController.signal
+                        });
+                        if (!loopRes.ok) throw new Error('Agent loop: failed to fetch');
+
+                        const loopReader = loopRes.body.getReader();
+                        const loopDecoder = new TextDecoder('utf-8');
+
+                        while (true) {
+                            const { done, value } = await loopReader.read();
+                            if (done) break;
+                            const chunk = loopDecoder.decode(value, { stream: true });
+                            for (const line of chunk.split('\n')) {
+                                if (!line.startsWith('data: ')) continue;
+                                const dataStr = line.substring(6);
+                                if (dataStr === '[DONE]') break;
+                                try {
+                                    const d = JSON.parse(dataStr);
+                                    if (d.thinking) {
+                                        nextThinking += d.thinking;
+                                        nextAssistant.thinkingToggle.style.display = 'flex';
+                                        nextAssistant.thinkingDiv.style.display = 'block';
+                                        nextAssistant.thinkingDiv.querySelector('.thinking-text').textContent = nextThinking;
+                                    }
+                                    if (d.text) loopContent += d.text;
+                                    if (d.error) loopContent = d.error;
+                                    renderContent(nextAssistant.contentDiv, loopContent, true);
+                                    scrollToBottom();
+                                } catch (e) { }
+                            }
+                        }
+
+                        clearInterval(nextCursorInterval);
+                        renderContent(nextAssistant.contentDiv, loopContent, false);
+                        renderMath(nextAssistant.contentDiv);
+
+                        chatHistory.push({ role: 'assistant', content: loopContent, thinking: nextThinking || undefined });
+                        nextAssistant.actionsDiv.style.display = 'flex';
+                        const dn = modelSelect.options[modelSelect.selectedIndex]
+                            ? modelSelect.options[modelSelect.selectedIndex].textContent : modelId;
+                        nextAssistant.modelBadge.textContent = 'Model used: ' + dn;
+                        nextAssistant.modelBadge.style.display = 'block';
+
+                    } catch (e) {
+                        clearInterval(nextCursorInterval);
+                        if (e.name === 'AbortError') {
+                            renderContent(nextAssistant.contentDiv, loopContent || 'Agent stopped.', false);
+                            if (loopContent) chatHistory.push({ role: 'assistant', content: loopContent });
+                        } else {
+                            nextAssistant.contentDiv.innerHTML = '<span class="error-text">Agent error: ' + escapeHtml(e.message) + '</span>';
+                        }
+                        break;
                     }
                 }
             }
@@ -709,6 +851,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
+            // Content script (DOM) actions
             switch (action.type) {
                 case 'click':
                     result = await chrome.tabs.sendMessage(tab.id, { action: 'agentClick', selector: action.selector });
@@ -716,15 +859,74 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'type':
                     result = await chrome.tabs.sendMessage(tab.id, { action: 'agentType', selector: action.selector, text: action.text });
                     break;
+                case 'select':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentSelect', selector: action.selector, value: action.value });
+                    break;
                 case 'scroll':
                     result = await chrome.tabs.sendMessage(tab.id, { action: 'agentScroll', direction: action.direction, amount: action.amount });
+                    break;
+                case 'hover':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentHover', selector: action.selector });
                     break;
                 case 'drag':
                     result = await chrome.tabs.sendMessage(tab.id, { action: 'agentDrag', selector: action.selector, dx: action.dx, dy: action.dy });
                     break;
+                case 'toggleCheckbox':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentToggleCheckbox', selector: action.selector });
+                    break;
+                case 'fillForm':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentFillForm', fields: action.fields });
+                    break;
+                case 'getElements':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentGetElements' });
+                    break;
+                case 'extractText':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentExtractText', selector: action.selector });
+                    break;
+                case 'extractLinks':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentExtractLinks' });
+                    break;
+                case 'extractTable':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentExtractTable', selector: action.selector });
+                    break;
+                case 'highlight':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentHighlight', selector: action.selector, color: action.color });
+                    break;
+                case 'waitFor':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentWaitFor', selector: action.selector, timeout: action.timeout });
+                    break;
+                case 'getAttribute':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentGetAttribute', selector: action.selector, attribute: action.attribute });
+                    break;
+                case 'readSelection':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentReadSelection' });
+                    break;
+                case 'readPageMeta':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentReadPageMeta' });
+                    break;
+                case 'scan':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentScreenshot' });
+                    break;
+
+                // Background (browser-level) actions
                 case 'openTab':
                     result = await new Promise(resolve => {
                         chrome.runtime.sendMessage({ action: 'agentOpenTab', url: action.url, active: action.active }, resolve);
+                    });
+                    break;
+                case 'closeTab':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentCloseTab', tabId: action.tabId }, resolve);
+                    });
+                    break;
+                case 'switchTab':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentSwitchTab', tabId: action.tabId }, resolve);
+                    });
+                    break;
+                case 'getTabs':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentGetTabs' }, resolve);
                     });
                     break;
                 case 'navigate':
@@ -732,12 +934,84 @@ document.addEventListener('DOMContentLoaded', () => {
                         chrome.runtime.sendMessage({ action: 'agentNavigate', url: action.url }, resolve);
                     });
                     break;
-                case 'getElements':
-                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentGetElements' });
+                case 'goBack':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentGoBack' }, resolve);
+                    });
                     break;
-                case 'scan':
-                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentScreenshot' });
+                case 'goForward':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentGoForward' }, resolve);
+                    });
                     break;
+                case 'reloadTab':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentReloadTab' }, resolve);
+                    });
+                    break;
+                case 'duplicateTab':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentDuplicateTab' }, resolve);
+                    });
+                    break;
+                case 'pinTab':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentPinTab', tabId: action.tabId }, resolve);
+                    });
+                    break;
+                case 'groupTabs':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentGroupTabs', tabIds: action.tabIds, title: action.title, color: action.color }, resolve);
+                    });
+                    break;
+                case 'captureTab':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentCaptureTab' }, resolve);
+                    });
+                    break;
+                case 'createBookmark':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentCreateBookmark', title: action.title, url: action.url }, resolve);
+                    });
+                    break;
+                case 'searchBookmarks':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentSearchBookmarks', query: action.query }, resolve);
+                    });
+                    break;
+
+                // External API actions (via background)
+                case 'webSearch':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentWebSearch', query: action.query }, resolve);
+                    });
+                    break;
+                case 'fetchUrl':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentFetchUrl', url: action.url }, resolve);
+                    });
+                    break;
+                case 'wikipedia':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentWikipedia', title: action.title }, resolve);
+                    });
+                    break;
+                case 'weather':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentWeather', location: action.location }, resolve);
+                    });
+                    break;
+                case 'translate':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentTranslate', text: action.text, from: action.from, to: action.to }, resolve);
+                    });
+                    break;
+                case 'dictionary':
+                    result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ action: 'agentDictionary', word: action.word }, resolve);
+                    });
+                    break;
+
                 default:
                     result = { ok: false, error: 'Unknown action: ' + action.type };
             }
