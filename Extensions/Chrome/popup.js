@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const contextCloseBtn = document.getElementById('contextCloseBtn');
     const contextToggleText = document.getElementById('contextToggleText');
     const webSearchBtn = document.getElementById('webSearchBtn');
-    const contextBtn = document.getElementById('contextBtn');
     const agentBrowserBtn = document.getElementById('agentBrowserBtn');
     const screenshotBtn = document.getElementById('screenshotBtn');
     const attachBtn = document.getElementById('attachBtn');
@@ -607,11 +606,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (enabled) {
             contextToggle.style.display = 'flex';
             contextToggle.classList.remove('disabled');
-            contextBtn.style.display = 'none';
             updateContextLabel();
         } else {
             contextToggle.style.display = 'none';
-            contextBtn.style.display = 'flex';
         }
         updatePromptPlaceholder();
     }
@@ -649,7 +646,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     contextCloseBtn.addEventListener('click', e => { e.stopPropagation(); setContextState(false); });
     contextToggle.addEventListener('click', () => { }); // pill is informational when shown
-    contextBtn.addEventListener('click', () => setContextState(true));
     webSearchBtn.addEventListener('click', () => setWebSearchState(!includeWebSearch));
 
     // ── THINKING LEVEL ──────────────────────────────────────
