@@ -100,8 +100,18 @@
                 </svg>
             </button>
         </div>
+        <!-- Attachment previews -->
+        <div id="attachmentPreview" class="attachment-preview-row" style="display:none;"></div>
     </div>
     <div class="input-bar">
+        <button id="attachBtn" class="attach-btn" title="Add image">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+        </button>
+        <input type="file" id="fileInput" accept="image/*" multiple style="display:none;">
         <textarea id="promptInput" placeholder="Ask about this page..." rows="1"></textarea>
         <button id="webSearchBtn" class="input-icon-btn" title="Web Search" style="display:none;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"

@@ -15,6 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const contextToggleText = document.getElementById('contextToggleText');
     const webSearchBtn = document.getElementById('webSearchBtn');
     const agentBrowserBtn = document.getElementById('agentBrowserBtn');
+    const attachBtn = document.getElementById('attachBtn');
+    const fileInput = document.getElementById('fileInput');
+    const attachmentPreview = document.getElementById('attachmentPreview');
 
     // State
     let chatHistory = [];
@@ -26,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let thinkingLevel = 'medium';
     let thinkingDropdownOpen = false;
     let hasInjectedContextThisSession = false;
+    let pendingAttachments = []; // { dataUrl, mimeType, name }
 
     // Auto-resize textarea
     promptInput.addEventListener('input', () => {
@@ -35,7 +39,78 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function updateSendBtn() {
-        sendBtn.disabled = isGenerating ? false : promptInput.value.trim() === '';
+        sendBtn.disabled = isGenerating ? false : (promptInput.value.trim() === '' && pendingAttachments.length === 0);
+    }
+
+    // ── ATTACHMENT HANDLING ──────────────────────────────────
+    attachBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+        for (const file of fileInput.files) addAttachment(file);
+        fileInput.value = '';
+    });
+
+    // Paste images
+    promptInput.addEventListener('paste', (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                addAttachment(item.getAsFile());
+            }
+        }
+    });
+
+    // Drag-and-drop on input area
+    const inputArea = document.querySelector('.input-area');
+    inputArea.addEventListener('dragover', e => { e.preventDefault(); inputArea.classList.add('drag-over'); });
+    inputArea.addEventListener('dragleave', () => inputArea.classList.remove('drag-over'));
+    inputArea.addEventListener('drop', e => {
+        e.preventDefault();
+        inputArea.classList.remove('drag-over');
+        for (const file of e.dataTransfer.files) {
+            if (file.type.startsWith('image/')) addAttachment(file);
+        }
+    });
+
+    function addAttachment(file) {
+        if (!file.type.startsWith('image/')) return;
+        if (pendingAttachments.length >= 5) return; // max 5 images
+        const reader = new FileReader();
+        reader.onload = () => {
+            pendingAttachments.push({ dataUrl: reader.result, mimeType: file.type, name: file.name });
+            renderAttachmentPreviews();
+            updateSendBtn();
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function removeAttachment(index) {
+        pendingAttachments.splice(index, 1);
+        renderAttachmentPreviews();
+        updateSendBtn();
+    }
+
+    function renderAttachmentPreviews() {
+        if (pendingAttachments.length === 0) {
+            attachmentPreview.style.display = 'none';
+            attachmentPreview.innerHTML = '';
+            return;
+        }
+        attachmentPreview.style.display = 'flex';
+        attachmentPreview.innerHTML = '';
+        pendingAttachments.forEach((att, i) => {
+            const thumb = document.createElement('div');
+            thumb.className = 'attachment-thumb';
+            thumb.innerHTML =
+                '<img src="' + att.dataUrl + '" alt="' + escapeHtml(att.name) + '">' +
+                '<button class="attachment-remove" title="Remove">' +
+                '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+                '</button>';
+            thumb.querySelector('.attachment-remove').addEventListener('click', () => removeAttachment(i));
+            attachmentPreview.appendChild(thumb);
+        });
     }
 
     // ── MODEL SELECTOR ──────────────────────────────────────
@@ -283,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sendBtn.addEventListener('click', () => {
         if (isGenerating) { stopGeneration(); }
         else {
-            const text = promptInput.value.trim();
+            const text = promptInput.value.trim() || (pendingAttachments.length > 0 ? 'Describe this image.' : '');
             if (text) sendMessage(text);
         }
     });
@@ -291,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             if (isGenerating) return;
-            const text = promptInput.value.trim();
+            const text = promptInput.value.trim() || (pendingAttachments.length > 0 ? 'Describe this image.' : '');
             if (text) sendMessage(text);
         }
     });
@@ -328,7 +403,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── SEND MESSAGE (with full history context) ────────────
     async function sendMessage(text, isRegenerate) {
         const modelId = modelSelect.value;
-        if (!text || !modelId) return;
+        if ((!text && pendingAttachments.length === 0) || !modelId) return;
+
+        // Capture attachments before clearing
+        const attachments = [...pendingAttachments];
+        pendingAttachments = [];
+        renderAttachmentPreviews();
 
         promptInput.value = '';
         promptInput.style.height = 'auto';
@@ -349,8 +429,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (last.classList.contains('assistant-wrapper')) last.remove();
             }
         } else {
-            chatHistory.push({ role: 'user', content: text });
-            appendUserMessage(text);
+            chatHistory.push({ role: 'user', content: text, attachments: attachments.length > 0 ? attachments : undefined });
+            appendUserMessage(text, attachments);
         }
 
         const assistant = createAssistantMessage();
@@ -377,7 +457,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Build messages array with full chat history
-        let messagesForApi = chatHistory.map(m => ({ role: m.role, content: m.content }));
+        let messagesForApi = chatHistory.map(m => {
+            const msg = { role: m.role, content: m.content };
+            if (m.attachments && m.attachments.length > 0) {
+                msg.images = m.attachments.map(a => a.dataUrl);
+            }
+            return msg;
+        });
 
         // Inject page context only into the latest user message if not already present
         if (pageContext.length > 0 && !hasInjectedContextThisSession) {
@@ -439,6 +525,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"translate","text":"...","from":"en","to":"es"} - Translate text\n' +
                     '- {"type":"dictionary","word":"..."} - Word definition\n\n' +
                     'Output: ```agent-action\n{"type":"..."}\n```\n' +
+                    'CRITICAL: You MUST wrap every action JSON in ```agent-action fences. Never output bare JSON outside fences. Actions without ```agent-action will NOT execute.\n' +
                     'You may output multiple action blocks. Explain each step briefly. When done, give final summary without action blocks.'
             });
         }
@@ -576,12 +663,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let loop = 0; loop < MAX_AGENT_LOOPS; loop++) {
                     if (!abortController || abortController.signal.aborted) break;
 
-                    // Parse agent actions from current response
+                    // Parse agent actions from current response (fenced + bare JSON fallback)
+                    let actions = [];
+                    // Primary: fenced ```agent-action blocks
                     const actionRegex = /```agent-action\s*\n([\s\S]*?)```/g;
                     let match;
-                    let actions = [];
                     while ((match = actionRegex.exec(loopContent)) !== null) {
                         try { actions.push(JSON.parse(match[1].trim())); } catch (e) { }
+                    }
+                    // Fallback: bare JSON blocks with {"type":"..."} pattern (only if no fenced found)
+                    if (actions.length === 0) {
+                        const bareRegex = /(?:^|\n)\s*(\{"type"\s*:\s*"[^"]+?"[^}]*\})/g;
+                        while ((match = bareRegex.exec(loopContent)) !== null) {
+                            try {
+                                const parsed = JSON.parse(match[1].trim());
+                                if (parsed.type) actions.push(parsed);
+                            } catch (e) { }
+                        }
                     }
 
                     if (actions.length === 0) break; // No actions = agent is done
@@ -707,9 +805,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ── MESSAGE RENDERING ───────────────────────────────────
-    function appendUserMessage(text) {
+    function appendUserMessage(text, attachments) {
         const wrapper = document.createElement('div');
         wrapper.className = 'message-wrapper user-wrapper';
+
+        // Show image thumbnails if present
+        if (attachments && attachments.length > 0) {
+            const imgRow = document.createElement('div');
+            imgRow.className = 'user-images-row';
+            attachments.forEach(att => {
+                const img = document.createElement('img');
+                img.src = att.dataUrl;
+                img.className = 'user-image-thumb';
+                img.alt = att.name;
+                imgRow.appendChild(img);
+            });
+            wrapper.appendChild(imgRow);
+        }
+
         const bubble = document.createElement('div');
         bubble.className = 'user-message';
         bubble.textContent = text;

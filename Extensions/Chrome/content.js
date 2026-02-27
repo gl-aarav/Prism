@@ -7,8 +7,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "agentClick") {
         try {
             const el = findElement(request.selector);
-            if (el) { el.click(); sendResponse({ ok: true, summary: `Clicked "${getLabel(el)}"` }); }
-            else { sendResponse({ ok: false, error: "Element not found" }); }
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Simulate full mouse interaction for better compatibility
+                el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+                el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                el.click();
+                sendResponse({ ok: true, summary: `Clicked "${getLabel(el)}"` });
+            }
+            else { sendResponse({ ok: false, error: "Element not found for: " + request.selector }); }
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
     }
 
@@ -16,12 +25,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         try {
             const el = findElement(request.selector);
             if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 el.focus();
-                el.value = request.text || '';
-                el.dispatchEvent(new Event('input', { bubbles: true }));
+                // Clear existing value if requested
+                if (request.clear !== false) {
+                    el.value = '';
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                // Simulate keypresses for better framework compatibility
+                const text = request.text || '';
+                for (const char of text) {
+                    el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+                    el.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
+                    // Use native setter to bypass React/Vue controlled component issues
+                    const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+                    if (nativeSet) {
+                        nativeSet.call(el, el.value + char);
+                    } else {
+                        el.value += char;
+                    }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+                }
                 el.dispatchEvent(new Event('change', { bubbles: true }));
-                sendResponse({ ok: true, summary: `Typed in "${getLabel(el)}"` });
-            } else { sendResponse({ ok: false, error: "Element not found" }); }
+                sendResponse({ ok: true, summary: `Typed "${text.substring(0, 50)}" in "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "Element not found for: " + request.selector }); }
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
     }
 
@@ -246,19 +274,84 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // ── HELPERS ──────────────────────────────────────────────
 function findElement(selector) {
     if (!selector) return null;
+
+    // Handle "text=..." prefix format (e.g. "text=Updates")
+    if (selector.startsWith('text=')) {
+        const searchText = selector.substring(5).trim();
+        return findByText(searchText);
+    }
+
     // Try CSS selector first
     try { const el = document.querySelector(selector); if (el) return el; } catch (e) { }
-    // Try by text content
-    const all = document.querySelectorAll('a, button, input, textarea, select, [role="button"]');
-    for (const el of all) {
-        if (getLabel(el).toLowerCase().includes(selector.toLowerCase())) return el;
+
+    // Try XPath if it looks like one
+    if (selector.startsWith('/') || selector.startsWith('(')) {
+        try {
+            const xResult = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+            if (xResult.singleNodeValue) return xResult.singleNodeValue;
+        } catch (e) { }
     }
+
+    // Try by aria-label
+    try {
+        const byAria = document.querySelector(`[aria-label="${CSS.escape(selector)}"]`) ||
+            document.querySelector(`[aria-label*="${CSS.escape(selector)}" i]`);
+        if (byAria) return byAria;
+    } catch (e) { }
+
+    // Try by text content — search a wide range of clickable/visible elements
+    return findByText(selector);
+}
+
+function findByText(text) {
+    if (!text) return null;
+    const lowerText = text.toLowerCase().trim();
+
+    // Priority 1: Interactive elements — exact match
+    const interactive = document.querySelectorAll('a, button, input, textarea, select, [role="button"], [role="link"], [role="tab"], [role="menuitem"], summary, label');
+    for (const el of interactive) {
+        if (getLabel(el).toLowerCase().trim() === lowerText) return el;
+    }
+
+    // Priority 2: Interactive elements — partial match
+    for (const el of interactive) {
+        if (getLabel(el).toLowerCase().includes(lowerText)) return el;
+    }
+
+    // Priority 3: Any visible element with matching text (headings, spans, divs, li, td, etc.)
+    const allVisible = document.querySelectorAll('h1, h2, h3, h4, h5, h6, span, div, p, li, td, th, nav, section, details, summary, [onclick], [tabindex]');
+    for (const el of allVisible) {
+        const directText = getDirectText(el).toLowerCase().trim();
+        if (directText === lowerText) return el;
+    }
+    for (const el of allVisible) {
+        const directText = getDirectText(el).toLowerCase().trim();
+        if (directText.includes(lowerText) && directText.length < lowerText.length * 3) return el;
+    }
+
+    // Priority 4: XPath text search
+    try {
+        const xpathResult = document.evaluate(
+            `//*[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'), '${lowerText.replace(/'/g, "\\'")}')]`,
+            document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+        );
+        if (xpathResult.singleNodeValue) return xpathResult.singleNodeValue;
+    } catch (e) { }
+
     return null;
+}
+
+function getDirectText(el) {
+    let text = '';
+    for (const node of el.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE) text += node.textContent;
+    }
+    return text.trim() || getLabel(el);
 }
 
 function getLabel(el) {
     return (el.textContent || el.getAttribute('aria-label') || el.getAttribute('title')
-        || el.getAttribute('placeholder') || el.getAttribute('alt') || el.tagName).trim().substring(0, 60);
+        || el.getAttribute('placeholder') || el.getAttribute('alt') || el.tagName).trim().substring(0, 80);
 }
 
 function getCssSelector(el) {
