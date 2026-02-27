@@ -405,10 +405,12 @@ class ExtensionServer {
             let style = (json["style"] as? String) ?? "Animation"
 
             // Determine which shortcut to use based on style
-            let shortcutImageGen = UserDefaults.standard.string(forKey: "ShortcutImageGen")
+            let shortcutImageGen =
+                UserDefaults.standard.string(forKey: "ShortcutImageGen")
                 ?? "Generate Image"
-            let shortcutImageGenChatGPT = UserDefaults.standard.string(
-                forKey: "ShortcutImageGenChatGPT") ?? "Generate Image ChatGPT"
+            let shortcutImageGenChatGPT =
+                UserDefaults.standard.string(
+                    forKey: "ShortcutImageGenChatGPT") ?? "Generate Image ChatGPT"
             let isChatGPT = style == "ChatGPT" || style.contains("(ChatGPT)")
             let targetShortcut = isChatGPT ? shortcutImageGenChatGPT : shortcutImageGen
 
