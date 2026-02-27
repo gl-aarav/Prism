@@ -33,8 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let pendingAttachments = []; // { dataUrl, mimeType, name }
 
     // ── SLASH COMMANDS ──────────────────────────────────────
-    const builtInCommands = [
-        { trigger: '/imagine', expansion: 'Create an image of the following:', isImageGen: true },
+    let slashCommands = [
         { trigger: '/summarize', expansion: 'Summarize the following:' },
         { trigger: '/explain', expansion: 'Explain the following in detail:' },
         { trigger: '/translate', expansion: 'Translate the following to English:' },
@@ -64,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const query = slashMatch[1].toLowerCase();
-        cmdFiltered = builtInCommands.filter(c => c.trigger.substring(1).startsWith(query));
+        cmdFiltered = slashCommands.filter(c => c.trigger.substring(1).startsWith(query));
         if (cmdFiltered.length === 0) {
             cmdDropdown.style.display = 'none';
             return;
@@ -79,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cmdFiltered.forEach((cmd, i) => {
             const item = document.createElement('div');
             item.className = 'command-item' + (i === cmdSelectedIndex ? ' selected' : '');
-            item.innerHTML = '<span class="command-trigger">' + cmd.trigger + '</span><span class="command-desc">' + (cmd.isImageGen ? 'Generate an image with AI' : cmd.expansion) + '</span>';
+            item.innerHTML = '<span class="command-trigger">' + cmd.trigger + '</span><span class="command-desc">' + cmd.expansion + '</span>';
             item.addEventListener('mousedown', e => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -104,7 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
             promptInput.style.height = 'auto';
             promptInput.style.height = Math.min(promptInput.scrollHeight, 140) + 'px';
             updateSendBtn();
-            updateStyleStrip();
         }
         cmdDropdown.style.display = 'none';
     }
@@ -118,38 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let tabSelectedIndex = 0;
     let tabFiltered = [];
     let mentionedTabs = []; // {title, url, tabId}
-
-    // ── IMAGE GEN STYLE STRIP ──────────────────────────────
-    const styleStrip = document.createElement('div');
-    styleStrip.className = 'image-gen-style-strip';
-    styleStrip.style.display = 'none';
-    document.querySelector('.input-bar').appendChild(styleStrip);
-
-    function updateStyleStrip() {
-        const text = promptInput.value;
-        if (text.startsWith('/imagine')) {
-            renderStyleStrip();
-            styleStrip.style.display = 'flex';
-        } else {
-            styleStrip.style.display = 'none';
-        }
-    }
-
-    function renderStyleStrip() {
-        styleStrip.innerHTML = '<span class="style-strip-label">Style:</span>';
-        imageGenStyles.forEach(s => {
-            const pill = document.createElement('button');
-            pill.className = 'style-pill' + (imageGenStyle === s.value ? ' active' : '');
-            pill.textContent = s.label;
-            pill.addEventListener('mousedown', e => {
-                e.preventDefault();
-                imageGenStyle = s.value;
-                renderStyleStrip();
-                promptInput.focus();
-            });
-            styleStrip.appendChild(pill);
-        });
-    }
 
     async function updateTabDropdown() {
         const text = promptInput.value;
@@ -264,7 +230,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSendBtn();
         updateCommandDropdown();
         updateTabDropdown();
-        updateStyleStrip();
     });
 
     function updateSendBtn() {
@@ -427,6 +392,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    async function fetchCommands() {
+        try {
+            const res = await fetch('http://localhost:8080/api/commands');
+            if (res.ok) {
+                const cmds = await res.json();
+                if (Array.isArray(cmds) && cmds.length > 0) {
+                    slashCommands = cmds.map(c => ({
+                        trigger: c.trigger,
+                        expansion: c.expansion,
+                    }));
+                }
+            }
+        } catch (e) {
+            console.warn('Could not fetch commands from Prism, using defaults.');
+        }
+    }
+
     function getProviderIcon(modelId) {
         if (modelId.startsWith('apple:'))
             return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83"/><path d="M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11"/></svg>';
@@ -551,6 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     fetchModels();
+    fetchCommands();
     updateContextLabel();
 
     // ── NEW CHAT ────────────────────────────────────────────
@@ -807,78 +790,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ── IMAGE GENERATION ──────────────────────────────────
-    const imageGenStyles = [
-        { label: 'Animation', value: 'Animation' },
-        { label: 'Illustration', value: 'Illustration' },
-        { label: 'Sketch', value: 'Sketch' },
-        { label: 'ChatGPT', value: 'ChatGPT' },
-        { label: 'Oil Painting', value: 'Oil Painting (ChatGPT)' },
-        { label: 'Watercolor', value: 'Watercolor (ChatGPT)' },
-    ];
-    let imageGenStyle = 'Animation';
-
-    async function generateImage(prompt) {
-        const es = document.getElementById('emptyState');
-        if (es) es.style.display = 'none';
-
-        chatHistory.push({ role: 'user', content: '/imagine ' + prompt });
-        appendUserMessage('/imagine ' + prompt, []);
-        setGeneratingState(true);
-
-        const assistant = createAssistantMessage();
-        renderContent(assistant.contentDiv, '🎨 Generating image (' + imageGenStyle + ')...', true);
-
-        try {
-            const res = await fetch('http://localhost:8080/api/generate-image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: prompt, style: imageGenStyle })
-            });
-            const result = await res.json();
-            if (result.status === 'ok' && result.image) {
-                const msgText = result.text ? result.text : '';
-                renderContent(assistant.contentDiv, msgText || '🎨 Image generated successfully.', false);
-                // Add image to the message
-                const img = document.createElement('img');
-                img.src = result.image;
-                img.alt = prompt;
-                img.className = 'generated-image';
-                img.addEventListener('click', () => {
-                    window.open(result.image, '_blank');
-                });
-                assistant.contentDiv.appendChild(img);
-                assistant.actionsDiv.style.display = 'flex';
-                chatHistory.push({ role: 'assistant', content: msgText || '[Generated Image]', attachments: [{ dataUrl: result.image, mimeType: 'image/png', name: 'generated.png' }] });
-            } else {
-                renderContent(assistant.contentDiv, '⚠️ ' + (result.error || 'Image generation failed.'), false);
-                assistant.actionsDiv.style.display = 'flex';
-                chatHistory.push({ role: 'assistant', content: result.error || 'Image generation failed.' });
-            }
-        } catch (e) {
-            renderContent(assistant.contentDiv, '⚠️ Could not connect to Prism app for image generation.', false);
-            assistant.actionsDiv.style.display = 'flex';
-            chatHistory.push({ role: 'assistant', content: 'Image generation connection failed.' });
-        }
-        setGeneratingState(false);
-        scrollToBottom();
-    }
-
     // ── SEND MESSAGE (with full history context) ────────────
     async function sendMessage(text, isRegenerate) {
         const modelId = modelSelect.value;
         if ((!text && pendingAttachments.length === 0) || !modelId) return;
-
-        // Handle /imagine command
-        const imagineMatch = text.match(/^\/imagine\s+(.+)/s);
-        if (imagineMatch && !isRegenerate) {
-            pendingAttachments = [];
-            renderAttachmentPreviews();
-            promptInput.value = '';
-            promptInput.style.height = 'auto';
-            await generateImage(imagineMatch[1].trim());
-            return;
-        }
 
         // Capture attachments before clearing
         const attachments = [...pendingAttachments];

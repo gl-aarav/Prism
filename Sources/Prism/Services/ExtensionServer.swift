@@ -386,6 +386,33 @@ class ExtensionServer {
             }
         }
 
+        // Slash commands endpoint – syncs with SlashCommandManager
+        server["/api/commands"] = { request in
+            if request.method.uppercased() == "OPTIONS" {
+                return self.applyCORS(to: .ok(.html("")))
+            }
+
+            let commands = SlashCommandManager.shared.commands
+                .filter { !SlashCommandManager.actionCommands.contains($0.trigger) }
+                .map { cmd -> [String: String] in
+                    return [
+                        "trigger": cmd.trigger,
+                        "expansion": cmd.expansion,
+                    ]
+                }
+
+            guard let data = try? JSONSerialization.data(withJSONObject: commands) else {
+                return self.applyCORS(to: .ok(.text("[]")))
+            }
+            return self.applyCORS(
+                to: .raw(
+                    200, "OK",
+                    ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*"],
+                    { writer in
+                        try? writer.write(Array(data))
+                    }))
+        }
+
         // Image generation endpoint
         server["/api/generate-image"] = { request in
             if request.method.uppercased() == "OPTIONS" {
