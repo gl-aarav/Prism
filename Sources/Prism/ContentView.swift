@@ -3346,9 +3346,6 @@ struct SidebarItem: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-        }
         .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.8))
     }
 }
@@ -3614,9 +3611,6 @@ struct HeaderView: View {
                         .glassEffect(.regular, in: .circle)
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-                }
                 .help("New Chat")
             }
         }
@@ -5148,7 +5142,6 @@ struct CodeBlockView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .background(PointingHandCursor())
                 .onHover { hovering in
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                         copyHovered = hovering
@@ -5483,35 +5476,6 @@ struct EmptyStateView: View {
     }
 }
 
-struct PointingHandCursor: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = Impl()
-        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        view.setContentHuggingPriority(.defaultLow, for: .vertical)
-        return view
-    }
-    func updateNSView(_ nsView: NSView, context: Context) {}
-    private class Impl: NSView {
-        override func updateTrackingAreas() {
-            super.updateTrackingAreas()
-            trackingAreas.forEach { removeTrackingArea($0) }
-            addTrackingArea(
-                NSTrackingArea(
-                    rect: bounds,
-                    options: [.mouseEnteredAndExited, .activeAlways],
-                    owner: self,
-                    userInfo: nil
-                ))
-        }
-        override func mouseEntered(with event: NSEvent) {
-            NSCursor.pointingHand.push()
-        }
-        override func mouseExited(with event: NSEvent) {
-            NSCursor.pop()
-        }
-    }
-}
-
 struct ExpandingActionButton: View {
     let title: String
     let icon: String
@@ -5548,11 +5512,6 @@ struct ExpandingActionButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            if hovering {
-                NSCursor.pointingHand.push()
-            } else {
-                NSCursor.pop()
-            }
             isHovered = hovering
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isHovered)

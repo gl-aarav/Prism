@@ -82,6 +82,11 @@ document.addEventListener('DOMContentLoaded', () => {
             item.innerHTML = '<span class="command-trigger">' + cmd.trigger + '</span><span class="command-desc">' + (cmd.isImageGen ? 'Generate an image with AI' : cmd.expansion) + '</span>';
             item.addEventListener('mousedown', e => {
                 e.preventDefault();
+                e.stopPropagation();
+            });
+            item.addEventListener('click', e => {
+                e.preventDefault();
+                e.stopPropagation();
                 selectCommand(i);
             });
             item.addEventListener('mouseenter', () => {
@@ -185,6 +190,11 @@ document.addEventListener('DOMContentLoaded', () => {
             item.innerHTML = favicon + '<span class="command-trigger" style="color:var(--text-primary);font-weight:500;">' + title + '</span>';
             item.addEventListener('mousedown', e => {
                 e.preventDefault();
+                e.stopPropagation();
+            });
+            item.addEventListener('click', e => {
+                e.preventDefault();
+                e.stopPropagation();
                 selectTab(i);
             });
             item.addEventListener('mouseenter', () => {
@@ -198,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function selectTab(index) {
         const tab = tabFiltered[index];
         if (!tab) return;
+        // Remove the @query text from textarea
         const cursorPos = promptInput.selectionStart;
         const text = promptInput.value;
         const textBeforeCursor = text.substring(0, cursorPos);
@@ -206,15 +217,44 @@ document.addEventListener('DOMContentLoaded', () => {
             const matchStart = textBeforeCursor.lastIndexOf('@');
             const before = text.substring(0, matchStart);
             const after = text.substring(cursorPos);
-            const mention = '@[' + tab.title + '] ';
-            promptInput.value = before + mention + after;
-            promptInput.selectionStart = promptInput.selectionEnd = before.length + mention.length;
-            mentionedTabs.push({ title: tab.title, url: tab.url, tabId: tab.id });
+            promptInput.value = before + after;
+            promptInput.selectionStart = promptInput.selectionEnd = before.length;
+            mentionedTabs.push({ title: tab.title, url: tab.url, tabId: tab.id, favIconUrl: tab.favIconUrl || '' });
         }
         tabDropdown.style.display = 'none';
         promptInput.style.height = 'auto';
         promptInput.style.height = Math.min(promptInput.scrollHeight, 140) + 'px';
+        renderMentionPills();
         updateSendBtn();
+        promptInput.focus();
+    }
+
+    const mentionPreview = document.getElementById('mentionPreview');
+
+    function renderMentionPills() {
+        mentionPreview.innerHTML = '';
+        if (mentionedTabs.length === 0) {
+            mentionPreview.style.display = 'none';
+            return;
+        }
+        mentionPreview.style.display = 'flex';
+        mentionedTabs.forEach((mt, i) => {
+            const pill = document.createElement('span');
+            pill.className = 'mention-pill';
+            const faviconHtml = mt.favIconUrl ? '<img class="mention-pill-favicon" src="' + mt.favIconUrl + '" onerror="this.style.display=\'none\'">' : '';
+            const titleText = (mt.title || '').substring(0, 40);
+            pill.innerHTML = faviconHtml +
+                '<span class="mention-pill-title">' + titleText + '</span>' +
+                '<button class="mention-pill-remove" title="Remove">&times;</button>';
+            pill.querySelector('.mention-pill-remove').addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                mentionedTabs.splice(i, 1);
+                renderMentionPills();
+                updateSendBtn();
+            });
+            mentionPreview.appendChild(pill);
+        });
     }
 
     // Auto-resize textarea
@@ -228,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function updateSendBtn() {
-        sendBtn.disabled = isGenerating ? false : (promptInput.value.trim() === '' && pendingAttachments.length === 0);
+        sendBtn.disabled = isGenerating ? false : (promptInput.value.trim() === '' && pendingAttachments.length === 0 && mentionedTabs.length === 0);
     }
 
     // ── ATTACHMENT HANDLING ──────────────────────────────────
@@ -923,6 +963,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             mentionedTabs = [];
+            renderMentionPills();
         }
 
         // Inject agent browser system prompt when agent mode is enabled
@@ -1350,7 +1391,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Content
         const contentDiv = document.createElement('div');
         contentDiv.className = 'assistant-message';
-        contentDiv.innerHTML = '<div class="thinking-indicator"><span></span><span></span><span></span></div>';
+        contentDiv.innerHTML = '<div class="thinking-indicator"><span class="working-orb"></span><span class="working-text">Working\u2026</span></div>';
 
         // Actions (ExpandingActionButton style)
         const actionsDiv = document.createElement('div');

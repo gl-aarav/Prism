@@ -109,13 +109,6 @@ struct QuickAIView: View {
                                         )
                                 }
                                 .buttonStyle(.plain)
-                                .onHover { hovering in
-                                    if hovering {
-                                        NSCursor.pointingHand.push()
-                                    } else {
-                                        NSCursor.pop()
-                                    }
-                                }
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
@@ -1851,9 +1844,6 @@ extension QuickAIView {
                     .glassEffect(.regular, in: .capsule)
             }
             .buttonStyle(.plain)
-            .onHover { hovering in
-                if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-            }
             .help("New Chat")
         }
         .padding(.horizontal, 10)
@@ -2402,9 +2392,6 @@ extension QuickAIView {
                             .glassEffect(.regular, in: .circle)
                     }
                     .buttonStyle(.plain)
-                    .onHover { hovering in
-                        if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-                    }
                     .help(webSearchEnabled ? "Web Search: On" : "Web Search: Off")
                 }
 
@@ -2415,9 +2402,6 @@ extension QuickAIView {
                         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-                }
                 .disabled((inputText.isEmpty && selectedAttachments.isEmpty) || isLoading)
             }
             .padding(16)
