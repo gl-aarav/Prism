@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Swifter
 
@@ -133,9 +134,21 @@ class ExtensionServer {
                         let content = msgDict["content"] as? String
                     else { continue }
 
+                    var attachments: [MessageAttachment]?
+                    if let images = msgDict["images"] as? [String], !images.isEmpty {
+                        attachments = images.compactMap { dataUrl -> MessageAttachment? in
+                            guard let commaIndex = dataUrl.firstIndex(of: ",") else { return nil }
+                            let base64 = String(dataUrl[dataUrl.index(after: commaIndex)...])
+                            guard let data = Data(base64Encoded: base64) else { return nil }
+                            return MessageAttachment(type: "image", data: data)
+                        }
+                        if attachments?.isEmpty == true { attachments = nil }
+                    }
+
                     let msg = Message(
                         content: content,
                         model: role == "assistant" ? modelUsed : nil,
+                        attachments: attachments,
                         isUser: role == "user"
                     )
                     chatManager.addMessage(msg)
@@ -371,6 +384,91 @@ class ExtensionServer {
 
                 group.wait()
             }
+        }
+
+        // Image generation endpoint
+        server["/api/generate-image"] = { request in
+            if request.method.uppercased() == "OPTIONS" {
+                return self.applyCORS(to: .ok(.html("")))
+            }
+
+            let body = Data(request.body)
+            guard
+                let json = try? JSONSerialization.jsonObject(with: body, options: [])
+                    as? [String: Any],
+                let prompt = json["prompt"] as? String,
+                !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else {
+                return self.applyCORS(to: .badRequest(nil))
+            }
+
+            let style = (json["style"] as? String) ?? "Animation"
+
+            // Determine which shortcut to use based on style
+            let shortcutImageGen = UserDefaults.standard.string(forKey: "ShortcutImageGen")
+                ?? "Generate Image"
+            let shortcutImageGenChatGPT = UserDefaults.standard.string(
+                forKey: "ShortcutImageGenChatGPT") ?? "Generate Image ChatGPT"
+            let isChatGPT = style == "ChatGPT" || style.contains("(ChatGPT)")
+            let targetShortcut = isChatGPT ? shortcutImageGenChatGPT : shortcutImageGen
+
+            let shortcutService = ShortcutService()
+
+            let group = DispatchGroup()
+            group.enter()
+
+            var resultText = ""
+            var resultImageBase64: String?
+            var resultError: String?
+
+            Task {
+                do {
+                    let result = try await shortcutService.runShortcut(
+                        name: targetShortcut, input: prompt, style: style, image: nil)
+                    resultText = result.0
+                    if let image = result.1, let tiff = image.tiffRepresentation,
+                        let bitmap = NSBitmapImageRep(data: tiff),
+                        let png = bitmap.representation(using: .png, properties: [:])
+                    {
+                        resultImageBase64 = png.base64EncodedString()
+
+                        // Also save to ImageGenerationStore
+                        let itemId = UUID()
+                        let item = GeneratedImageItem(
+                            id: itemId, prompt: prompt, style: style,
+                            responseText: resultText.isEmpty ? nil : resultText,
+                            error: nil, timestamp: Date())
+                        await MainActor.run {
+                            ImageGenerationStore.shared.addItem(item, image: image)
+                        }
+                    }
+                } catch {
+                    resultError = error.localizedDescription
+                }
+                group.leave()
+            }
+
+            group.wait()
+
+            var responseDict: [String: Any] = ["status": "ok"]
+            if let error = resultError {
+                responseDict = ["status": "error", "error": error]
+            } else {
+                if let base64 = resultImageBase64 {
+                    responseDict["image"] = "data:image/png;base64,\(base64)"
+                }
+                responseDict["text"] = resultText
+            }
+
+            let data =
+                (try? JSONSerialization.data(withJSONObject: responseDict, options: [])) ?? Data()
+            return self.applyCORS(
+                to: .raw(
+                    200, "OK",
+                    ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*"],
+                    { writer in
+                        try? writer.write(Array(data))
+                    }))
         }
     }
 

@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── SLASH COMMANDS ──────────────────────────────────────
     const builtInCommands = [
+        { trigger: '/imagine', expansion: 'Create an image of the following:', isImageGen: true },
         { trigger: '/summarize', expansion: 'Summarize the following:' },
         { trigger: '/explain', expansion: 'Explain the following in detail:' },
         { trigger: '/translate', expansion: 'Translate the following to English:' },
@@ -78,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cmdFiltered.forEach((cmd, i) => {
             const item = document.createElement('div');
             item.className = 'command-item' + (i === cmdSelectedIndex ? ' selected' : '');
-            item.innerHTML = '<span class="command-trigger">' + cmd.trigger + '</span><span class="command-desc">' + cmd.expansion + '</span>';
+            item.innerHTML = '<span class="command-trigger">' + cmd.trigger + '</span><span class="command-desc">' + (cmd.isImageGen ? 'Generate an image with AI' : cmd.expansion) + '</span>';
             item.addEventListener('mousedown', e => {
                 e.preventDefault();
                 selectCommand(i);
@@ -98,6 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
             promptInput.style.height = 'auto';
             promptInput.style.height = Math.min(promptInput.scrollHeight, 140) + 'px';
             updateSendBtn();
+            updateStyleStrip();
         }
         cmdDropdown.style.display = 'none';
     }
@@ -111,6 +113,38 @@ document.addEventListener('DOMContentLoaded', () => {
     let tabSelectedIndex = 0;
     let tabFiltered = [];
     let mentionedTabs = []; // {title, url, tabId}
+
+    // ── IMAGE GEN STYLE STRIP ──────────────────────────────
+    const styleStrip = document.createElement('div');
+    styleStrip.className = 'image-gen-style-strip';
+    styleStrip.style.display = 'none';
+    document.querySelector('.input-bar').appendChild(styleStrip);
+
+    function updateStyleStrip() {
+        const text = promptInput.value;
+        if (text.startsWith('/imagine')) {
+            renderStyleStrip();
+            styleStrip.style.display = 'flex';
+        } else {
+            styleStrip.style.display = 'none';
+        }
+    }
+
+    function renderStyleStrip() {
+        styleStrip.innerHTML = '<span class="style-strip-label">Style:</span>';
+        imageGenStyles.forEach(s => {
+            const pill = document.createElement('button');
+            pill.className = 'style-pill' + (imageGenStyle === s.value ? ' active' : '');
+            pill.textContent = s.label;
+            pill.addEventListener('mousedown', e => {
+                e.preventDefault();
+                imageGenStyle = s.value;
+                renderStyleStrip();
+                promptInput.focus();
+            });
+            styleStrip.appendChild(pill);
+        });
+    }
 
     async function updateTabDropdown() {
         const text = promptInput.value;
@@ -190,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSendBtn();
         updateCommandDropdown();
         updateTabDropdown();
+        updateStyleStrip();
     });
 
     function updateSendBtn() {
@@ -573,6 +608,12 @@ document.addEventListener('DOMContentLoaded', () => {
             thinkingDropdownOpen = false;
             thinkingDropdown.style.display = 'none';
         }
+        if (!cmdDropdown.contains(e.target) && e.target !== promptInput) {
+            cmdDropdown.style.display = 'none';
+        }
+        if (!tabDropdown.contains(e.target) && e.target !== promptInput) {
+            tabDropdown.style.display = 'none';
+        }
     });
 
     // ── AGENT BROWSER TOGGLE ────────────────────────────────
@@ -614,51 +655,57 @@ document.addEventListener('DOMContentLoaded', () => {
             if (text) sendMessage(text);
         }
     });
-    promptInput.addEventListener('keydown', e => {
+    // Use capture phase on document to intercept keys before Chrome side-panel handling
+    document.addEventListener('keydown', e => {
+        if (document.activeElement !== promptInput) return;
+        const cmdVisible = cmdDropdown.style.display !== 'none' && cmdFiltered.length > 0;
+        const tabVisible = tabDropdown.style.display !== 'none' && tabFiltered.length > 0;
         // Command dropdown navigation
-        if (cmdDropdown.style.display !== 'none') {
+        if (cmdVisible) {
             if (e.key === 'ArrowDown') {
-                e.preventDefault();
+                e.preventDefault(); e.stopPropagation();
                 cmdSelectedIndex = Math.min(cmdSelectedIndex + 1, cmdFiltered.length - 1);
                 renderCommandDropdown();
                 return;
             }
             if (e.key === 'ArrowUp') {
-                e.preventDefault();
+                e.preventDefault(); e.stopPropagation();
                 cmdSelectedIndex = Math.max(cmdSelectedIndex - 1, 0);
                 renderCommandDropdown();
                 return;
             }
             if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-                e.preventDefault();
+                e.preventDefault(); e.stopPropagation();
                 selectCommand(cmdSelectedIndex);
                 return;
             }
             if (e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
                 cmdDropdown.style.display = 'none';
                 return;
             }
         }
         // Tab mention dropdown navigation
-        if (tabDropdown.style.display !== 'none') {
+        if (tabVisible) {
             if (e.key === 'ArrowDown') {
-                e.preventDefault();
+                e.preventDefault(); e.stopPropagation();
                 tabSelectedIndex = Math.min(tabSelectedIndex + 1, tabFiltered.length - 1);
                 renderTabDropdown();
                 return;
             }
             if (e.key === 'ArrowUp') {
-                e.preventDefault();
+                e.preventDefault(); e.stopPropagation();
                 tabSelectedIndex = Math.max(tabSelectedIndex - 1, 0);
                 renderTabDropdown();
                 return;
             }
             if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-                e.preventDefault();
+                e.preventDefault(); e.stopPropagation();
                 selectTab(tabSelectedIndex);
                 return;
             }
             if (e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
                 tabDropdown.style.display = 'none';
                 return;
             }
@@ -669,7 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const text = promptInput.value.trim() || (pendingAttachments.length > 0 ? 'Describe this image.' : '');
             if (text) sendMessage(text);
         }
-    });
+    }, true);
 
     // Suggestion chips (initial)
     document.querySelectorAll('.suggestion-chip').forEach(chip => {
@@ -700,10 +747,78 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ── IMAGE GENERATION ──────────────────────────────────
+    const imageGenStyles = [
+        { label: 'Animation', value: 'Animation' },
+        { label: 'Illustration', value: 'Illustration' },
+        { label: 'Sketch', value: 'Sketch' },
+        { label: 'ChatGPT', value: 'ChatGPT' },
+        { label: 'Oil Painting', value: 'Oil Painting (ChatGPT)' },
+        { label: 'Watercolor', value: 'Watercolor (ChatGPT)' },
+    ];
+    let imageGenStyle = 'Animation';
+
+    async function generateImage(prompt) {
+        const es = document.getElementById('emptyState');
+        if (es) es.style.display = 'none';
+
+        chatHistory.push({ role: 'user', content: '/imagine ' + prompt });
+        appendUserMessage('/imagine ' + prompt, []);
+        setGeneratingState(true);
+
+        const assistant = createAssistantMessage();
+        renderContent(assistant.contentDiv, '🎨 Generating image (' + imageGenStyle + ')...', true);
+
+        try {
+            const res = await fetch('http://localhost:8080/api/generate-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: prompt, style: imageGenStyle })
+            });
+            const result = await res.json();
+            if (result.status === 'ok' && result.image) {
+                const msgText = result.text ? result.text : '';
+                renderContent(assistant.contentDiv, msgText || '🎨 Image generated successfully.', false);
+                // Add image to the message
+                const img = document.createElement('img');
+                img.src = result.image;
+                img.alt = prompt;
+                img.className = 'generated-image';
+                img.addEventListener('click', () => {
+                    window.open(result.image, '_blank');
+                });
+                assistant.contentDiv.appendChild(img);
+                assistant.actionsDiv.style.display = 'flex';
+                chatHistory.push({ role: 'assistant', content: msgText || '[Generated Image]', attachments: [{ dataUrl: result.image, mimeType: 'image/png', name: 'generated.png' }] });
+            } else {
+                renderContent(assistant.contentDiv, '⚠️ ' + (result.error || 'Image generation failed.'), false);
+                assistant.actionsDiv.style.display = 'flex';
+                chatHistory.push({ role: 'assistant', content: result.error || 'Image generation failed.' });
+            }
+        } catch (e) {
+            renderContent(assistant.contentDiv, '⚠️ Could not connect to Prism app for image generation.', false);
+            assistant.actionsDiv.style.display = 'flex';
+            chatHistory.push({ role: 'assistant', content: 'Image generation connection failed.' });
+        }
+        setGeneratingState(false);
+        scrollToBottom();
+    }
+
     // ── SEND MESSAGE (with full history context) ────────────
     async function sendMessage(text, isRegenerate) {
         const modelId = modelSelect.value;
         if ((!text && pendingAttachments.length === 0) || !modelId) return;
+
+        // Handle /imagine command
+        const imagineMatch = text.match(/^\/imagine\s+(.+)/s);
+        if (imagineMatch && !isRegenerate) {
+            pendingAttachments = [];
+            renderAttachmentPreviews();
+            promptInput.value = '';
+            promptInput.style.height = 'auto';
+            await generateImage(imagineMatch[1].trim());
+            return;
+        }
 
         // Capture attachments before clearing
         const attachments = [...pendingAttachments];
@@ -833,7 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"getAttribute","selector":"CSS","attribute":"href"} - Get attribute\n' +
                     '- {"type":"readSelection"} - Get user-selected text\n' +
                     '- {"type":"readPageMeta"} - Get page metadata (title, description, etc.)\n' +
-                    '- {"type":"scan"} - Get page dimensions & scroll info\n\n' +
+                    '- {"type":"scan"} - Take a screenshot of the page + get page dimensions. The screenshot will be sent to you as an image for visual analysis.\n\n' +
                     '## Browser Control:\n' +
                     '- {"type":"navigate","url":"https://..."} - Go to URL\n' +
                     '- {"type":"openTab","url":"https://...","active":true} - Open new tab\n' +
@@ -846,7 +961,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"duplicateTab"} - Duplicate tab\n' +
                     '- {"type":"pinTab"} - Pin/unpin tab\n' +
                     '- {"type":"groupTabs","tabIds":[1,2],"title":"Name"} - Group tabs\n' +
-                    '- {"type":"captureTab"} - Screenshot visible tab\n' +
+                    '- {"type":"captureTab"} - Screenshot visible tab (image sent to you for visual analysis)\n' +
                     '- {"type":"createBookmark","title":"...","url":"..."} - Add bookmark\n' +
                     '- {"type":"searchBookmarks","query":"..."} - Search bookmarks\n\n' +
                     '## Web & Information:\n' +
@@ -1033,6 +1148,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         appendAgentAction(null, action);
                         const result = await executeAgentAction(action);
                         results.push({ type: action.type, result: result || {} });
+
+                        // Show screenshot inline if the action captured one
+                        if ((action.type === 'captureTab' || action.type === 'scan') && result?.ok && result?.image) {
+                            appendAgentScreenshot(result.image);
+                        }
                     }
 
                     // Build results summary for AI
@@ -1040,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const resultText = results.map(r => {
                         const res = r.result;
                         // Collect screenshot images for vision
-                        if (r.type === 'captureTab' && res.ok && res.image) {
+                        if ((r.type === 'captureTab' || r.type === 'scan') && res.ok && res.image) {
                             screenshotImages.push(res.image);
                         }
                         let info = res.summary || res.error || '';
@@ -1340,7 +1460,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'getAttribute': return { icon: '🏷️', label: 'Read attribute "' + (action.attribute || '') + '" from ' + sel };
             case 'readSelection': return { icon: '✂️', label: 'Read selected text' };
             case 'readPageMeta': return { icon: '📑', label: 'Read page metadata' };
-            case 'scan': return { icon: '📐', label: 'Scanned page layout' };
+            case 'scan': return { icon: '�', label: 'Took screenshot & scanned page' };
             case 'navigate': return { icon: '🌐', label: 'Navigated to ' + safeHost(action.url) };
             case 'openTab': return { icon: '➕', label: 'Opened new tab' + (action.url ? ': ' + safeHost(action.url) : '') };
             case 'closeTab': return { icon: '✖️', label: 'Closed tab' };
@@ -1452,9 +1572,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'readPageMeta':
                     result = await chrome.tabs.sendMessage(tab.id, { action: 'agentReadPageMeta' });
                     break;
-                case 'scan':
-                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentScreenshot' });
+                case 'scan': {
+                    // Capture real screenshot via background + get page info from content
+                    const [scanScreenshot, scanPageInfo] = await Promise.all([
+                        new Promise(resolve => chrome.runtime.sendMessage({ action: 'agentCaptureTab' }, resolve)),
+                        chrome.tabs.sendMessage(tab.id, { action: 'agentScreenshot' }).catch(() => ({}))
+                    ]);
+                    result = {
+                        ok: scanScreenshot?.ok || false,
+                        image: scanScreenshot?.image || null,
+                        summary: 'Scanned page with screenshot',
+                        pageInfo: scanPageInfo?.pageInfo || null
+                    };
                     break;
+                }
 
                 // Background (browser-level) actions
                 case 'openTab':
@@ -1586,6 +1717,26 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollToBottom();
     }
 
+    function appendAgentScreenshot(dataUrl) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'agent-screenshot-wrapper';
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.className = 'agent-screenshot';
+        img.alt = 'Page screenshot';
+        img.addEventListener('click', () => window.open(dataUrl, '_blank'));
+        wrapper.appendChild(img);
+        chatContainer.appendChild(wrapper);
+        scrollToBottom();
+
+        // Store screenshot in chat history for forwarding
+        chatHistory.push({
+            role: 'user',
+            content: '[Agent Screenshot]',
+            attachments: [{ dataUrl: dataUrl, mimeType: 'image/png', name: 'agent-screenshot.png' }]
+        });
+    }
+
     // ── FORWARD TO PRISM APP ────────────────────────────────
     async function forwardChatToApp() {
         if (chatHistory.length === 0) return;
@@ -1595,7 +1746,11 @@ document.addEventListener('DOMContentLoaded', () => {
             let content = m.content;
             // Remove injected webpage context
             content = content.replace(/\[Webpage Context\]:[\s\S]*?\[User Message\]:\n/g, '');
-            return { role: m.role, content: content.trim() };
+            const msg = { role: m.role, content: content.trim() };
+            if (m.attachments && m.attachments.length > 0) {
+                msg.images = m.attachments.map(a => a.dataUrl);
+            }
+            return msg;
         }).filter(m => m.content.length > 0);
 
         const modelName = modelSelect.options[modelSelect.selectedIndex]
