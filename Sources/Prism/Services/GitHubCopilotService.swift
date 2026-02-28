@@ -226,7 +226,8 @@ class GitHubCopilotService: ObservableObject {
                         login, forKey: "\(self.userNameKey)_\(acctId.uuidString)")
                     UserDefaults.standard.set(
                         avatar, forKey: "\(self.avatarKey)_\(acctId.uuidString)")
-                    AccountManager.shared.renameAccount(id: acctId, newName: "GitHub Copilot (\(login))")
+                    AccountManager.shared.renameAccount(
+                        id: acctId, newName: "GitHub Copilot (\(login))")
                 } else {
                     self.userName = login
                     self.avatarURL = avatar
@@ -234,7 +235,8 @@ class GitHubCopilotService: ObservableObject {
                     UserDefaults.standard.set(avatar, forKey: self.avatarKey)
                     // If this was the first/legacy account without an ID, rename the first copilot account
                     if let firstCopilot = AccountManager.shared.copilotAccounts().first {
-                        AccountManager.shared.renameAccount(id: firstCopilot.id, newName: "GitHub Copilot (\(login))")
+                        AccountManager.shared.renameAccount(
+                            id: firstCopilot.id, newName: "GitHub Copilot (\(login))")
                     }
                 }
                 self.isAuthenticated = true
@@ -427,12 +429,14 @@ class GitHubCopilotService: ObservableObject {
                             // Helper to compress image size
                             let compressImage: (Data) -> String? = { data in
                                 guard let image = NSImage(data: data) else { return nil }
-                                
+
                                 // Resize if larger than 1024px
                                 let maxDimension: CGFloat = 1024.0
                                 var targetSize = image.size
-                                
-                                if image.size.width > maxDimension || image.size.height > maxDimension {
+
+                                if image.size.width > maxDimension
+                                    || image.size.height > maxDimension
+                                {
                                     let aspectRatio = image.size.width / image.size.height
                                     if aspectRatio > 1 {
                                         targetSize.width = maxDimension
@@ -442,28 +446,37 @@ class GitHubCopilotService: ObservableObject {
                                         targetSize.width = maxDimension * aspectRatio
                                     }
                                 }
-                                
+
                                 let newImage = NSImage(size: targetSize)
                                 newImage.lockFocus()
-                                image.draw(in: NSRect(origin: .zero, size: targetSize), from: NSRect(origin: .zero, size: image.size), operation: .copy, fraction: 1.0)
+                                image.draw(
+                                    in: NSRect(origin: .zero, size: targetSize),
+                                    from: NSRect(origin: .zero, size: image.size), operation: .copy,
+                                    fraction: 1.0)
                                 newImage.unlockFocus()
-                                
+
                                 guard let tiff = newImage.tiffRepresentation,
-                                      let bitmap = NSBitmapImageRep(data: tiff),
-                                      let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.6]) else {
+                                    let bitmap = NSBitmapImageRep(data: tiff),
+                                    let jpegData = bitmap.representation(
+                                        using: .jpeg, properties: [.compressionFactor: 0.6])
+                                else {
                                     return nil
                                 }
-                                
+
                                 return jpegData.base64EncodedString()
                             }
 
-                            if let imageData = msg.imageData, let base64String = compressImage(imageData) {
+                            if let imageData = msg.imageData,
+                                let base64String = compressImage(imageData)
+                            {
                                 msgDict["content"] = [
                                     ["type": "text", "text": msg.content],
                                     [
                                         "type": "image_url",
-                                        "image_url": ["url": "data:image/jpeg;base64,\(base64String)"]
-                                    ]
+                                        "image_url": [
+                                            "url": "data:image/jpeg;base64,\(base64String)"
+                                        ],
+                                    ],
                                 ]
                             } else if let attachments = msg.attachments, !attachments.isEmpty {
                                 // Extract images from attachments array
@@ -471,12 +484,14 @@ class GitHubCopilotService: ObservableObject {
                                     ["type": "text", "text": msg.content]
                                 ]
                                 for attachment in attachments {
-                                    if attachment.type == "image", let base64String = compressImage(attachment.data) {
+                                    if attachment.type == "image",
+                                        let base64String = compressImage(attachment.data)
+                                    {
                                         contentArr.append([
                                             "type": "image_url",
                                             "image_url": [
                                                 "url": "data:image/jpeg;base64,\(base64String)"
-                                            ]
+                                            ],
                                         ])
                                     }
                                 }
