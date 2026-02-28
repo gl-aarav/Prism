@@ -1,0 +1,44 @@
+{
+    "manifest_version": 3,
+    "name": "Prism Chat",
+    "version": "8.0.0",
+    "description": "Chat with the current webpage using Prism local models",
+    "permissions": [
+        "activeTab",
+        "scripting",
+        "storage",
+        "tabs",
+        "bookmarks"
+    ],
+    "host_permissions": [
+        "http://127.0.0.1:8080/*",
+        "http://localhost:8080/*",
+        "*://*/*"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "icon.png",
+            "48": "icon.png",
+            "128": "icon.png"
+        }
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*/*"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ],
+    "icons": {
+        "16": "icon.png",
+        "48": "icon.png",
+        "128": "icon.png"
+    }
+}
