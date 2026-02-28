@@ -27,6 +27,11 @@ struct PrismApp: App {
                         ]
                     )
                 }
+                Divider()
+                Button("Check for Updates…") {
+                    Task { await UpdateManager.shared.checkForUpdates() }
+                    AppDelegate.shared?.showUpdateWindow()
+                }
             }
         }
 
@@ -48,6 +53,7 @@ class AppState: ObservableObject {
 class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
     private var statusItem: NSStatusItem?
+    private var updateWindow: NSWindow?
 
     override init() {
         super.init()
@@ -106,6 +112,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ExtensionServer.shared.start()
 
         print("Prism has launched!")
+
+        // Check for updates silently on launch
+        Task {
+            await UpdateManager.shared.checkForUpdates()
+        }
+    }
+
+    func showUpdateWindow() {
+        if let existing = updateWindow, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let view = UpdateView()
+        let hostingView = NSHostingView(rootView: view)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 520),
+            styleMask: [.borderless, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = true
+        window.contentView = hostingView
+        window.center()
+        window.title = "Software Update"
+        window.makeKeyAndOrderFront(nil)
+        updateWindow = window
     }
 
     private func setupStatusItem() {

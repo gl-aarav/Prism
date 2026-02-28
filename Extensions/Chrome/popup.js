@@ -920,6 +920,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"extractLinks"} - Get all page links\n' +
                     '- {"type":"extractTable","selector":"table"} - Extract table as JSON\n' +
                     '- {"type":"highlight","selector":"CSS","color":"yellow"} - Highlight elements\n' +
+                    '- {"type":"wait","seconds":2} - Wait/pause for N seconds (max 30)\n' +
                     '- {"type":"waitFor","selector":"CSS","timeout":5000} - Wait for element\n' +
                     '- {"type":"getAttribute","selector":"CSS","attribute":"href"} - Get attribute\n' +
                     '- {"type":"readSelection"} - Get user-selected text\n' +
@@ -1432,6 +1433,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'extractLinks': return { icon: '🔗', label: 'Extracted all links' };
             case 'extractTable': return { icon: '📊', label: 'Extracted table data' };
             case 'highlight': return { icon: '🖍️', label: 'Highlighted ' + sel };
+            case 'wait': return { icon: '⏱️', label: 'Waited ' + (action.seconds || 0) + ' second' + ((action.seconds || 0) !== 1 ? 's' : '') };
             case 'waitFor': return { icon: '⏳', label: 'Waiting for ' + sel };
             case 'getAttribute': return { icon: '🏷️', label: 'Read attribute "' + (action.attribute || '') + '" from ' + sel };
             case 'readSelection': return { icon: '✂️', label: 'Read selected text' };
@@ -1536,6 +1538,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'highlight':
                     result = await chrome.tabs.sendMessage(tab.id, { action: 'agentHighlight', selector: action.selector, color: action.color });
                     break;
+                case 'wait': {
+                    const secs = Math.min(Math.max(Number(action.seconds) || 1, 0.1), 30);
+                    await new Promise(resolve => setTimeout(resolve, secs * 1000));
+                    result = { ok: true, summary: `Waited ${secs} second${secs !== 1 ? 's' : ''}` };
+                    break;
+                }
                 case 'waitFor':
                     result = await chrome.tabs.sendMessage(tab.id, { action: 'agentWaitFor', selector: action.selector, timeout: action.timeout });
                     break;

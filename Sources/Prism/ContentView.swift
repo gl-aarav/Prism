@@ -6004,12 +6004,95 @@ struct SettingsView: View {
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var accountManager = AccountManager.shared
     @ObservedObject var copilotService = GitHubCopilotService.shared
+    @ObservedObject var updateManager = UpdateManager.shared
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
     @State private var showAddCustomGeminiModel = false
     @State private var newCustomGeminiModelName = ""
     @State private var editingAccountId: UUID? = nil
     @State private var editingAccountName: String = ""
+
+    // MARK: - Updates Section
+
+    @ViewBuilder
+    private var updatesSection: some View {
+        Section(header: Label("Software Update", systemImage: "arrow.triangle.2.circlepath")) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Current Version")
+                    Text(updateManager.currentVersion)
+                        .font(.system(.callout, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if updateManager.isChecking {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if updateManager.updateAvailable {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                        Text("v\(updateManager.latestVersion) available")
+                            .font(.callout)
+                            .foregroundStyle(.green)
+                    }
+                }
+            }
+
+            Toggle(isOn: $updateManager.enablePreRelease) {
+                Label("Include Pre-Releases", systemImage: "flask")
+            }
+            .toggleStyle(.switch)
+            .onChange(of: updateManager.enablePreRelease) {
+                Task { await updateManager.checkForUpdates() }
+            }
+
+            LabeledContent {
+                HStack {
+                    TextField("Path", text: $updateManager.chromeExtensionPath)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Browse") {
+                        let panel = NSOpenPanel()
+                        panel.canChooseFiles = false
+                        panel.canChooseDirectories = true
+                        panel.allowsMultipleSelection = false
+                        panel.message =
+                            "Select the folder containing your unpacked Chrome extension"
+                        if panel.runModal() == .OK {
+                            updateManager.chromeExtensionPath = panel.url?.path ?? ""
+                        }
+                    }
+                    if !updateManager.chromeExtensionPath.isEmpty {
+                        Button(action: { updateManager.chromeExtensionPath = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } label: {
+                Label("Chrome Extension Folder", systemImage: "puzzlepiece.extension")
+            }
+            Text("The unpacked Chrome extension folder. Used to auto-update the extension.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Button {
+                AppDelegate.shared?.showUpdateWindow()
+                Task { await updateManager.checkForUpdates() }
+            } label: {
+                Label("Check for Updates…", systemImage: "arrow.clockwise")
+                    .frame(maxWidth: .infinity)
+            }
+
+            if let error = updateManager.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
 
     // MARK: - Appearance Section
 
@@ -6878,6 +6961,7 @@ struct SettingsView: View {
             autocompleteSections
             fileDownloadsSection
             shortcutsSection
+            updatesSection
             dataSection
 
             Section {

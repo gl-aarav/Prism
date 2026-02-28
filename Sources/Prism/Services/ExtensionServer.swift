@@ -499,6 +499,72 @@ class ExtensionServer {
                         try? writer.write(Array(data))
                     }))
         }
+
+        // Chrome extension update check endpoint
+        server["/api/chrome-update"] = { request in
+            if request.method.uppercased() == "OPTIONS" {
+                return self.applyCORS(to: .ok(.html("")))
+            }
+
+            // Get current extension version from request query or body
+            let body = Data(request.body)
+            let json =
+                (try? JSONSerialization.jsonObject(with: body, options: [])) as? [String: Any]
+            let currentVersion = json?["version"] as? String ?? ""
+
+            var responseDict: [String: Any] = [
+                "latestVersion": "",
+                "updateAvailable": false,
+                "downloadURL": "",
+            ]
+
+            // Read from UpdateManager's cached data
+            DispatchQueue.main.sync {
+                let mgr = UpdateManager.shared
+                let latest = mgr.latestChromeVersion
+                responseDict["latestVersion"] = latest
+                if !currentVersion.isEmpty && !latest.isEmpty {
+                    responseDict["updateAvailable"] = mgr.compareVersions(
+                        latest, isNewerThan: currentVersion)
+                }
+                if let url = mgr.chromeZipDownloadURL {
+                    responseDict["downloadURL"] = url.absoluteString
+                }
+            }
+
+            let data =
+                (try? JSONSerialization.data(withJSONObject: responseDict, options: [])) ?? Data()
+            return self.applyCORS(
+                to: .raw(
+                    200, "OK",
+                    ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*"],
+                    { writer in
+                        try? writer.write(Array(data))
+                    }))
+        }
+        // Chrome extension update install endpoint - triggers download & extract
+        server["/api/chrome-update-install"] = { request in
+            if request.method.uppercased() == "OPTIONS" {
+                return self.applyCORS(to: .ok(.html("")))
+            }
+
+            DispatchQueue.main.async {
+                UpdateManager.shared.downloadChromeExtension()
+            }
+
+            let responseDict: [String: Any] = [
+                "ok": true, "message": "Chrome extension update started",
+            ]
+            let data =
+                (try? JSONSerialization.data(withJSONObject: responseDict, options: [])) ?? Data()
+            return self.applyCORS(
+                to: .raw(
+                    200, "OK",
+                    ["Content-Type": "application/json", "Access-Control-Allow-Origin": "*"],
+                    { writer in
+                        try? writer.write(Array(data))
+                    }))
+        }
     }
 
     private func applyCORS(to response: HttpResponse) -> HttpResponse {
