@@ -108,8 +108,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         IconManager.shared.updateIcon()
 
-        // Start local extension server
-        ExtensionServer.shared.start()
+        // Start local extension server on a background thread to avoid blocking launch
+        DispatchQueue.global(qos: .utility).async {
+            ExtensionServer.shared.start()
+        }
 
         print("Prism has launched!")
 
@@ -177,7 +179,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-
+        // Clean up resources to prevent crashes during shutdown
+        ExtensionServer.shared.stop()
+        if UserDefaults.standard.bool(forKey: "EnableAIAutocomplete") {
+            AutocompleteManager.shared.stop()
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

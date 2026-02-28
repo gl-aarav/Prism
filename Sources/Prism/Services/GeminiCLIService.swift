@@ -15,11 +15,20 @@ class GeminiCLIService: ObservableObject {
             cliPath = customPath
             isAvailable = true
         } else {
-            detectCLI()
+            // Run fast file-system checks synchronously (non-blocking)
+            detectCLIFast()
+            // Defer the slow shell-based detection to a background thread
+            // to avoid blocking app launch
+            if !isAvailable {
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    self?.detectCLISlow()
+                }
+            }
         }
     }
 
-    func detectCLI() {
+    /// Fast detection: only check known file paths (no subprocess)
+    private func detectCLIFast() {
         let homeDir = NSHomeDirectory()
         let searchPaths = [
             "/opt/homebrew/bin/gemini",
@@ -37,8 +46,10 @@ class GeminiCLIService: ObservableObject {
                 return
             }
         }
+    }
 
-        // Use login shell to resolve PATH (picks up nvm, homebrew, etc.)
+    /// Slow detection: spawns a login shell to resolve PATH. Called on a background thread.
+    private func detectCLISlow() {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let task = Process()
         let pipe = Pipe()
@@ -56,11 +67,20 @@ class GeminiCLIService: ObservableObject {
                 !path.isEmpty,
                 FileManager.default.isExecutableFile(atPath: path)
             {
-                cliPath = path
-                isAvailable = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.cliPath = path
+                    self?.isAvailable = true
+                }
             }
         } catch {
-            isAvailable = false
+            // CLI not found — leave isAvailable as false
+        }
+    }
+
+    func detectCLI() {
+        detectCLIFast()
+        if !isAvailable {
+            detectCLISlow()
         }
     }
 

@@ -32,6 +32,8 @@ class CursorTracker: ObservableObject {
     /// The polling interval in milliseconds.
     var pollIntervalMs: Int = 100
 
+    private var isSuspended = false
+
     private init() {}
 
     // MARK: - Lifecycle
@@ -39,6 +41,7 @@ class CursorTracker: ObservableObject {
     func start() {
         guard !isRunning else { return }
         isRunning = true
+        isSuspended = false
 
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(
@@ -54,7 +57,13 @@ class CursorTracker: ObservableObject {
     }
 
     func stop() {
+        guard isRunning else { return }
         isRunning = false
+        // If suspended, resume before cancelling to avoid crash
+        if isSuspended {
+            timer?.resume()
+            isSuspended = false
+        }
         timer?.cancel()
         timer = nil
         DispatchQueue.main.async { [weak self] in
@@ -66,10 +75,14 @@ class CursorTracker: ObservableObject {
     }
 
     func pause() {
+        guard !isSuspended else { return }
+        isSuspended = true
         timer?.suspend()
     }
 
     func resume() {
+        guard isSuspended else { return }
+        isSuspended = false
         timer?.resume()
     }
 

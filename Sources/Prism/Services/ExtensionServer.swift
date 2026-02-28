@@ -13,12 +13,17 @@ class ExtensionServer {
     }
 
     func start() {
-        do {
-            try server.start(8080)
-            print("Extension server started on port 8080")
-        } catch {
-            print("Failed to start extension server: \(error)")
+        let ports: [UInt16] = [8080, 8081, 8082, 8083]
+        for port in ports {
+            do {
+                try server.start(port)
+                print("Extension server started on port \(port)")
+                return
+            } catch {
+                print("Port \(port) unavailable: \(error)")
+            }
         }
+        print("Failed to start extension server on any port")
     }
 
     func stop() {
@@ -224,7 +229,9 @@ class ExtensionServer {
             let afterPrefix = modelId.components(separatedBy: ":").dropFirst().joined(
                 separator: ":")
             let modelParts = afterPrefix.components(separatedBy: "|")
-            let actualModel = modelParts[0]
+            guard let actualModel = modelParts.first, !actualModel.isEmpty else {
+                return self.applyCORS(to: .badRequest(nil))
+            }
             let accountId = modelParts.count > 1 ? modelParts[1] : nil
             let systemPrompt = UserDefaults.standard.string(forKey: "SystemPrompt") ?? ""
 
@@ -518,8 +525,10 @@ class ExtensionServer {
                 "downloadURL": "",
             ]
 
-            // Read from UpdateManager's cached data
-            DispatchQueue.main.sync {
+            // Read from UpdateManager's cached data (use async to avoid deadlock)
+            let group = DispatchGroup()
+            group.enter()
+            DispatchQueue.main.async {
                 let mgr = UpdateManager.shared
                 let latest = mgr.latestChromeVersion
                 responseDict["latestVersion"] = latest
@@ -530,7 +539,9 @@ class ExtensionServer {
                 if let url = mgr.chromeZipDownloadURL {
                     responseDict["downloadURL"] = url.absoluteString
                 }
+                group.leave()
             }
+            group.wait()
 
             let data =
                 (try? JSONSerialization.data(withJSONObject: responseDict, options: [])) ?? Data()

@@ -32,8 +32,11 @@ class AccessibilityHelper {
             kAXFocusedUIElementAttribute as CFString,
             &focusedElement
         )
-        guard result == .success else { return nil }
-        return (focusedElement as! AXUIElement)
+        guard result == .success, let element = focusedElement else { return nil }
+        // AXUIElement is a CFTypeRef — verify the type before casting
+        let typeID = CFGetTypeID(element)
+        guard typeID == AXUIElementGetTypeID() else { return nil }
+        return (element as! AXUIElement)
     }
 
     /// Returns the focused application's AXUIElement.
@@ -44,8 +47,10 @@ class AccessibilityHelper {
             kAXFocusedApplicationAttribute as CFString,
             &focusedApp
         )
-        guard result == .success else { return nil }
-        return (focusedApp as! AXUIElement)
+        guard result == .success, let app = focusedApp else { return nil }
+        let typeID = CFGetTypeID(app)
+        guard typeID == AXUIElementGetTypeID() else { return nil }
+        return (app as! AXUIElement)
     }
 
     // MARK: - Text Reading
@@ -74,7 +79,7 @@ class AccessibilityHelper {
         
         // If count is available, use it. Otherwise, assume a reasonably large number (e.g. 100000)
         // for Electron apps that don't report count but support AXStringForRange
-        let count = (countResult == .success && countValue is Int) ? (countValue as! Int) : 100000
+        let count = (countResult == .success) ? (countValue as? Int ?? 100000) : 100000
         
         if count > 0 {
             var cfRange = CFRange(location: 0, length: count)
@@ -116,10 +121,12 @@ class AccessibilityHelper {
             kAXSelectedTextRangeAttribute as CFString,
             &value
         )
-        guard result == .success else { return nil }
+        guard result == .success, let axValue = value else { return nil }
+        let typeID = CFGetTypeID(axValue)
+        guard typeID == AXValueGetTypeID() else { return nil }
 
         var range = CFRange(location: 0, length: 0)
-        if AXValueGetValue(value as! AXValue, .cfRange, &range) {
+        if AXValueGetValue(axValue as! AXValue, .cfRange, &range) {
             return range
         }
         return nil
@@ -158,6 +165,8 @@ class AccessibilityHelper {
         )
 
         if result == .success, let axValue = boundsValue {
+            let typeID = CFGetTypeID(axValue)
+            guard typeID == AXValueGetTypeID() else { return nil }
             var rect = CGRect.zero
             if AXValueGetValue(axValue as! AXValue, .cgRect, &rect) {
                 // Return raw AX coordinates — origin at top-left of primary display

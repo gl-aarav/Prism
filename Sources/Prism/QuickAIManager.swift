@@ -167,7 +167,10 @@ class QuickAIManager: ObservableObject {
         let isMajorTransition = diff > 100
 
         DispatchQueue.main.async { [weak self, weak panel] in
-            guard let self = self, let panel = panel else { return }
+            guard let self = self, let panel = panel else {
+                self?.isApplyingResize = false
+                return
+            }
 
             let currentFrame = panel.frame
             let newY = currentFrame.maxY - targetSize
@@ -192,9 +195,10 @@ class QuickAIManager: ObservableObject {
                 }
                 context.allowsImplicitAnimation = true
                 panel.animator().setFrame(newFrame, display: true)
-            } completionHandler: {
-                 // Ensure final frame is set correctly
-                 panel.setFrame(newFrame, display: true)
+            } completionHandler: { [weak self, weak panel] in
+                 // Ensure final frame is set correctly (only if panel is still valid)
+                 panel?.setFrame(newFrame, display: true)
+                 _ = self  // prevent unused capture warning
             }
 
             self.isApplyingResize = false

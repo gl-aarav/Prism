@@ -76,12 +76,13 @@ class IconManager: ObservableObject {
         let renderer = ImageRenderer(content: PrismIconView(theme: themeToUse, isDark: isDark))
         renderer.scale = 1.0  // Ensure 1:1 pixel mapping for 1024x1024
 
-        if let image = renderer.nsImage {
-            // Ensure the image has the correct pixel size
-            let rep = NSBitmapImageRep(data: image.tiffRepresentation!)
-            rep?.size = CGSize(width: 1024, height: 1024)
+        if let image = renderer.nsImage,
+           let tiffData = image.tiffRepresentation,
+           let rep = NSBitmapImageRep(data: tiffData)
+        {
+            rep.size = CGSize(width: 1024, height: 1024)
             let finalImage = NSImage(size: CGSize(width: 1024, height: 1024))
-            finalImage.addRepresentation(rep!)
+            finalImage.addRepresentation(rep)
 
             NSApplication.shared.applicationIconImage = finalImage
         }
