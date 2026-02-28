@@ -9,6 +9,7 @@ class UpdateManager: ObservableObject {
     private let repo = "PrismApp"
     private let appZipName = "Prism.zip"
     private let chromeZipName = "Chrome.zip"
+    private let safariZipName = "Safari.zip"
 
     @Published var updateAvailable = false
     @Published var latestVersion: String = ""
@@ -16,6 +17,7 @@ class UpdateManager: ObservableObject {
     @Published var releaseURL: URL? = nil
     @Published var appDownloadURL: URL? = nil
     @Published var chromeZipDownloadURL: URL? = nil
+    @Published var safariZipDownloadURL: URL? = nil
     @Published var isPreRelease = false
 
     @Published var isChecking = false
@@ -31,13 +33,22 @@ class UpdateManager: ObservableObject {
     @Published var latestChromeVersion: String = ""
     @Published var chromeUpdateAvailable = false
 
+    @Published var isDownloadingSafari = false
+    @Published var safariDownloadProgress: Double = 0
+    @Published var safariExtensionUpdated = false
+    @Published var safariErrorMessage: String? = nil
+    @Published var latestSafariVersion: String = ""
+    @Published var safariUpdateAvailable = false
+
     var enablePreRelease: Bool {
         UserDefaults.standard.bool(forKey: "EnablePreReleaseUpdates")
     }
     @AppStorage("ChromeExtensionPath") var chromeExtensionPath: String = ""
+    @AppStorage("SafariExtensionPath") var safariExtensionPath: String = ""
 
     private var downloadTask: URLSessionDownloadTask? = nil
     private var chromeDownloadTask: URLSessionDownloadTask? = nil
+    private var safariDownloadTask: URLSessionDownloadTask? = nil
 
     private init() {}
 
@@ -138,6 +149,46 @@ class UpdateManager: ObservableObject {
             } else {
                 chromeUpdateAvailable = false
             }
+
+            // Check Safari extension version independently
+            // Look through all releases for the latest one that has Safari.zip
+            let safariCandidates = enablePreRelease ? releases : releases.filter { !$0.prerelease }
+            for release in safariCandidates {
+                if let safariAsset = release.assets.first(where: { $0.name == safariZipName }) {
+                    safariZipDownloadURL = URL(string: safariAsset.browser_download_url)
+                    // Parse safari version from release body: "Safari-Version: X.Y.Z"
+                    if let body = release.body,
+                        let range = body.range(
+                            of: #"Safari-Version:\s*(\S+)"#, options: .regularExpression)
+                    {
+                        let match = body[range]
+                        let ver =
+                            match.split(separator: ":").last?.trimmingCharacters(in: .whitespaces)
+                            ?? ""
+                        latestSafariVersion = ver
+                    } else {
+                        // Fallback: use release tag as safari version
+                        let tag = release.tag_name.trimmingCharacters(
+                            in: CharacterSet(charactersIn: "vV"))
+                        latestSafariVersion = tag
+                    }
+                    break
+                }
+            }
+
+            // Compare against installed Safari extension version
+            if !latestSafariVersion.isEmpty, !safariExtensionPath.isEmpty {
+                let installedVersion = readInstalledSafariVersion()
+                if !installedVersion.isEmpty {
+                    safariUpdateAvailable = compareVersions(
+                        latestSafariVersion, isNewerThan: installedVersion)
+                } else {
+                    // No manifest.json found — assume update is available
+                    safariUpdateAvailable = true
+                }
+            } else {
+                safariUpdateAvailable = false
+            }
         } catch {
             errorMessage = "Network error: \(error.localizedDescription)"
         }
@@ -147,6 +198,18 @@ class UpdateManager: ObservableObject {
     private func readInstalledChromeVersion() -> String {
         guard !chromeExtensionPath.isEmpty else { return "" }
         let manifestURL = URL(fileURLWithPath: chromeExtensionPath).appendingPathComponent(
+            "manifest.json")
+        guard let data = try? Data(contentsOf: manifestURL),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let version = json["version"] as? String
+        else { return "" }
+        return version
+    }
+
+    /// Reads the version from the installed Safari extension's manifest.json
+    private func readInstalledSafariVersion() -> String {
+        guard !safariExtensionPath.isEmpty else { return "" }
+        let manifestURL = URL(fileURLWithPath: safariExtensionPath).appendingPathComponent(
             "manifest.json")
         guard let data = try? Data(contentsOf: manifestURL),
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -308,6 +371,66 @@ class UpdateManager: ObservableObject {
         chromeDownloadProgress = 0
     }
 
+    // MARK: - Safari Extension Update
+
+    func downloadSafariExtension() {
+        guard let url = safariZipDownloadURL else {
+            safariErrorMessage = "No Safari.zip in this release."
+            return
+        }
+        guard !safariExtensionPath.isEmpty else {
+            safariErrorMessage = "Set the Safari extension folder in Settings first."
+            return
+        }
+
+        isDownloadingSafari = true
+        safariDownloadProgress = 0
+        safariExtensionUpdated = false
+        safariErrorMessage = nil
+
+        let extensionPath = safariExtensionPath
+
+        let delegate = DownloadDelegate { [weak self] progress in
+            Task { @MainActor in
+                self?.safariDownloadProgress = progress
+            }
+        } onComplete: { [weak self] localURL, error in
+            Task { @MainActor in
+                guard let self else { return }
+                self.isDownloadingSafari = false
+                if let error {
+                    self.safariErrorMessage = "Download failed: \(error.localizedDescription)"
+                    return
+                }
+                guard let localURL else {
+                    self.safariErrorMessage = "Download failed."
+                    return
+                }
+
+                // Extract zip to the safari extension folder
+                do {
+                    try self.extractZip(from: localURL, to: URL(fileURLWithPath: extensionPath))
+                    self.safariExtensionUpdated = true
+                } catch {
+                    self.safariErrorMessage = "Failed to extract: \(error.localizedDescription)"
+                }
+
+                try? FileManager.default.removeItem(at: localURL)
+            }
+        }
+
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        safariDownloadTask = session.downloadTask(with: url)
+        safariDownloadTask?.resume()
+    }
+
+    func cancelSafariDownload() {
+        safariDownloadTask?.cancel()
+        safariDownloadTask = nil
+        isDownloadingSafari = false
+        safariDownloadProgress = 0
+    }
+
     private func extractZip(from zipURL: URL, to destDir: URL) throws {
         let fm = FileManager.default
 
@@ -357,6 +480,7 @@ class UpdateManager: ObservableObject {
         releaseURL = nil
         appDownloadURL = nil
         chromeZipDownloadURL = nil
+        safariZipDownloadURL = nil
         downloadedFileURL = nil
         errorMessage = nil
         isDownloading = false
@@ -365,6 +489,10 @@ class UpdateManager: ObservableObject {
         chromeErrorMessage = nil
         isDownloadingChrome = false
         chromeDownloadProgress = 0
+        safariExtensionUpdated = false
+        safariErrorMessage = nil
+        isDownloadingSafari = false
+        safariDownloadProgress = 0
     }
 
     // MARK: - Version Comparison
