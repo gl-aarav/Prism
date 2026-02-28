@@ -1615,7 +1615,8 @@ struct ContentView: View {
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
     @AppStorage("WebSearchEnabled") private var webSearchEnabled: Bool = false
-    @State private var showSplash: Bool = !AppState.shared.hasShownSplash
+    @AppStorage("ShowSplashScreen") private var showSplashScreenPref: Bool = true
+    @State private var showSplash: Bool = !AppState.shared.hasShownSplash && UserDefaults.standard.object(forKey: "ShowSplashScreen") as? Bool ?? true
     @State private var currentTask: Task<Void, Never>?
     @State private var showImageGallery: Bool = false
     @State private var showModelComparison: Bool = false
@@ -1746,6 +1747,7 @@ struct ContentView: View {
                                 HeaderView(
                                     selectedProvider: $selectedProvider,
                                     onNewChat: chatManager.createNewSession,
+                                    chatManager: chatManager,
                                     columnVisibility: columnVisibility
                                 )
                             }
@@ -1811,6 +1813,7 @@ struct ContentView: View {
                                     HeaderView(
                                         selectedProvider: $selectedProvider,
                                         onNewChat: chatManager.createNewSession,
+                                        chatManager: chatManager,
                                         columnVisibility: columnVisibility
                                     )
                                 }
@@ -3458,10 +3461,12 @@ struct SidebarRow: View {
 struct HeaderView: View {
     @Binding var selectedProvider: String
     var onNewChat: () -> Void
+    @ObservedObject var chatManager: ChatManager
     var columnVisibility: NavigationSplitViewVisibility = .automatic
     @ObservedObject private var accountManager = AccountManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var geminiCLIService = GeminiCLIService.shared
+    @State private var showExportDone = false
 
     var body: some View {
         HStack {
@@ -3599,19 +3604,23 @@ struct HeaderView: View {
             Spacer()
 
             if columnVisibility == .detailOnly {
-                Button(action: onNewChat) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .padding(8)
-                        .background(
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                        )
-                        .glassEffect(.regular, in: .circle)
+                HStack(spacing: 6) {
+                    exportMenuButton
+
+                    Button(action: onNewChat) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .padding(8)
+                            .background(
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                            )
+                            .glassEffect(.regular, in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .help("New Chat")
                 }
-                .buttonStyle(.plain)
-                .help("New Chat")
             }
         }
         .padding(.horizontal, 16)
@@ -3652,6 +3661,226 @@ struct HeaderView: View {
         case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
         case "Gemini CLI": return "terminal"
         default: return "cpu"
+        }
+    }
+
+    // MARK: - Export
+
+    @ViewBuilder
+    private var exportMenuButton: some View {
+        let messages = chatManager.getCurrentMessages()
+        Menu {
+            Button {
+                exportAsMarkdown(messages: messages)
+            } label: {
+                Label("Export as Markdown", systemImage: "doc.text")
+            }
+            Button {
+                exportAsPDF(messages: messages)
+            } label: {
+                Label("Export as PDF", systemImage: "doc.richtext")
+            }
+        } label: {
+            Image(systemName: showExportDone ? "checkmark" : "square.and.arrow.up")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(showExportDone ? .green : .primary)
+                .padding(8)
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                )
+                .glassEffect(.regular, in: .circle)
+                .animation(.easeInOut(duration: 0.3), value: showExportDone)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Export Chat")
+        .disabled(messages.isEmpty)
+        .opacity(messages.isEmpty ? 0.4 : 1)
+    }
+
+    private func currentSessionTitle() -> String {
+        if let session = chatManager.sessions.first(where: { $0.id == chatManager.currentSessionId }) {
+            return session.title
+        }
+        return "Chat"
+    }
+
+    private func exportAsMarkdown(messages: [Message]) {
+        let md = buildMarkdown(messages: messages)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(sanitizeFilename(currentSessionTitle())).md"
+        panel.allowedContentTypes = [.plainText]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try md.write(to: url, atomically: true, encoding: .utf8)
+            flashExportDone()
+        } catch {}
+    }
+
+    private func exportAsPDF(messages: [Message]) {
+        let md = buildMarkdown(messages: messages)
+        let title = currentSessionTitle()
+
+        let attributed = renderMarkdownToAttributed(md)
+        let printInfo = NSPrintInfo.shared
+        printInfo.topMargin = 50
+        printInfo.bottomMargin = 50
+        printInfo.leftMargin = 50
+        printInfo.rightMargin = 50
+        let pageWidth = printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin
+        let pageHeight = printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin
+
+        let textStorage = NSTextStorage(attributedString: attributed)
+        let layoutManager = NSLayoutManager()
+        textStorage.addLayoutManager(layoutManager)
+
+        let textContainer = NSTextContainer(size: NSSize(width: pageWidth, height: .greatestFiniteMagnitude))
+        textContainer.lineFragmentPadding = 0
+        layoutManager.addTextContainer(textContainer)
+        layoutManager.ensureLayout(for: textContainer)
+
+        let textBounds = layoutManager.usedRect(for: textContainer)
+        let totalHeight = textBounds.height
+        let pageCount = max(1, Int(ceil(totalHeight / pageHeight)))
+
+        let pdfData = NSMutableData()
+        var mediaBox = CGRect(x: 0, y: 0, width: printInfo.paperSize.width, height: printInfo.paperSize.height)
+
+        guard let consumer = CGDataConsumer(data: pdfData as CFMutableData),
+              let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return }
+
+        for page in 0..<pageCount {
+            pdfContext.beginPDFPage(nil)
+            let nsContext = NSGraphicsContext(cgContext: pdfContext, flipped: false)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = nsContext
+
+            let yOffset = CGFloat(page) * pageHeight
+            let drawOrigin = NSPoint(x: printInfo.leftMargin, y: printInfo.paperSize.height - printInfo.topMargin)
+
+            let glyphRange = layoutManager.glyphRange(forBoundingRect: NSRect(x: 0, y: yOffset, width: pageWidth, height: pageHeight), in: textContainer)
+            layoutManager.drawBackground(forGlyphRange: glyphRange, at: NSPoint(x: drawOrigin.x, y: drawOrigin.y - yOffset))
+            layoutManager.drawGlyphs(forGlyphRange: glyphRange, at: NSPoint(x: drawOrigin.x, y: drawOrigin.y - yOffset))
+
+            NSGraphicsContext.restoreGraphicsState()
+            pdfContext.endPDFPage()
+        }
+        pdfContext.closePDF()
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(sanitizeFilename(title)).pdf"
+        panel.allowedContentTypes = [.pdf]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        pdfData.write(to: url, atomically: true)
+        flashExportDone()
+    }
+
+    private func buildMarkdown(messages: [Message]) -> String {
+        let title = currentSessionTitle()
+        var md = "# \(title)\n\n"
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .short
+
+        for message in messages {
+            let role = message.isUser ? "You" : (message.model ?? "AI")
+            let time = dateFormatter.string(from: message.timestamp)
+            md += "### \(role)\n"
+            md += "_\(time)_\n\n"
+
+            if let thinking = message.thinkingContent, !thinking.isEmpty {
+                md += "<details>\n<summary>Thinking</summary>\n\n\(thinking)\n\n</details>\n\n"
+            }
+
+            md += "\(message.content)\n\n"
+
+            if let attachments = message.attachments {
+                for att in attachments {
+                    if att.type == "text", let text = String(data: att.data, encoding: .utf8) {
+                        let name = att.fileName ?? "attachment"
+                        md += "**Attached: \(name)**\n```\n\(text)\n```\n\n"
+                    } else if att.type == "image" {
+                        md += "_(image attachment)_\n\n"
+                    } else if att.type == "pdf" {
+                        md += "_(PDF attachment)_\n\n"
+                    }
+                }
+            }
+
+            md += "---\n\n"
+        }
+        return md
+    }
+
+    private func renderMarkdownToAttributed(_ md: String) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let defaultFont = NSFont.systemFont(ofSize: 13)
+        let boldFont = NSFont.boldSystemFont(ofSize: 13)
+        let h1Font = NSFont.systemFont(ofSize: 22, weight: .bold)
+        let h3Font = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        let codeFont = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        let defaultColor = NSColor.textColor
+        let secondaryColor = NSColor.secondaryLabelColor
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 4
+        paragraphStyle.paragraphSpacing = 8
+
+        let lines = md.components(separatedBy: "\n")
+        var inCodeBlock = false
+        var codeBuffer = ""
+
+        for line in lines {
+            if line.hasPrefix("```") {
+                if inCodeBlock {
+                    let codeAttrs: [NSAttributedString.Key: Any] = [.font: codeFont, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle, .backgroundColor: NSColor.quaternaryLabelColor]
+                    result.append(NSAttributedString(string: codeBuffer + "\n", attributes: codeAttrs))
+                    codeBuffer = ""
+                    inCodeBlock = false
+                } else {
+                    inCodeBlock = true
+                }
+                continue
+            }
+            if inCodeBlock {
+                codeBuffer += (codeBuffer.isEmpty ? "" : "\n") + line
+                continue
+            }
+
+            if line.hasPrefix("# ") {
+                let text = String(line.dropFirst(2))
+                result.append(NSAttributedString(string: text + "\n\n", attributes: [.font: h1Font, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle]))
+            } else if line.hasPrefix("### ") {
+                let text = String(line.dropFirst(4))
+                result.append(NSAttributedString(string: "\n" + text + "\n", attributes: [.font: h3Font, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle]))
+            } else if line.hasPrefix("---") {
+                let dividerStyle = NSMutableParagraphStyle()
+                dividerStyle.paragraphSpacing = 12
+                result.append(NSAttributedString(string: "\n", attributes: [.font: defaultFont, .paragraphStyle: dividerStyle]))
+            } else if line.hasPrefix("_") && line.hasSuffix("_") && line.count > 2 {
+                let text = String(line.dropFirst().dropLast())
+                result.append(NSAttributedString(string: text + "\n", attributes: [.font: NSFontManager.shared.convert(defaultFont, toHaveTrait: .italicFontMask), .foregroundColor: secondaryColor, .paragraphStyle: paragraphStyle]))
+            } else if line.hasPrefix("**") && line.contains("**") {
+                result.append(NSAttributedString(string: line.replacingOccurrences(of: "**", with: "") + "\n", attributes: [.font: boldFont, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle]))
+            } else {
+                result.append(NSAttributedString(string: line + "\n", attributes: [.font: defaultFont, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle]))
+            }
+        }
+        return result
+    }
+
+    private func sanitizeFilename(_ name: String) -> String {
+        let invalidChars = CharacterSet(charactersIn: "/\\:*?\"<>|")
+        return name.components(separatedBy: invalidChars).joined(separator: "_")
+    }
+
+    private func flashExportDone() {
+        showExportDone = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            showExportDone = false
         }
     }
 }
@@ -6097,9 +6326,15 @@ struct SettingsView: View {
 
     // MARK: - Appearance Section
 
+    @AppStorage("ShowSplashScreen") private var showSplashScreen: Bool = true
+
     @ViewBuilder
     private var appearanceSection: some View {
         Section(header: Label("Appearance", systemImage: "paintbrush")) {
+            Toggle(isOn: $showSplashScreen) {
+                Label("Show Splash Screen on Launch", systemImage: "sparkles.rectangle.stack")
+            }
+            .toggleStyle(.switch)
             LabeledContent {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -7085,6 +7320,12 @@ struct SplashScreen: View {
     @State private var prismScale: CGFloat = 0.3
     @State private var prismOpacity: Double = 0
     @State private var shimmerOffset: CGFloat = -200
+    @State private var secondShimmer: CGFloat = -200
+    @State private var prismGlowPulse: CGFloat = 0
+    @State private var subtitleOpacity: Double = 0
+    @State private var beamLength: CGFloat = 0
+    @State private var rainbowBeamLength: CGFloat = 0
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -7094,249 +7335,315 @@ struct SplashScreen: View {
         ZStack {
             bgColor.ignoresSafeArea()
 
-            // Ambient background glow pulses
+            // Multi-layered ambient background
             ZStack {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color.blue.opacity(0.06), Color.clear],
+                            colors: [Color.blue.opacity(0.08), Color.clear],
+                            center: .center, startRadius: 0, endRadius: 300
+                        )
+                    )
+                    .frame(width: 600, height: 600)
+                    .scaleEffect(backgroundPulse)
+                    .opacity(stage >= 1 ? 0.9 : 0)
+
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.purple.opacity(0.06), Color.clear],
                             center: .center, startRadius: 0, endRadius: 250
                         )
                     )
                     .frame(width: 500, height: 500)
-                    .scaleEffect(backgroundPulse)
-                    .opacity(stage >= 1 ? 0.8 : 0)
+                    .offset(x: 80, y: -60)
+                    .scaleEffect(backgroundPulse * 0.9)
+                    .opacity(stage >= 2 ? 0.7 : 0)
 
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color.purple.opacity(0.04), Color.clear],
+                            colors: [Color.orange.opacity(0.04), Color.clear],
                             center: .center, startRadius: 0, endRadius: 200
                         )
                     )
                     .frame(width: 400, height: 400)
-                    .offset(x: 60, y: -40)
-                    .scaleEffect(backgroundPulse * 0.9)
+                    .offset(x: -60, y: 50)
+                    .scaleEffect(backgroundPulse * 0.85)
                     .opacity(stage >= 2 ? 0.6 : 0)
 
+                // Theme-tinted glow behind prism
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color.orange.opacity(0.03), Color.clear],
-                            center: .center, startRadius: 0, endRadius: 180
+                            colors: [
+                                (appTheme.colors.first ?? .blue).opacity(0.06),
+                                Color.clear,
+                            ],
+                            center: .center, startRadius: 0, endRadius: 150
                         )
                     )
-                    .frame(width: 360, height: 360)
-                    .offset(x: -50, y: 30)
-                    .scaleEffect(backgroundPulse * 0.85)
-                    .opacity(stage >= 2 ? 0.5 : 0)
+                    .frame(width: 300, height: 300)
+                    .scaleEffect(1.0 + prismGlowPulse * 0.15)
+                    .opacity(stage >= 1 ? 1.0 : 0)
             }
 
             // Main animation container
             ZStack {
-                // Particle field around prism
-                ForEach(0..<20, id: \.self) { i in
-                    let angle = Double(i) * 18.0
-                    let radius: CGFloat = 80 + CGFloat(i % 5) * 25
-                    let delay = Double(i) * 0.06
+                // Orbiting particles (more, with rainbow colors and varied sizes)
+                ForEach(0..<30, id: \.self) { i in
+                    let angle = Double(i) * 12.0
+                    let radius: CGFloat = 70 + CGFloat(i % 7) * 22
+                    let delay = Double(i) * 0.04
+                    let size = CGFloat(1 + i % 4)
                     Circle()
                         .fill(splashParticleColor(i))
-                        .frame(width: CGFloat(2 + i % 3), height: CGFloat(2 + i % 3))
+                        .frame(width: size, height: size)
                         .offset(
                             x: cos(angle * .pi / 180 + particlePhase) * radius,
                             y: sin(angle * .pi / 180 + particlePhase) * radius
                         )
-                        .opacity(stage >= 2 ? Double(0.2 + (Double(i % 5) * 0.12)) : 0)
-                        .blur(radius: CGFloat(i % 3))
+                        .opacity(stage >= 2 ? Double(0.15 + (Double(i % 6) * 0.1)) : 0)
+                        .blur(radius: CGFloat(i % 3) * 0.8)
                         .animation(
-                            .easeInOut(duration: 2.0 + Double(i % 3) * 0.5)
+                            .easeInOut(duration: 2.0 + Double(i % 4) * 0.4)
                                 .repeatForever(autoreverses: true)
                                 .delay(delay),
                             value: particlePhase
                         )
                 }
 
-                // 1. Light beam (enters from left with glow)
+                // Light beam entering from left
                 ZStack {
+                    // Outer glow
+                    Color.clear
+                        .frame(width: 200, height: 12)
+                        .overlay(
+                            Rectangle()
+                                .fill(mainColor.opacity(beamGlow * 0.12))
+                                .frame(width: beamLength),
+                            alignment: .leading
+                        )
+                        .blur(radius: 10)
+
+                    // Mid glow
+                    Color.clear
+                        .frame(width: 200, height: 4)
+                        .overlay(
+                            Rectangle()
+                                .fill(mainColor.opacity(beamGlow * 0.25))
+                                .frame(width: beamLength),
+                            alignment: .leading
+                        )
+                        .blur(radius: 4)
+
                     // Core beam
                     Color.clear
-                        .frame(width: 180, height: 2)
+                        .frame(width: 200, height: 1.5)
                         .overlay(
                             Rectangle()
                                 .fill(
                                     LinearGradient(
-                                        colors: [mainColor.opacity(0), mainColor.opacity(0.9)],
+                                        colors: [mainColor.opacity(0), mainColor.opacity(0.95)],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
-                                .frame(width: stage >= 1 ? 180 : 0),
+                                .frame(width: beamLength),
                             alignment: .leading
                         )
-
-                    // Beam glow
-                    Color.clear
-                        .frame(width: 180, height: 8)
-                        .overlay(
-                            Rectangle()
-                                .fill(mainColor.opacity(beamGlow * 0.3))
-                                .frame(width: stage >= 1 ? 180 : 0),
-                            alignment: .leading
-                        )
-                        .blur(radius: 6)
                 }
-                .offset(x: -110, y: -2)
-                .rotationEffect(.degrees(15), anchor: .trailing)
+                .offset(x: -120, y: -2)
+                .rotationEffect(.degrees(12), anchor: .trailing)
                 .opacity(stage >= 1 ? 1 : 0)
 
-                // 2. The Prism with glass effect
+                // The Prism
                 ZStack {
-                    // Prism glow underneath
+                    // Soft glow underneath
+                    Triangle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color.blue.opacity(0.2),
+                                    Color.purple.opacity(0.08),
+                                    Color.clear,
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 80
+                            )
+                        )
+                        .frame(width: 120, height: 110)
+                        .blur(radius: 20)
+                        .opacity(stage >= 1 ? 0.9 : 0)
+                        .scaleEffect(1.0 + prismGlowPulse * 0.1)
+
+                    // Glass body
                     Triangle()
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.blue.opacity(0.15),
-                                    Color.purple.opacity(0.1),
-                                    Color.clear,
+                                    mainColor.opacity(0.05),
+                                    mainColor.opacity(0.015),
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
                         .frame(width: 100, height: 100)
-                        .blur(radius: 15)
-                        .opacity(stage >= 1 ? 0.8 : 0)
 
-                    // Main prism body with glass effect
-                    Triangle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    mainColor.opacity(0.06),
-                                    mainColor.opacity(0.02),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 90, height: 90)
-
-                    // Prism edge stroke
+                    // Edge stroke
                     Triangle()
                         .stroke(
                             LinearGradient(
                                 colors: [
-                                    mainColor.opacity(0.7),
-                                    mainColor.opacity(0.3),
+                                    mainColor.opacity(0.8),
+                                    mainColor.opacity(0.25),
                                     mainColor.opacity(0.5),
                                 ],
-                                startPoint: .topLeading,
+                                startPoint: .top,
                                 endPoint: .bottomTrailing
                             ),
                             lineWidth: 1.5
                         )
-                        .frame(width: 90, height: 90)
+                        .frame(width: 100, height: 100)
 
-                    // Inner shine highlight
+                    // Internal refraction line
+                    Triangle()
+                        .fill(Color.clear)
+                        .frame(width: 100, height: 100)
+                        .overlay(
+                            Path { path in
+                                path.move(to: CGPoint(x: 50, y: 8))
+                                path.addLine(to: CGPoint(x: 75, y: 92))
+                            }
+                            .stroke(mainColor.opacity(stage >= 1 ? 0.15 : 0), lineWidth: 0.8)
+                        )
+
+                    // Inner glow highlight
                     Triangle()
                         .stroke(
                             LinearGradient(
                                 colors: [
-                                    mainColor.opacity(stage >= 1 ? 0.6 : 0),
+                                    mainColor.opacity(stage >= 1 ? 0.5 : 0),
                                     mainColor.opacity(0),
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
                             ),
-                            lineWidth: 2
+                            lineWidth: 1.5
                         )
-                        .frame(width: 70, height: 70)
+                        .frame(width: 78, height: 78)
                         .blur(radius: 1)
 
-                    // Shimmer sweep across prism
+                    // Shimmer sweep
                     Triangle()
                         .fill(Color.clear)
-                        .frame(width: 90, height: 90)
+                        .frame(width: 100, height: 100)
                         .overlay(
                             Rectangle()
                                 .fill(
                                     LinearGradient(
                                         colors: [
                                             Color.clear,
-                                            mainColor.opacity(0.15),
+                                            mainColor.opacity(0.18),
                                             Color.clear,
                                         ],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
-                                .frame(width: 40)
+                                .frame(width: 35)
                                 .offset(x: shimmerOffset)
+                                .blur(radius: 2)
+                        )
+                        .clipShape(Triangle())
+
+                    // Second shimmer (delayed)
+                    Triangle()
+                        .fill(Color.clear)
+                        .frame(width: 100, height: 100)
+                        .overlay(
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.clear,
+                                            (appTheme.colors.first ?? .blue).opacity(0.1),
+                                            Color.clear,
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: 25)
+                                .offset(x: secondShimmer)
                                 .blur(radius: 3)
                         )
                         .clipShape(Triangle())
                 }
                 .scaleEffect(prismScale)
                 .opacity(prismOpacity)
-                .shadow(color: mainColor.opacity(0.15), radius: 20)
+                .rotation3DEffect(.degrees(prismRotation), axis: (x: 0, y: 1, z: 0))
+                .shadow(color: mainColor.opacity(0.12), radius: 25)
 
-                // 3. Refracted rainbow light (dramatic spread)
+                // Rainbow refracted beams
                 ZStack {
                     ForEach(0..<7) { i in
-                        let spreadAngle = Double(i) * 5.5 - 16.5
+                        let spreadAngle = Double(i) * 5.0 - 15.0
 
+                        // Main beam
                         Color.clear
-                            .frame(width: 200, height: 3, alignment: .leading)
+                            .frame(width: 250, height: 2.5, alignment: .leading)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 1.5)
+                                RoundedRectangle(cornerRadius: 1.25)
                                     .fill(
                                         LinearGradient(
                                             colors: [
-                                                rainbowColor(i).opacity(0.9),
-                                                rainbowColor(i).opacity(0.3),
+                                                rainbowColor(i).opacity(0.95),
+                                                rainbowColor(i).opacity(0.15),
                                             ],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
                                     )
-                                    .frame(width: stage >= 2 ? 200 : 0),
+                                    .frame(width: rainbowBeamLength),
                                 alignment: .leading
                             )
-                            .offset(x: 110, y: 0)
+                            .offset(x: 115, y: 0)
                             .rotationEffect(
                                 .degrees(spreadAngle * rainbowSpread),
                                 anchor: .leading
                             )
-                            .blur(radius: 4)
+                            .blur(radius: 3)
 
-                        // Secondary glow layer for each beam
+                        // Bloom glow
                         Color.clear
-                            .frame(width: 200, height: 8, alignment: .leading)
+                            .frame(width: 250, height: 10, alignment: .leading)
                             .overlay(
                                 Rectangle()
-                                    .fill(rainbowColor(i).opacity(0.15))
-                                    .frame(width: stage >= 2 ? 200 : 0),
+                                    .fill(rainbowColor(i).opacity(0.1))
+                                    .frame(width: rainbowBeamLength),
                                 alignment: .leading
                             )
-                            .offset(x: 110, y: 0)
+                            .offset(x: 115, y: 0)
                             .rotationEffect(
                                 .degrees(spreadAngle * rainbowSpread),
                                 anchor: .leading
                             )
-                            .blur(radius: 10)
+                            .blur(radius: 12)
                     }
                 }
 
-                // 4. Text reveal
-                VStack(spacing: 8) {
+                // Text reveal
+                VStack(spacing: 6) {
                     Text("Prism")
-                        .font(.system(size: 46, weight: .light, design: .serif))
-                        .tracking(6)
+                        .font(.system(size: 48, weight: .thin, design: .serif))
+                        .tracking(8)
                         .foregroundStyle(
                             LinearGradient(
                                 colors: stage >= 3
-                                    ? [.red, .orange, .yellow, .green, .blue, .purple]
+                                    ? [.red, .orange, .yellow, .green, .cyan, .blue, .purple]
                                     : [mainColor, mainColor],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -7344,81 +7651,122 @@ struct SplashScreen: View {
                         )
                         .opacity(textOpacity)
                         .offset(y: textOffset)
+                        .shadow(color: stage >= 3 ? Color.blue.opacity(0.3) : .clear, radius: 8)
+
+                    Text("AI, refracted.")
+                        .font(.system(size: 14, weight: .light, design: .rounded))
+                        .tracking(3)
+                        .foregroundStyle(mainColor.opacity(0.4))
+                        .opacity(subtitleOpacity)
+                        .offset(y: textOffset * 0.5)
                 }
-                .offset(y: 110)
+                .offset(y: 120)
             }
-            .scaleEffect(stage == 4 ? 1.08 : 1.0)
+            .scaleEffect(stage == 4 ? 1.1 : 1.0)
             .opacity(stage == 4 ? 0 : 1)
         }
         .onAppear {
-            // Stage 0 -> 1: Prism appears + beam enters
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+            // Prism appears with spring
+            withAnimation(.spring(response: 0.9, dampingFraction: 0.65)) {
                 prismScale = 1.0
                 prismOpacity = 1.0
             }
+
+            // Subtle 3D rotation
+            withAnimation(.easeInOut(duration: 2.0).delay(0.2)) {
+                prismRotation = 8
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+                withAnimation(.easeInOut(duration: 1.5)) {
+                    prismRotation = 0
+                }
+            }
+
+            // Stage 1: Beam enters
             withAnimation(.easeOut(duration: 1.0).delay(0.3)) {
                 stage = 1
                 beamGlow = 1.0
             }
-            withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
-                backgroundPulse = 1.2
+            withAnimation(.easeOut(duration: 0.9).delay(0.3)) {
+                beamLength = 200
             }
 
-            // Shimmer sweep
-            withAnimation(.easeInOut(duration: 1.5).delay(0.5)) {
+            // Background breathing
+            withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
+                backgroundPulse = 1.2
+            }
+            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true).delay(0.5)) {
+                prismGlowPulse = 1.0
+            }
+
+            // Shimmer sweeps
+            withAnimation(.easeInOut(duration: 1.3).delay(0.5)) {
                 shimmerOffset = 200
+            }
+            withAnimation(.easeInOut(duration: 1.0).delay(1.2)) {
+                secondShimmer = 200
             }
 
             // Stage 2: Rainbow + particles
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                withAnimation(.easeOut(duration: 1.0)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+                withAnimation(.easeOut(duration: 0.8)) {
                     stage = 2
                 }
-                withAnimation(.easeOut(duration: 1.2)) {
+                withAnimation(.easeOut(duration: 1.0)) {
                     rainbowSpread = 1.0
+                }
+                withAnimation(.easeOut(duration: 1.2)) {
+                    rainbowBeamLength = 250
                 }
                 withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
                     particlePhase = .pi * 2
                 }
             }
 
-            // Stage 2.5: Text appears
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-                withAnimation(.spring(response: 0.8, dampingFraction: 0.8)) {
+            // Text appears
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                withAnimation(.spring(response: 0.7, dampingFraction: 0.75)) {
                     textOffset = 0
                     textOpacity = 1.0
                 }
             }
 
+            // Subtitle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.1) {
+                withAnimation(.easeOut(duration: 0.6)) {
+                    subtitleOpacity = 1.0
+                }
+            }
+
             // Stage 3: Rainbow text
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
-                withAnimation(.easeInOut(duration: 0.8)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+                withAnimation(.easeInOut(duration: 0.7)) {
                     stage = 3
                 }
             }
 
             // Stage 4: Fade out
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.8) {
-                withAnimation(.easeInOut(duration: 1.0)) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.4) {
+                withAnimation(.easeInOut(duration: 0.8)) {
                     stage = 4
                 }
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.9) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.3) {
                 onFinish()
             }
         }
     }
 
     func rainbowColor(_ i: Int) -> Color {
-        let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .indigo, .purple]
+        let colors: [Color] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple]
         return colors[i % colors.count]
     }
 
     func splashParticleColor(_ i: Int) -> Color {
         let colors: [Color] = [
-            .red.opacity(0.6), .orange.opacity(0.6), .yellow.opacity(0.6),
-            .green.opacity(0.6), .blue.opacity(0.6), .indigo.opacity(0.6), .purple.opacity(0.6),
+            .red.opacity(0.5), .orange.opacity(0.5), .yellow.opacity(0.5),
+            .green.opacity(0.5), .cyan.opacity(0.5), .blue.opacity(0.5), .purple.opacity(0.5),
         ]
         return colors[i % colors.count]
     }

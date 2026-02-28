@@ -143,6 +143,29 @@ struct UpdateView: View {
                 FloatingParticle(themeColors: themeColors, index: i)
             }
 
+            // Close button
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        NSApp.windows.first(where: { $0.title == "Software Update" })?.close()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .frame(width: 24, height: 24)
+                            .background(
+                                Circle().fill(Color.white.opacity(0.1))
+                            )
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(16)
+                }
+                Spacer()
+            }
+            .zIndex(10)
+
             // Main content
             VStack(spacing: 0) {
                 Spacer()
