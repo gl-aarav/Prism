@@ -79,8 +79,19 @@ class UpdateManager: ObservableObject {
                 return
             }
 
-            let remoteVersion = latest.tag_name.trimmingCharacters(
-                in: CharacterSet(charactersIn: "vV"))
+            var remoteVersion = ""
+            // Parse app version from release body: "App-Version: X.Y.Z"
+            if let body = latest.body,
+                let range = body.range(of: #"App-Version:\s*(\S+)"#, options: .regularExpression)
+            {
+                let match = body[range]
+                remoteVersion =
+                    match.split(separator: ":").last?.trimmingCharacters(in: .whitespaces) ?? ""
+            } else {
+                // Fallback: use release tag as app version
+                remoteVersion = latest.tag_name.trimmingCharacters(
+                    in: CharacterSet(charactersIn: "vV"))
+            }
 
             if compareVersions(remoteVersion, isNewerThan: currentVersion) {
                 latestVersion = remoteVersion
