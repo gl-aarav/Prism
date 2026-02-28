@@ -127,7 +127,8 @@ class UpdateManager: ObservableObject {
             if !latestChromeVersion.isEmpty, !chromeExtensionPath.isEmpty {
                 let installedVersion = readInstalledChromeVersion()
                 if !installedVersion.isEmpty {
-                    chromeUpdateAvailable = compareVersions(latestChromeVersion, isNewerThan: installedVersion)
+                    chromeUpdateAvailable = compareVersions(
+                        latestChromeVersion, isNewerThan: installedVersion)
                 } else {
                     // No manifest.json found — assume update is available
                     chromeUpdateAvailable = true
@@ -143,10 +144,11 @@ class UpdateManager: ObservableObject {
     /// Reads the version from the installed Chrome extension's manifest.json
     private func readInstalledChromeVersion() -> String {
         guard !chromeExtensionPath.isEmpty else { return "" }
-        let manifestURL = URL(fileURLWithPath: chromeExtensionPath).appendingPathComponent("manifest.json")
+        let manifestURL = URL(fileURLWithPath: chromeExtensionPath).appendingPathComponent(
+            "manifest.json")
         guard let data = try? Data(contentsOf: manifestURL),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let version = json["version"] as? String
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let version = json["version"] as? String
         else { return "" }
         return version
     }
