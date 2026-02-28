@@ -40,9 +40,10 @@ class GitHubCopilotService: ObservableObject {
             avatarURL = UserDefaults.standard.string(forKey: avatarKey) ?? ""
         }
 
-        // Restore per-account auth state, deferred to avoid initialization cycle with AccountManager
-        Task { @MainActor in
-            self.restoreAccountAuthStates()
+        // Restore per-account auth state, deferred to next run loop iteration
+        // to ensure dispatch_once lock for `shared` is fully released first
+        DispatchQueue.main.async { [weak self] in
+            self?.restoreAccountAuthStates()
         }
     }
 

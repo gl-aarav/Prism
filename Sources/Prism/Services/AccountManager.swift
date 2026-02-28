@@ -70,7 +70,8 @@ class AccountManager: ObservableObject {
         }
 
         // Migrate GitHub Copilot if signed in
-        if GitHubCopilotService.shared.isAuthenticated {
+        // Check Keychain directly to avoid circular singleton initialization with GitHubCopilotService
+        if hasCopilotTokenInKeychain() {
             if !accounts.contains(where: { $0.providerType == "copilot" }) {
                 accounts.append(.copilotAccount())
                 didMigrate = true
@@ -80,6 +81,23 @@ class AccountManager: ObservableObject {
         if didMigrate {
             saveAccounts()
         }
+    }
+
+    /// Check Keychain directly for a Copilot token without touching GitHubCopilotService.shared
+    private func hasCopilotTokenInKeychain() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.prism.github-copilot",
+            kSecAttrAccount as String: "GitHubCopilotToken",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data,
+            let token = String(data: data, encoding: .utf8), !token.isEmpty
+        else { return false }
+        return true
     }
 
     // MARK: - CRUD
