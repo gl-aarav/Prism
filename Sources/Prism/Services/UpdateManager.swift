@@ -7,14 +7,14 @@ class UpdateManager: ObservableObject {
 
     private let owner = "gl-aarav"
     private let repo = "PrismApp"
-    private let dmgName = "Prism_Installer.dmg"
+    private let appZipName = "Prism.zip"
     private let chromeZipName = "Chrome.zip"
 
     @Published var updateAvailable = false
     @Published var latestVersion: String = ""
     @Published var releaseNotes: String = ""
     @Published var releaseURL: URL? = nil
-    @Published var dmgDownloadURL: URL? = nil
+    @Published var appDownloadURL: URL? = nil
     @Published var chromeZipDownloadURL: URL? = nil
     @Published var isPreRelease = false
 
@@ -31,7 +31,9 @@ class UpdateManager: ObservableObject {
     @Published var latestChromeVersion: String = ""
     @Published var chromeUpdateAvailable = false
 
-    @AppStorage("EnablePreReleaseUpdates") var enablePreRelease: Bool = false
+    var enablePreRelease: Bool {
+        UserDefaults.standard.bool(forKey: "EnablePreReleaseUpdates")
+    }
     @AppStorage("ChromeExtensionPath") var chromeExtensionPath: String = ""
 
     private var downloadTask: URLSessionDownloadTask? = nil
@@ -99,10 +101,10 @@ class UpdateManager: ObservableObject {
                 releaseURL = URL(string: latest.html_url)
                 isPreRelease = latest.prerelease
 
-                if let dmgAsset = latest.assets.first(where: { $0.name == dmgName }) {
-                    dmgDownloadURL = URL(string: dmgAsset.browser_download_url)
+                if let zipAsset = latest.assets.first(where: { $0.name == appZipName }) {
+                    appDownloadURL = URL(string: zipAsset.browser_download_url)
                 } else {
-                    dmgDownloadURL = nil
+                    appDownloadURL = nil
                 }
 
                 updateAvailable = true
@@ -165,7 +167,7 @@ class UpdateManager: ObservableObject {
     }
 
     func downloadUpdate() {
-        guard let url = dmgDownloadURL else {
+        guard let url = appDownloadURL else {
             errorMessage = "No download URL available."
             return
         }
@@ -196,7 +198,7 @@ class UpdateManager: ObservableObject {
                 let downloads = FileManager.default.urls(
                     for: .downloadsDirectory, in: .userDomainMask
                 ).first!
-                let dest = downloads.appendingPathComponent(self.dmgName)
+                let dest = downloads.appendingPathComponent(self.appZipName)
 
                 try? FileManager.default.removeItem(at: dest)
                 do {
@@ -221,23 +223,22 @@ class UpdateManager: ObservableObject {
     }
 
     func installAndRestart() {
-        guard let dmgPath = downloadedFileURL else { return }
+        guard let zipPath = downloadedFileURL else { return }
 
         let appBundlePath = Bundle.main.bundlePath
-        let dmgFile = dmgPath.path
+        let zipFile = zipPath.path
 
-        // Script: mount DMG, copy new .app over current, unmount, relaunch
+        // Script: wait for app to quit, extract ZIP, copy new .app, relaunch
         let script = """
             #!/bin/bash
-            sleep 1
-            MOUNT_OUTPUT=$(hdiutil attach "\(dmgFile)" -nobrowse -noverify 2>&1)
-            MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | grep -o '/Volumes/[^"]*' | head -1)
-            if [ -z "$MOUNT_POINT" ]; then exit 1; fi
-            APP_SRC=$(find "$MOUNT_POINT" -maxdepth 1 -name "*.app" | head -1)
-            if [ -z "$APP_SRC" ]; then hdiutil detach "$MOUNT_POINT" -quiet; exit 1; fi
+            sleep 2
+            TEMP_DIR=$(mktemp -d)
+            ditto -xk "\(zipFile)" "$TEMP_DIR"
+            APP_SRC=$(find "$TEMP_DIR" -maxdepth 2 -name "*.app" -type d | head -1)
+            if [ -z "$APP_SRC" ]; then rm -rf "$TEMP_DIR"; exit 1; fi
             rm -rf "\(appBundlePath)"
             cp -R "$APP_SRC" "\(appBundlePath)"
-            hdiutil detach "$MOUNT_POINT" -quiet
+            rm -rf "$TEMP_DIR"
             open "\(appBundlePath)"
             """
 
@@ -247,13 +248,15 @@ class UpdateManager: ObservableObject {
         try? FileManager.default.setAttributes(
             [.posixPermissions: 0o755], ofItemAtPath: tmpScript.path)
 
+        // Launch script fully detached so it survives app exit
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [tmpScript.path]
+        process.arguments = ["-c", "nohup \(tmpScript.path) > /dev/null 2>&1 &"]
         try? process.run()
+        process.waitUntilExit()
 
-        // Quit current app so the script can replace it
-        NSApplication.shared.terminate(nil)
+        // Force quit immediately so the script can replace the app bundle
+        exit(0)
     }
 
     // MARK: - Chrome Extension Update
@@ -363,7 +366,7 @@ class UpdateManager: ObservableObject {
         latestVersion = ""
         releaseNotes = ""
         releaseURL = nil
-        dmgDownloadURL = nil
+        appDownloadURL = nil
         chromeZipDownloadURL = nil
         downloadedFileURL = nil
         errorMessage = nil

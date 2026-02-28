@@ -5998,6 +5998,7 @@ struct SettingsView: View {
     @AppStorage("AIAutocompleteMemoryEnabled") private var autocompleteMemory: Bool = true
     @AppStorage("AIAutocompleteCompletionLength") private var autocompleteCompletionLength: String =
         "Medium (~ 2 - 4 words)"
+    @AppStorage("EnablePreReleaseUpdates") private var enablePreRelease: Bool = false
 
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
@@ -6040,11 +6041,11 @@ struct SettingsView: View {
                 }
             }
 
-            Toggle(isOn: $updateManager.enablePreRelease) {
+            Toggle(isOn: $enablePreRelease) {
                 Label("Include Pre-Releases", systemImage: "flask")
             }
             .toggleStyle(.switch)
-            .onChange(of: updateManager.enablePreRelease) {
+            .onChange(of: enablePreRelease) {
                 Task { await updateManager.checkForUpdates() }
             }
 
