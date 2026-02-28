@@ -1616,7 +1616,9 @@ struct ContentView: View {
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
     @AppStorage("WebSearchEnabled") private var webSearchEnabled: Bool = false
     @AppStorage("ShowSplashScreen") private var showSplashScreenPref: Bool = true
-    @State private var showSplash: Bool = !AppState.shared.hasShownSplash && UserDefaults.standard.object(forKey: "ShowSplashScreen") as? Bool ?? true
+    @State private var showSplash: Bool =
+        !AppState.shared.hasShownSplash
+        && UserDefaults.standard.object(forKey: "ShowSplashScreen") as? Bool ?? true
     @State private var currentTask: Task<Void, Never>?
     @State private var showImageGallery: Bool = false
     @State private var showModelComparison: Bool = false
@@ -3700,7 +3702,8 @@ struct HeaderView: View {
     }
 
     private func currentSessionTitle() -> String {
-        if let session = chatManager.sessions.first(where: { $0.id == chatManager.currentSessionId }) {
+        if let session = chatManager.sessions.first(where: { $0.id == chatManager.currentSessionId }
+        ) {
             return session.title
         }
         return "Chat"
@@ -3736,7 +3739,8 @@ struct HeaderView: View {
         let layoutManager = NSLayoutManager()
         textStorage.addLayoutManager(layoutManager)
 
-        let textContainer = NSTextContainer(size: NSSize(width: pageWidth, height: .greatestFiniteMagnitude))
+        let textContainer = NSTextContainer(
+            size: NSSize(width: pageWidth, height: .greatestFiniteMagnitude))
         textContainer.lineFragmentPadding = 0
         layoutManager.addTextContainer(textContainer)
         layoutManager.ensureLayout(for: textContainer)
@@ -3746,10 +3750,12 @@ struct HeaderView: View {
         let pageCount = max(1, Int(ceil(totalHeight / pageHeight)))
 
         let pdfData = NSMutableData()
-        var mediaBox = CGRect(x: 0, y: 0, width: printInfo.paperSize.width, height: printInfo.paperSize.height)
+        var mediaBox = CGRect(
+            x: 0, y: 0, width: printInfo.paperSize.width, height: printInfo.paperSize.height)
 
         guard let consumer = CGDataConsumer(data: pdfData as CFMutableData),
-              let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else { return }
+            let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil)
+        else { return }
 
         for page in 0..<pageCount {
             pdfContext.beginPDFPage(nil)
@@ -3758,11 +3764,16 @@ struct HeaderView: View {
             NSGraphicsContext.current = nsContext
 
             let yOffset = CGFloat(page) * pageHeight
-            let drawOrigin = NSPoint(x: printInfo.leftMargin, y: printInfo.paperSize.height - printInfo.topMargin)
+            let drawOrigin = NSPoint(
+                x: printInfo.leftMargin, y: printInfo.paperSize.height - printInfo.topMargin)
 
-            let glyphRange = layoutManager.glyphRange(forBoundingRect: NSRect(x: 0, y: yOffset, width: pageWidth, height: pageHeight), in: textContainer)
-            layoutManager.drawBackground(forGlyphRange: glyphRange, at: NSPoint(x: drawOrigin.x, y: drawOrigin.y - yOffset))
-            layoutManager.drawGlyphs(forGlyphRange: glyphRange, at: NSPoint(x: drawOrigin.x, y: drawOrigin.y - yOffset))
+            let glyphRange = layoutManager.glyphRange(
+                forBoundingRect: NSRect(x: 0, y: yOffset, width: pageWidth, height: pageHeight),
+                in: textContainer)
+            layoutManager.drawBackground(
+                forGlyphRange: glyphRange, at: NSPoint(x: drawOrigin.x, y: drawOrigin.y - yOffset))
+            layoutManager.drawGlyphs(
+                forGlyphRange: glyphRange, at: NSPoint(x: drawOrigin.x, y: drawOrigin.y - yOffset))
 
             NSGraphicsContext.restoreGraphicsState()
             pdfContext.endPDFPage()
@@ -3836,8 +3847,13 @@ struct HeaderView: View {
         for line in lines {
             if line.hasPrefix("```") {
                 if inCodeBlock {
-                    let codeAttrs: [NSAttributedString.Key: Any] = [.font: codeFont, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle, .backgroundColor: NSColor.quaternaryLabelColor]
-                    result.append(NSAttributedString(string: codeBuffer + "\n", attributes: codeAttrs))
+                    let codeAttrs: [NSAttributedString.Key: Any] = [
+                        .font: codeFont, .foregroundColor: defaultColor,
+                        .paragraphStyle: paragraphStyle,
+                        .backgroundColor: NSColor.quaternaryLabelColor,
+                    ]
+                    result.append(
+                        NSAttributedString(string: codeBuffer + "\n", attributes: codeAttrs))
                     codeBuffer = ""
                     inCodeBlock = false
                 } else {
@@ -3852,21 +3868,55 @@ struct HeaderView: View {
 
             if line.hasPrefix("# ") {
                 let text = String(line.dropFirst(2))
-                result.append(NSAttributedString(string: text + "\n\n", attributes: [.font: h1Font, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle]))
+                result.append(
+                    NSAttributedString(
+                        string: text + "\n\n",
+                        attributes: [
+                            .font: h1Font, .foregroundColor: defaultColor,
+                            .paragraphStyle: paragraphStyle,
+                        ]))
             } else if line.hasPrefix("### ") {
                 let text = String(line.dropFirst(4))
-                result.append(NSAttributedString(string: "\n" + text + "\n", attributes: [.font: h3Font, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle]))
+                result.append(
+                    NSAttributedString(
+                        string: "\n" + text + "\n",
+                        attributes: [
+                            .font: h3Font, .foregroundColor: defaultColor,
+                            .paragraphStyle: paragraphStyle,
+                        ]))
             } else if line.hasPrefix("---") {
                 let dividerStyle = NSMutableParagraphStyle()
                 dividerStyle.paragraphSpacing = 12
-                result.append(NSAttributedString(string: "\n", attributes: [.font: defaultFont, .paragraphStyle: dividerStyle]))
+                result.append(
+                    NSAttributedString(
+                        string: "\n",
+                        attributes: [.font: defaultFont, .paragraphStyle: dividerStyle]))
             } else if line.hasPrefix("_") && line.hasSuffix("_") && line.count > 2 {
                 let text = String(line.dropFirst().dropLast())
-                result.append(NSAttributedString(string: text + "\n", attributes: [.font: NSFontManager.shared.convert(defaultFont, toHaveTrait: .italicFontMask), .foregroundColor: secondaryColor, .paragraphStyle: paragraphStyle]))
+                result.append(
+                    NSAttributedString(
+                        string: text + "\n",
+                        attributes: [
+                            .font: NSFontManager.shared.convert(
+                                defaultFont, toHaveTrait: .italicFontMask),
+                            .foregroundColor: secondaryColor, .paragraphStyle: paragraphStyle,
+                        ]))
             } else if line.hasPrefix("**") && line.contains("**") {
-                result.append(NSAttributedString(string: line.replacingOccurrences(of: "**", with: "") + "\n", attributes: [.font: boldFont, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle]))
+                result.append(
+                    NSAttributedString(
+                        string: line.replacingOccurrences(of: "**", with: "") + "\n",
+                        attributes: [
+                            .font: boldFont, .foregroundColor: defaultColor,
+                            .paragraphStyle: paragraphStyle,
+                        ]))
             } else {
-                result.append(NSAttributedString(string: line + "\n", attributes: [.font: defaultFont, .foregroundColor: defaultColor, .paragraphStyle: paragraphStyle]))
+                result.append(
+                    NSAttributedString(
+                        string: line + "\n",
+                        attributes: [
+                            .font: defaultFont, .foregroundColor: defaultColor,
+                            .paragraphStyle: paragraphStyle,
+                        ]))
             }
         }
         return result
