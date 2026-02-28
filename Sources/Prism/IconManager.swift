@@ -77,8 +77,8 @@ class IconManager: ObservableObject {
         renderer.scale = 1.0  // Ensure 1:1 pixel mapping for 1024x1024
 
         if let image = renderer.nsImage,
-           let tiffData = image.tiffRepresentation,
-           let rep = NSBitmapImageRep(data: tiffData)
+            let tiffData = image.tiffRepresentation,
+            let rep = NSBitmapImageRep(data: tiffData)
         {
             rep.size = CGSize(width: 1024, height: 1024)
             let finalImage = NSImage(size: CGSize(width: 1024, height: 1024))

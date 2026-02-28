@@ -76,11 +76,11 @@ class AccessibilityHelper {
             "AXNumberOfCharacters" as CFString,
             &countValue
         )
-        
+
         // If count is available, use it. Otherwise, assume a reasonably large number (e.g. 100000)
         // for Electron apps that don't report count but support AXStringForRange
         let count = (countResult == .success) ? (countValue as? Int ?? 100000) : 100000
-        
+
         if count > 0 {
             var cfRange = CFRange(location: 0, length: count)
             guard let rangeValue = AXValueCreate(.cfRange, &cfRange) else { return nil }

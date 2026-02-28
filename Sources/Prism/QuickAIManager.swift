@@ -112,7 +112,7 @@ class QuickAIManager: ObservableObject {
         let currentHeight = panel.frame.height
         let targetHeight = max(72, size.height)
         let diff = abs(currentHeight - targetHeight)
-        
+
         // If the change is significant (expansion/collapse), run immediately without debounce
         // to match the SwiftUI animation.
         if diff > 50 {
@@ -153,8 +153,8 @@ class QuickAIManager: ObservableObject {
         if panel.contentView?.needsUpdateConstraints == true || panel.inLiveResize {
             // If it's a large jump, force it through anyway to avoid getting stuck
             if diff <= 50 {
-               scheduleResize(to: size, panel: panel)
-               return
+                scheduleResize(to: size, panel: panel)
+                return
             }
         }
 
@@ -162,7 +162,7 @@ class QuickAIManager: ObservableObject {
         // active display/layout cycle.
         isApplyingResize = true
         let targetSize = targetHeight
-        
+
         // Determine if this is a major transition (expand/collapse)
         let isMajorTransition = diff > 100
 
@@ -188,17 +188,19 @@ class QuickAIManager: ObservableObject {
                     // Match the SwiftUI spring animation (response: 0.5, damping: 0.82)
                     // Spring response of 0.5s with high damping = smooth, controlled expansion
                     context.duration = 0.55
-                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0) // Custom ease-out curve
+                    context.timingFunction = CAMediaTimingFunction(
+                        controlPoints: 0.22, 1.0, 0.36, 1.0)  // Custom ease-out curve
                 } else {
                     context.duration = 0.35
-                    context.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1.0) // Smooth ease
+                    context.timingFunction = CAMediaTimingFunction(
+                        controlPoints: 0.25, 0.1, 0.25, 1.0)  // Smooth ease
                 }
                 context.allowsImplicitAnimation = true
                 panel.animator().setFrame(newFrame, display: true)
             } completionHandler: { [weak self, weak panel] in
-                 // Ensure final frame is set correctly (only if panel is still valid)
-                 panel?.setFrame(newFrame, display: true)
-                 _ = self  // prevent unused capture warning
+                // Ensure final frame is set correctly (only if panel is still valid)
+                panel?.setFrame(newFrame, display: true)
+                _ = self  // prevent unused capture warning
             }
 
             self.isApplyingResize = false
@@ -220,46 +222,47 @@ extension QuickAIManager {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        
+
         // 2. Close Quick AI panel
         panel?.orderOut(nil)
-        
+
         // 3. Activate previous app
         guard let previousApp = previousApp else {
             // If no previous app, just hide ourselves
             NSApp.hide(nil)
-            
+
             // Simulate paste after brief delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 self.simulatePaste()
             }
             return
         }
-        
+
         previousApp.activate()
         self.previousApp = nil
-        
+
         // 4. Simulate Cmd+V after a brief delay to ensure app is ready
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             self.simulatePaste()
         }
     }
-    
+
     /// Simulate Cmd+V keystroke
     private func simulatePaste() {
         // Create key down event for 'V' with Command modifier
         let source = CGEventSource(stateID: .hidSystemState)
-        
+
         // Key code for 'V' is 9
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
-              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else {
+            let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
+        else {
             return
         }
-        
+
         // Add Command modifier
         keyDown.flags = .maskCommand
         keyUp.flags = .maskCommand
-        
+
         // Post the events
         keyDown.post(tap: .cghidEventTap)
         keyUp.post(tap: .cghidEventTap)
@@ -269,16 +272,16 @@ extension QuickAIManager {
 class QuickAIPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
-    
+
     override func resignKey() {
         super.resignKey()
-        
+
         // Auto-hide when clicking outside the panel
         DispatchQueue.main.async {
             // Only hide if we're still visible but no longer key window
             if self.isVisible && !self.isKeyWindow {
                 self.orderOut(nil)
-                
+
                 // Return focus to previous app if needed
                 let otherWindowsVisible = NSApp.windows.contains { $0 != self && $0.isVisible }
                 if !otherWindowsVisible {
