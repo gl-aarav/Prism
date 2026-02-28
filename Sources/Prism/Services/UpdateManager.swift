@@ -122,9 +122,33 @@ class UpdateManager: ObservableObject {
                     break
                 }
             }
+
+            // Compare against installed Chrome extension version
+            if !latestChromeVersion.isEmpty, !chromeExtensionPath.isEmpty {
+                let installedVersion = readInstalledChromeVersion()
+                if !installedVersion.isEmpty {
+                    chromeUpdateAvailable = compareVersions(latestChromeVersion, isNewerThan: installedVersion)
+                } else {
+                    // No manifest.json found — assume update is available
+                    chromeUpdateAvailable = true
+                }
+            } else {
+                chromeUpdateAvailable = false
+            }
         } catch {
             errorMessage = "Network error: \(error.localizedDescription)"
         }
+    }
+
+    /// Reads the version from the installed Chrome extension's manifest.json
+    private func readInstalledChromeVersion() -> String {
+        guard !chromeExtensionPath.isEmpty else { return "" }
+        let manifestURL = URL(fileURLWithPath: chromeExtensionPath).appendingPathComponent("manifest.json")
+        guard let data = try? Data(contentsOf: manifestURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let version = json["version"] as? String
+        else { return "" }
+        return version
     }
 
     func downloadUpdate() {

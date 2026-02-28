@@ -179,7 +179,7 @@ struct UpdateView: View {
                 }
 
                 // Chrome extension update (independent of app update)
-                if updateManager.chromeZipDownloadURL != nil {
+                if updateManager.chromeUpdateAvailable {
                     chromeExtensionSection
                         .opacity(contentOpacity)
                         .padding(.top, 12)
