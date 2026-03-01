@@ -910,15 +910,16 @@ class OllamaService {
         let resized = NSImage(size: newSize)
         resized.lockFocus()
         NSGraphicsContext.current?.imageInterpolation = .high
-        image.draw(in: NSRect(origin: .zero, size: newSize),
-                   from: NSRect(origin: .zero, size: size),
-                   operation: .copy, fraction: 1.0)
+        image.draw(
+            in: NSRect(origin: .zero, size: newSize),
+            from: NSRect(origin: .zero, size: size),
+            operation: .copy, fraction: 1.0)
         resized.unlockFocus()
 
         // Convert to JPEG
         guard let tiff = resized.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.75])
+            let bitmap = NSBitmapImageRep(data: tiff),
+            let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.75])
         else { return nil }
 
         return jpeg.base64EncodedString()
@@ -967,7 +968,8 @@ class OllamaService {
                         // Only attach images for user messages — Ollama rejects images on assistant role
                         if msg.isUser {
                             if let data = msg.imageData,
-                               let compressed = self.compressImageForOllama(data) {
+                                let compressed = self.compressImageForOllama(data)
+                            {
                                 images.append(compressed)
                             }
 
