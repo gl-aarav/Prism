@@ -1224,15 +1224,17 @@ class GeminiService {
                     if lowerImg.contains("3.1-flash-image") {
                         // Gemini 3.1 Flash Image supports minimal/high
                         let level = (thinkingLevel.lowercased() == "high") ? "HIGH" : "MINIMAL"
-                        imageGenConfig["thinkingConfig"] = [
-                            "thinkingLevel": level,
-                            "includeThoughts": true
-                        ] as [String: Any]
+                        imageGenConfig["thinkingConfig"] =
+                            [
+                                "thinkingLevel": level,
+                                "includeThoughts": true,
+                            ] as [String: Any]
                     } else if lowerImg.contains("3-pro-image") {
                         // Gemini 3 Pro Image: thinking always on
-                        imageGenConfig["thinkingConfig"] = [
-                            "includeThoughts": true
-                        ] as [String: Any]
+                        imageGenConfig["thinkingConfig"] =
+                            [
+                                "includeThoughts": true
+                            ] as [String: Any]
                     }
                     body["generationConfig"] = imageGenConfig
                 } else {
@@ -4647,15 +4649,15 @@ struct InputView: View {
                             // 0.5K (512px) only available on Gemini 3.1 Flash Image
                             let is31Flash = geminiModel.lowercased().contains("3.1-flash-image")
                             if res != "0.5K" || is31Flash {
-                            Button {
-                                geminiImageResolution = res
-                            } label: {
-                                if geminiImageResolution == res {
-                                    Label(res, systemImage: "checkmark")
-                                } else {
-                                    Text(res)
+                                Button {
+                                    geminiImageResolution = res
+                                } label: {
+                                    if geminiImageResolution == res {
+                                        Label(res, systemImage: "checkmark")
+                                    } else {
+                                        Text(res)
+                                    }
                                 }
-                            }
                             }
                         }
                     } label: {

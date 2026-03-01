@@ -2315,17 +2315,18 @@ extension QuickAIView {
                             ForEach(["0.5K", "1K", "2K", "4K"], id: \.self) { res in
                                 let is31Flash = geminiModel.lowercased().contains("3.1-flash-image")
                                 if res != "0.5K" || is31Flash {
-                                Button {
-                                    geminiImageResolution = res
-                                } label: {
-                                    if geminiImageResolution == res {
-                                        Label(res, systemImage: "checkmark")
-                                            .foregroundStyle(
-                                                colorScheme == .dark ? Color.white : Color.primary)
-                                    } else {
-                                        Text(res)
+                                    Button {
+                                        geminiImageResolution = res
+                                    } label: {
+                                        if geminiImageResolution == res {
+                                            Label(res, systemImage: "checkmark")
+                                                .foregroundStyle(
+                                                    colorScheme == .dark
+                                                        ? Color.white : Color.primary)
+                                        } else {
+                                            Text(res)
+                                        }
                                     }
-                                }
                                 }
                             }
                         } label: {
