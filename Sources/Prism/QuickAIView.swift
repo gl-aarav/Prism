@@ -2308,7 +2308,9 @@ extension QuickAIView {
                     }
 
                     // Image Resolution & Aspect Ratio pickers (image models)
-                    if geminiModel.lowercased().contains("image") || geminiModel.lowercased().contains("nano-banana") {
+                    if geminiModel.lowercased().contains("image")
+                        || geminiModel.lowercased().contains("nano-banana")
+                    {
                         Menu {
                             ForEach(["0.5K", "1K", "2K", "4K"], id: \.self) { res in
                                 Button {
@@ -2316,7 +2318,8 @@ extension QuickAIView {
                                 } label: {
                                     if geminiImageResolution == res {
                                         Label(res, systemImage: "checkmark")
-                                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.primary)
+                                            .foregroundStyle(
+                                                colorScheme == .dark ? Color.white : Color.primary)
                                     } else {
                                         Text(res)
                                     }
@@ -2340,13 +2343,19 @@ extension QuickAIView {
                         .help("Output Resolution")
 
                         Menu {
-                            ForEach(["Default", "1:1", "3:4", "4:3", "9:16", "16:9", "1:4", "4:1", "1:8", "8:1"], id: \.self) { ratio in
+                            ForEach(
+                                [
+                                    "Default", "1:1", "3:4", "4:3", "9:16", "16:9", "1:4", "4:1",
+                                    "1:8", "8:1",
+                                ], id: \.self
+                            ) { ratio in
                                 Button {
                                     geminiImageAspectRatio = ratio
                                 } label: {
                                     if geminiImageAspectRatio == ratio {
                                         Label(ratio, systemImage: "checkmark")
-                                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.primary)
+                                            .foregroundStyle(
+                                                colorScheme == .dark ? Color.white : Color.primary)
                                     } else {
                                         Text(ratio)
                                     }
@@ -2356,8 +2365,11 @@ extension QuickAIView {
                             HStack(spacing: 2) {
                                 Image(systemName: "aspectratio")
                                     .font(.system(size: 9, weight: .medium))
-                                Text(geminiImageAspectRatio == "Default" ? "Ratio" : geminiImageAspectRatio)
-                                    .font(.system(size: 9, weight: .medium))
+                                Text(
+                                    geminiImageAspectRatio == "Default"
+                                        ? "Ratio" : geminiImageAspectRatio
+                                )
+                                .font(.system(size: 9, weight: .medium))
                             }
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(.horizontal, 6)

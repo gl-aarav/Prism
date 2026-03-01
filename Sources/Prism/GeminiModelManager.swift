@@ -107,7 +107,7 @@ class GeminiModelManager: ObservableObject {
                 used.formUnion(models)
             }
         }
-        
+
         let custom = shared.customModels
         if !custom.isEmpty {
             result.append(ModelGroup(name: "Custom", models: custom))
