@@ -3810,7 +3810,7 @@ enum ExportHelper {
             if let icon = appIcon {
                 let iconX = brandX - iconSize - 4
                 let iconRect = NSRect(x: iconX, y: brandY, width: iconSize, height: iconSize)
-                icon.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+                icon.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0, respectFlipped: true, hints: nil)
             }
 
             // Draw text content
@@ -3920,7 +3920,7 @@ enum ExportHelper {
                 let text = String(line.dropFirst(2))
                 result.append(
                     NSAttributedString(
-                        string: text + "\n\n",
+                        string: text + "\n",
                         attributes: [
                             .font: h1Font, .foregroundColor: defaultColor,
                             .paragraphStyle: paragraphStyle,
@@ -3929,7 +3929,7 @@ enum ExportHelper {
                 let text = String(line.dropFirst(4))
                 result.append(
                     NSAttributedString(
-                        string: "\n" + text + "\n",
+                        string: text + "\n",
                         attributes: [
                             .font: h3Font, .foregroundColor: defaultColor,
                             .paragraphStyle: paragraphStyle,
@@ -3959,6 +3959,11 @@ enum ExportHelper {
                             .font: boldFont, .foregroundColor: defaultColor,
                             .paragraphStyle: paragraphStyle,
                         ]))
+            } else if line.isEmpty {
+                // In Markdown, an empty line usually separates paragraphs. 
+                // We don't need to append an explicit newline because `paragraphSpacing`
+                // on the previous line's paragraph style already adds separation.
+                continue
             } else {
                 result.append(
                     NSAttributedString(
