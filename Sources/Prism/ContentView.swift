@@ -895,6 +895,35 @@ class OllamaService {
         self.session = URLSession(configuration: config)
     }
 
+    /// Compress and resize image data to fit within Ollama's request body limits.
+    /// Returns a JPEG-compressed base64 string, downscaled if needed.
+    private func compressImageForOllama(_ data: Data, maxDimension: CGFloat = 1024) -> String? {
+        guard let image = NSImage(data: data) else { return nil }
+        let size = image.size
+        guard size.width > 0 && size.height > 0 else { return nil }
+
+        // Calculate scale factor to fit within maxDimension
+        let scale = min(1.0, min(maxDimension / size.width, maxDimension / size.height))
+        let newSize = NSSize(width: size.width * scale, height: size.height * scale)
+
+        // Draw resized image
+        let resized = NSImage(size: newSize)
+        resized.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        image.draw(in: NSRect(origin: .zero, size: newSize),
+                   from: NSRect(origin: .zero, size: size),
+                   operation: .copy, fraction: 1.0)
+        resized.unlockFocus()
+
+        // Convert to JPEG
+        guard let tiff = resized.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.75])
+        else { return nil }
+
+        return jpeg.base64EncodedString()
+    }
+
     func sendMessageStream(
         history: [Message], endpoint: String, model: String, systemPrompt: String = "",
         thinkingLevel: String = "medium"
@@ -932,26 +961,39 @@ class OllamaService {
 
                 messages.append(
                     contentsOf: history.map { msg in
-                        let content = msg.content
+                        var content = msg.content
                         var images: [String] = []
 
-                        if let data = msg.imageData {
-                            images.append(data.base64EncodedString())
-                        }
+                        // Only attach images for user messages — Ollama rejects images on assistant role
+                        if msg.isUser {
+                            if let data = msg.imageData,
+                               let compressed = self.compressImageForOllama(data) {
+                                images.append(compressed)
+                            }
 
-                        // Also read from attachments array (used by extension screenshots)
-                        if let attachments = msg.attachments {
-                            for att in attachments where att.type == "image" {
-                                images.append(att.data.base64EncodedString())
+                            // Also read from attachments array (used by extension screenshots)
+                            if let attachments = msg.attachments {
+                                for att in attachments where att.type == "image" {
+                                    if let compressed = self.compressImageForOllama(att.data) {
+                                        images.append(compressed)
+                                    }
+                                }
                             }
                         }
 
+                        // Extract text from PDFs rather than sending raw bytes (Ollama expects image formats, not PDF)
                         if let pdfData = msg.pdfData {
-                            // Let Ollama models decide if they can handle PDF as images, or just send the bytes.
-                            // However, mostly we extract text from PDF unless we know it's a vision model capable of
-                            // reading PDF directly. But per user request we just send images and let Ollama error out.
-                            // To be safe for PDFs we'll still send as images and let Ollama fail if it can't handle it.
-                            images.append(pdfData.base64EncodedString())
+                            if let pdf = PDFDocument(data: pdfData) {
+                                let pageCount = pdf.pageCount
+                                var extractedText = "\n\n--- PDF Content ---\n"
+                                for i in 0..<pageCount {
+                                    if let page = pdf.page(at: i), let pageText = page.string {
+                                        extractedText += "Page \(i+1):\n\(pageText)\n"
+                                    }
+                                }
+                                extractedText += "--- End PDF Content ---\n"
+                                content += extractedText
+                            }
                         }
 
                         var message: [String: Any] = [
