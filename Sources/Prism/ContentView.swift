@@ -1894,7 +1894,9 @@ struct ContentView: View {
                                     let messages = chatManager.getCurrentMessages()
                                     guard let lastId = messages.last?.id else { return }
                                     DispatchQueue.main.async {
-                                        proxy.scrollTo(lastId, anchor: .bottom)
+                                        withAnimation(.easeOut(duration: 0.15)) {
+                                            proxy.scrollTo(lastId, anchor: .bottom)
+                                        }
                                     }
                                 }
                                 .onChange(of: isLoading) { _, loading in
@@ -2056,7 +2058,7 @@ struct ContentView: View {
                 // New Message -> Animate
                 if let lastId = messages.last?.id {
                     DispatchQueue.main.async {
-                        withAnimation {
+                        withAnimation(.easeOut(duration: 0.2)) {
                             proxy.scrollTo(lastId, anchor: .bottom)
                         }
                     }

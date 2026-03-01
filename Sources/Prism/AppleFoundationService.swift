@@ -66,13 +66,18 @@ class AppleFoundationService {
         @available(macOS 26.0, *)
         private class InnerFoundationHandler {
             private var session: LanguageModelSession?
+            private var isInitializing = true
 
             init() {
-                self.session = LanguageModelSession(
-                    instructions: Instructions(
-                        "You are a helpful assistant found in the Prism menu bar app."))
-                Task {
-                    self.session?.prewarm()
+                Task.detached { [weak self] in
+                    let newSession = LanguageModelSession(
+                        instructions: Instructions(
+                            "You are a helpful assistant found in the Prism menu bar app."))
+                    newSession.prewarm()
+                    await MainActor.run {
+                        self?.session = newSession
+                        self?.isInitializing = false
+                    }
                 }
             }
 
@@ -82,10 +87,13 @@ class AppleFoundationService {
                 return AsyncThrowingStream { continuation in
                     Task {
                         guard let session = self.session else {
+                            let errorMsg = self.isInitializing
+                                ? "Apple Intelligence is still loading. Please try again in a moment."
+                                : "Session not initialized"
                             continuation.finish(
                                 throwing: NSError(
                                     domain: "AppleFoundationService", code: 1,
-                                    userInfo: [NSLocalizedDescriptionKey: "Session not initialized"]
+                                    userInfo: [NSLocalizedDescriptionKey: errorMsg]
                                 ))
                             return
                         }

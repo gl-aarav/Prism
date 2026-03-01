@@ -1896,7 +1896,7 @@ extension QuickAIView {
                 let messages = chatManager.getCurrentMessages()
                 guard let lastId = messages.last?.id else { return }
                 DispatchQueue.main.async {
-                    withAnimation {
+                    withAnimation(.easeOut(duration: 0.2)) {
                         proxy.scrollTo(lastId, anchor: .bottom)
                     }
                 }
@@ -1908,14 +1908,18 @@ extension QuickAIView {
                     messages.last?.isStreaming == true
                 else { return }
                 DispatchQueue.main.async {
-                    proxy.scrollTo(lastId, anchor: .bottom)
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo(lastId, anchor: .bottom)
+                    }
                 }
             }
             .onChange(of: streamBuffer) { _, _ in
                 let messages = chatManager.getCurrentMessages()
                 guard let lastId = messages.last?.id, isLoading else { return }
                 DispatchQueue.main.async {
-                    proxy.scrollTo(lastId, anchor: .bottom)
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo(lastId, anchor: .bottom)
+                    }
                 }
             }
             .onChange(of: isLoading) { _, loading in

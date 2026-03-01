@@ -29,8 +29,8 @@ struct PrismApp: App {
                 }
                 Divider()
                 Button("Check for Updates…") {
-                    Task { await UpdateManager.shared.checkForUpdates() }
                     AppDelegate.shared?.showUpdateWindow()
+                    Task { await UpdateManager.shared.checkForUpdates() }
                 }
             }
         }
@@ -127,6 +127,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             existing.makeKeyAndOrderFront(nil)
             return
         }
+        // Clear stale reference to prevent use-after-free
+        updateWindow = nil
 
         let view = UpdateView()
         let hostingView = NSHostingView(rootView: view)
