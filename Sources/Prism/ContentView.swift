@@ -930,16 +930,9 @@ class OllamaService {
                     ])
                 }
 
-                let isVisionModel =
-                    model.contains("qwen3-vl") || model.contains("gemma3") || model.contains("clip")
-                    || model.contains("llava") || model.contains("deepseek-vl")
-                    || model.contains("janus")
-                    || model.contains("minicpm-v") || model.contains("deepseek-ocr")
-                    || model.contains("olmocr")
-
                 messages.append(
                     contentsOf: history.map { msg in
-                        var content = msg.content
+                        let content = msg.content
                         var images: [String] = []
 
                         if let data = msg.imageData {
@@ -954,34 +947,11 @@ class OllamaService {
                         }
 
                         if let pdfData = msg.pdfData {
-                            if isVisionModel {
-                                // Vision models can see the PDF pages as images (simplification: sending raw PDF bytes if supported,
-                                // or better, we should rasterize. For now, assuming Ollama 2026 handles PDF bytes in 'images' for VL models
-                                // or we fallback to text extraction if this fails. But user said qwen3-vl handles PDF visual OCR.)
-                                //
-                                // Note: In current real Ollama, one must convert to images.
-                                // For 2026 simulation, we'll try sending PDF base64 in images if the protocol allows,
-                                // otherwise we should probably extract text for safety unless we implement rasterization.
-                                // Given I can't easily rasterize in this script without more code,
-                                // and the prompt says "gpt-oss can read a PDF if you pipe it as text",
-                                // implying others do it visually.
-                                //
-                                // Let's try sending as image for VL, and text for others.
-                                images.append(pdfData.base64EncodedString())
-                            } else {
-                                // Text-only model: Extract text from PDF
-                                if let pdf = PDFDocument(data: pdfData) {
-                                    let pageCount = pdf.pageCount
-                                    var extractedText = "\n\n--- PDF Content ---\n"
-                                    for i in 0..<pageCount {
-                                        if let page = pdf.page(at: i), let pageText = page.string {
-                                            extractedText += "Page \(i+1):\n\(pageText)\n"
-                                        }
-                                    }
-                                    extractedText += "--- End PDF Content ---\n"
-                                    content += extractedText
-                                }
-                            }
+                            // Let Ollama models decide if they can handle PDF as images, or just send the bytes.
+                            // However, mostly we extract text from PDF unless we know it's a vision model capable of
+                            // reading PDF directly. But per user request we just send images and let Ollama error out.
+                            // To be safe for PDFs we'll still send as images and let Ollama fail if it can't handle it.
+                            images.append(pdfData.base64EncodedString())
                         }
 
                         var message: [String: Any] = [
@@ -989,11 +959,7 @@ class OllamaService {
                             "content": content,
                         ]
 
-                        // Only attach images if it's a vision model or if we are forcing it
-                        // For non-vision models, we shouldn't send images field at all usually,
-                        // but if the user attached an image to a text model, we just ignore it (or maybe describe it? too hard).
-                        // We'll send it if we have it, let Ollama error or ignore.
-                        if !images.isEmpty && isVisionModel {
+                        if !images.isEmpty {
                             message["images"] = images
                         }
 
@@ -1674,6 +1640,7 @@ struct ContentView: View {
     @State private var chatPreviewImage: NSImage? = nil
     @State private var chatPreviewVisible: Bool = false
     @State private var chatPreviewSourceRect: CGRect = .zero
+    @State private var scrollWorkItem: DispatchWorkItem?  // throttle streaming scroll
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
@@ -1891,19 +1858,37 @@ struct ContentView: View {
                                 }
                                 .onChange(of: streamBuffer) { _, _ in
                                     guard isLoading else { return }
-                                    let messages = chatManager.getCurrentMessages()
-                                    guard let lastId = messages.last?.id else { return }
-                                    DispatchQueue.main.async {
-                                        withAnimation(.easeOut(duration: 0.15)) {
-                                            proxy.scrollTo(lastId, anchor: .bottom)
-                                        }
+                                    // Throttle: cancel pending scroll, schedule new one
+                                    scrollWorkItem?.cancel()
+                                    let work = DispatchWorkItem { [weak chatManager] in
+                                        guard let messages = chatManager?.getCurrentMessages(),
+                                            let lastId = messages.last?.id
+                                        else { return }
+                                        proxy.scrollTo(lastId, anchor: .bottom)
                                     }
+                                    scrollWorkItem = work
+                                    DispatchQueue.main.asyncAfter(
+                                        deadline: .now() + 0.05, execute: work)
                                 }
                                 .onChange(of: isLoading) { _, loading in
                                     if loading {
-                                        DispatchQueue.main.async {
-                                            withAnimation {
-                                                proxy.scrollTo("typingIndicator", anchor: .bottom)
+                                        let messages = chatManager.getCurrentMessages()
+                                        if let lastId = messages.last?.id {
+                                            DispatchQueue.main.async {
+                                                withAnimation(.easeOut(duration: 0.2)) {
+                                                    proxy.scrollTo(lastId, anchor: .bottom)
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        // Generation finished — final scroll
+                                        scrollWorkItem?.cancel()
+                                        let messages = chatManager.getCurrentMessages()
+                                        if let lastId = messages.last?.id {
+                                            DispatchQueue.main.async {
+                                                withAnimation(.easeOut(duration: 0.2)) {
+                                                    proxy.scrollTo(lastId, anchor: .bottom)
+                                                }
                                             }
                                         }
                                     }

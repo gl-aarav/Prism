@@ -35,6 +35,7 @@ struct QuickAIView: View {
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
+    @State private var quickScrollWorkItem: DispatchWorkItem?  // throttle streaming scroll
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
@@ -1901,32 +1902,36 @@ extension QuickAIView {
                     }
                 }
             }
-            // Auto-scroll during generation
-            .onChange(of: chatManager.getCurrentMessages().last?.content.count) { _, _ in
-                let messages = chatManager.getCurrentMessages()
-                guard let lastId = messages.last?.id,
-                    messages.last?.isStreaming == true
-                else { return }
-                DispatchQueue.main.async {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo(lastId, anchor: .bottom)
-                    }
-                }
-            }
+            // Throttled auto-scroll during generation
             .onChange(of: streamBuffer) { _, _ in
                 let messages = chatManager.getCurrentMessages()
                 guard let lastId = messages.last?.id, isLoading else { return }
-                DispatchQueue.main.async {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        proxy.scrollTo(lastId, anchor: .bottom)
-                    }
+                quickScrollWorkItem?.cancel()
+                let work = DispatchWorkItem {
+                    proxy.scrollTo(lastId, anchor: .bottom)
                 }
+                quickScrollWorkItem = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
             }
             .onChange(of: isLoading) { _, loading in
                 if loading {
-                    DispatchQueue.main.async {
-                        withAnimation {
-                            proxy.scrollTo("loading", anchor: .bottom)
+                    let messages = chatManager.getCurrentMessages()
+                    if let lastId = messages.last?.id {
+                        DispatchQueue.main.async {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(lastId, anchor: .bottom)
+                            }
+                        }
+                    }
+                } else {
+                    // Generation finished — final scroll
+                    quickScrollWorkItem?.cancel()
+                    let messages = chatManager.getCurrentMessages()
+                    if let lastId = messages.last?.id {
+                        DispatchQueue.main.async {
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                proxy.scrollTo(lastId, anchor: .bottom)
+                            }
                         }
                     }
                 }
