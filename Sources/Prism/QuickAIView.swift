@@ -2313,6 +2313,8 @@ extension QuickAIView {
                     {
                         Menu {
                             ForEach(["0.5K", "1K", "2K", "4K"], id: \.self) { res in
+                                let is31Flash = geminiModel.lowercased().contains("3.1-flash-image")
+                                if res != "0.5K" || is31Flash {
                                 Button {
                                     geminiImageResolution = res
                                 } label: {
@@ -2323,6 +2325,7 @@ extension QuickAIView {
                                     } else {
                                         Text(res)
                                     }
+                                }
                                 }
                             }
                         } label: {
@@ -2345,8 +2348,8 @@ extension QuickAIView {
                         Menu {
                             ForEach(
                                 [
-                                    "Default", "1:1", "3:4", "4:3", "9:16", "16:9", "1:4", "4:1",
-                                    "1:8", "8:1",
+                                    "Default", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4",
+                                    "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1",
                                 ], id: \.self
                             ) { ratio in
                                 Button {

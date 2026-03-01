@@ -1205,16 +1205,34 @@ class GeminiService {
                     var imageGenConfig: [String: Any] = [
                         "responseModalities": ["TEXT", "IMAGE"]
                     ]
-                    // Add resolution if not default
+                    // Build imageConfig with resolution and aspect ratio
+                    var imageConfig: [String: Any] = [:]
                     let resolutionMap: [String: String] = [
-                        "0.5K": "512", "1K": "1024", "2K": "2048", "4K": "4096",
+                        "0.5K": "512px", "1K": "1K", "2K": "2K", "4K": "4K",
                     ]
                     if let res = resolutionMap[imageResolution] {
-                        imageGenConfig["imageResolution"] = res
+                        imageConfig["imageSize"] = res
                     }
-                    // Add aspect ratio if specified
                     if !imageAspectRatio.isEmpty && imageAspectRatio != "Default" {
-                        imageGenConfig["aspectRatio"] = imageAspectRatio
+                        imageConfig["aspectRatio"] = imageAspectRatio
+                    }
+                    if !imageConfig.isEmpty {
+                        imageGenConfig["imageConfig"] = imageConfig
+                    }
+                    // Add thinking config for image models
+                    let lowerImg = modelName.lowercased()
+                    if lowerImg.contains("3.1-flash-image") {
+                        // Gemini 3.1 Flash Image supports minimal/high
+                        let level = (thinkingLevel.lowercased() == "high") ? "HIGH" : "MINIMAL"
+                        imageGenConfig["thinkingConfig"] = [
+                            "thinkingLevel": level,
+                            "includeThoughts": true
+                        ] as [String: Any]
+                    } else if lowerImg.contains("3-pro-image") {
+                        // Gemini 3 Pro Image: thinking always on
+                        imageGenConfig["thinkingConfig"] = [
+                            "includeThoughts": true
+                        ] as [String: Any]
                     }
                     body["generationConfig"] = imageGenConfig
                 } else {
@@ -4626,6 +4644,9 @@ struct InputView: View {
                 {
                     Menu {
                         ForEach(["0.5K", "1K", "2K", "4K"], id: \.self) { res in
+                            // 0.5K (512px) only available on Gemini 3.1 Flash Image
+                            let is31Flash = geminiModel.lowercased().contains("3.1-flash-image")
+                            if res != "0.5K" || is31Flash {
                             Button {
                                 geminiImageResolution = res
                             } label: {
@@ -4634,6 +4655,7 @@ struct InputView: View {
                                 } else {
                                     Text(res)
                                 }
+                            }
                             }
                         }
                     } label: {
@@ -4660,8 +4682,8 @@ struct InputView: View {
                     Menu {
                         ForEach(
                             [
-                                "Default", "1:1", "3:4", "4:3", "9:16", "16:9", "1:4", "4:1", "1:8",
-                                "8:1",
+                                "Default", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4",
+                                "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1",
                             ], id: \.self
                         ) { ratio in
                             Button {
