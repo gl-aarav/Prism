@@ -446,7 +446,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                             dismissed++;
                         }
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
             // Remove fixed/sticky overlays that block the page
             const allEls = document.querySelectorAll('div, section, aside');

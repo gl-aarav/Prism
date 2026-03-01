@@ -1137,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             screenshotImages.push(res.image);
                         }
                         let info = res.summary || res.error || '';
-                        for (const key of ['elements', 'tabs', 'data', 'text', 'links', 'pageInfo', 'meta', 'content', 'definition', 'weather', 'translation', 'bookmarks', 'value']) {
+                        for (const key of ['elements', 'tabs', 'data', 'text', 'links', 'pageInfo', 'meta', 'content', 'definition', 'weather', 'translation', 'bookmarks', 'value', 'state', 'info', 'images', 'matches', 'styles', 'options', 'history', 'downloads', 'cookies', 'windows']) {
                             if (res[key]) {
                                 const val = typeof res[key] === 'string' ? res[key] : JSON.stringify(res[key]);
                                 info += '\n' + val.substring(0, 3000);

@@ -442,7 +442,7 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
                             dismissed++;
                         }
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
             const allEls = document.querySelectorAll('div, section, aside');
             for (const el of allEls) {

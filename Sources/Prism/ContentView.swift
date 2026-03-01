@@ -1094,7 +1094,8 @@ class GeminiService {
 
     func sendMessageStream(
         history: [Message], apiKey: String, model: String, systemPrompt: String = "",
-        thinkingLevel: String = "medium"
+        thinkingLevel: String = "medium", imageResolution: String = "1K",
+        imageAspectRatio: String = ""
     ) -> AsyncThrowingStream<(String, String?, Data?), Error> {
         return AsyncThrowingStream { continuation in
             Task {
@@ -1201,9 +1202,21 @@ class GeminiService {
 
                 // Enable image output for image-capable models
                 if isImageModel {
-                    body["generationConfig"] = [
+                    var imageGenConfig: [String: Any] = [
                         "responseModalities": ["TEXT", "IMAGE"]
                     ]
+                    // Add resolution if not default
+                    let resolutionMap: [String: String] = [
+                        "0.5K": "512", "1K": "1024", "2K": "2048", "4K": "4096",
+                    ]
+                    if let res = resolutionMap[imageResolution] {
+                        imageGenConfig["imageResolution"] = res
+                    }
+                    // Add aspect ratio if specified
+                    if !imageAspectRatio.isEmpty && imageAspectRatio != "Default" {
+                        imageGenConfig["aspectRatio"] = imageAspectRatio
+                    }
+                    body["generationConfig"] = imageGenConfig
                 } else {
                     // Add thinking config for models that support it
                     let lowerModel = modelName.lowercased()
@@ -1592,6 +1605,8 @@ struct ContentView: View {
     @State private var isLoading: Bool = false
     @AppStorage("ThinkingLevel") private var thinkingLevel: String = "medium"
     @AppStorage("GeminiThinkingLevel") private var geminiThinkingLevel: String = "auto"
+    @AppStorage("GeminiImageResolution") private var geminiImageResolution: String = "1K"
+    @AppStorage("GeminiImageAspectRatio") private var geminiImageAspectRatio: String = "Default"
     @State private var showSidebar: Bool = false
     @State private var lastMessageCount: Int = 0
     @State private var lastSessionId: UUID?
@@ -2315,7 +2330,9 @@ struct ContentView: View {
                                 history: chatManager.getCurrentMessages(), apiKey: apiKey,
                                 model: geminiModel,
                                 systemPrompt: systemPrompt,
-                                thinkingLevel: geminiThinkingLevel)
+                                thinkingLevel: geminiThinkingLevel,
+                                imageResolution: geminiImageResolution,
+                                imageAspectRatio: geminiImageAspectRatio)
                         }.value
 
                         for try await (contentChunk, thinkingChunk, imageData) in stream {
@@ -3691,7 +3708,9 @@ struct HeaderView: View {
 
 enum ExportHelper {
 
-    static func exportAsMarkdown(messages: [Message], title: String, completion: (() -> Void)? = nil) {
+    static func exportAsMarkdown(
+        messages: [Message], title: String, completion: (() -> Void)? = nil
+    ) {
         let md = buildMarkdown(messages: messages, title: title)
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(sanitizeFilename(title)).md"
@@ -3714,8 +3733,9 @@ enum ExportHelper {
         printInfo.leftMargin = 50
         printInfo.rightMargin = 50
         let pageWidth = printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin
-        let headerHeight: CGFloat = 30 // space reserved for branding header
-        let pageHeight = printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin - headerHeight
+        let headerHeight: CGFloat = 30  // space reserved for branding header
+        let pageHeight =
+            printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin - headerHeight
 
         let textStorage = NSTextStorage(attributedString: attributed)
         let layoutManager = NSLayoutManager()
@@ -3758,7 +3778,7 @@ enum ExportHelper {
             let iconSize: CGFloat = 16
             let brandAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 11, weight: .medium),
-                .foregroundColor: NSColor.gray
+                .foregroundColor: NSColor.gray,
             ]
             let brandStr = NSAttributedString(string: "Prism Chat", attributes: brandAttrs)
             let brandSize = brandStr.size()
@@ -4114,6 +4134,8 @@ struct InputView: View {
     var onSlashAction: ((String) -> Void)? = nil  // callback for action commands (/clear, /quit, /new)
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
+    @AppStorage("GeminiImageResolution") private var geminiImageResolution: String = "1K"
+    @AppStorage("GeminiImageAspectRatio") private var geminiImageAspectRatio: String = "Default"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
     @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
         "gemini-2.5-flash"
@@ -4595,6 +4617,86 @@ struct InputView: View {
                     }
                     .menuStyle(.borderlessButton)
                     .help("Reasoning Effort")
+                }
+
+                // Image Resolution & Aspect Ratio pickers (Gemini image models only)
+                if isGemini
+                    && (geminiModel.lowercased().contains("image")
+                        || geminiModel.lowercased().contains("nano-banana"))
+                {
+                    Menu {
+                        ForEach(["0.5K", "1K", "2K", "4K"], id: \.self) { res in
+                            Button {
+                                geminiImageResolution = res
+                            } label: {
+                                if geminiImageResolution == res {
+                                    Label(res, systemImage: "checkmark")
+                                } else {
+                                    Text(res)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 10, weight: .medium))
+                            Text(geminiImageResolution)
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.08)
+                                        : Color.black.opacity(0.04))
+                        )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Output Resolution")
+
+                    Menu {
+                        ForEach(
+                            [
+                                "Default", "1:1", "3:4", "4:3", "9:16", "16:9", "1:4", "4:1", "1:8",
+                                "8:1",
+                            ], id: \.self
+                        ) { ratio in
+                            Button {
+                                geminiImageAspectRatio = ratio
+                            } label: {
+                                if geminiImageAspectRatio == ratio {
+                                    Label(ratio, systemImage: "checkmark")
+                                } else {
+                                    Text(ratio)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "aspectratio")
+                                .font(.system(size: 10, weight: .medium))
+                            Text(
+                                geminiImageAspectRatio == "Default"
+                                    ? "Ratio" : geminiImageAspectRatio
+                            )
+                            .font(.system(size: 10, weight: .medium))
+                        }
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.08)
+                                        : Color.black.opacity(0.04))
+                        )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Aspect Ratio")
                 }
 
                 // Web Search Toggle (Ollama only)

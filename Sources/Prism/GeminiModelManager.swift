@@ -10,6 +10,7 @@ class GeminiModelManager: ObservableObject {
     @Published var availableModels: [String] = [
         // Gemini 3
         "gemini-3.1-pro-preview",
+        "gemini-3.1-flash-image-preview",
         "gemini-3-pro-preview",
         "gemini-3-flash-preview",
         "gemini-3-pro-image-preview",
@@ -48,6 +49,7 @@ class GeminiModelManager: ObservableObject {
 
     static let displayNames: [String: String] = [
         "gemini-3.1-pro-preview": "Gemini 3.1 Pro Preview",
+        "gemini-3.1-flash-image-preview": "Nano Banana 2",
         "gemini-3-pro-preview": "Gemini 3 Pro Preview",
         "gemini-3-flash-preview": "Gemini 3 Flash Preview",
         "gemini-3-pro-image-preview": "Nano Banana Pro",

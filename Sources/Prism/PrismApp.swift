@@ -81,6 +81,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let window = NSApp.windows.first(where: { !($0 is QuickAIPanel) }) {
                 window.titlebarAppearsTransparent = true
                 window.styleMask.insert(.fullSizeContentView)
+                window.isReleasedWhenClosed = false
                 window.makeKeyAndOrderFront(nil)
                 window.center()
             }
@@ -184,6 +185,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if UserDefaults.standard.bool(forKey: "EnableAIAutocomplete") {
             AutocompleteManager.shared.stop()
         }
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Keep the app running when the user closes the window with Cmd+W
+        return false
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

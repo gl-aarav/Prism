@@ -29,6 +29,8 @@ struct QuickAIView: View {
     // Settings
     @AppStorage("GeminiKey") private var geminiKey: String = ""
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
+    @AppStorage("GeminiImageResolution") private var geminiImageResolution: String = "1K"
+    @AppStorage("GeminiImageAspectRatio") private var geminiImageAspectRatio: String = "Default"
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
@@ -513,7 +515,9 @@ struct QuickAIView: View {
                             in geminiService.sendMessageStream(
                                 history: chatManager.getCurrentMessages(), apiKey: apiKey,
                                 model: geminiModel, systemPrompt: systemPrompt,
-                                thinkingLevel: geminiThinkingLevel)
+                                thinkingLevel: geminiThinkingLevel,
+                                imageResolution: geminiImageResolution,
+                                imageAspectRatio: geminiImageAspectRatio)
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {
@@ -2301,6 +2305,69 @@ extension QuickAIView {
                         .menuStyle(.borderlessButton)
                         .tint(colorScheme == .dark ? .white : .black)
                         .help("Reasoning Effort")
+                    }
+
+                    // Image Resolution & Aspect Ratio pickers (image models)
+                    if geminiModel.lowercased().contains("image") || geminiModel.lowercased().contains("nano-banana") {
+                        Menu {
+                            ForEach(["0.5K", "1K", "2K", "4K"], id: \.self) { res in
+                                Button {
+                                    geminiImageResolution = res
+                                } label: {
+                                    if geminiImageResolution == res {
+                                        Label(res, systemImage: "checkmark")
+                                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.primary)
+                                    } else {
+                                        Text(res)
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 2) {
+                                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                    .font(.system(size: 9, weight: .medium))
+                                Text(geminiImageResolution)
+                                    .font(.system(size: 9, weight: .medium))
+                            }
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.primary.opacity(0.06)))
+                            .glassEffect(.regular, in: .capsule)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .tint(colorScheme == .dark ? .white : .black)
+                        .help("Output Resolution")
+
+                        Menu {
+                            ForEach(["Default", "1:1", "3:4", "4:3", "9:16", "16:9", "1:4", "4:1", "1:8", "8:1"], id: \.self) { ratio in
+                                Button {
+                                    geminiImageAspectRatio = ratio
+                                } label: {
+                                    if geminiImageAspectRatio == ratio {
+                                        Label(ratio, systemImage: "checkmark")
+                                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.primary)
+                                    } else {
+                                        Text(ratio)
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 2) {
+                                Image(systemName: "aspectratio")
+                                    .font(.system(size: 9, weight: .medium))
+                                Text(geminiImageAspectRatio == "Default" ? "Ratio" : geminiImageAspectRatio)
+                                    .font(.system(size: 9, weight: .medium))
+                            }
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.primary.opacity(0.06)))
+                            .glassEffect(.regular, in: .capsule)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .tint(colorScheme == .dark ? .white : .black)
+                        .help("Aspect Ratio")
                     }
                 }
 
