@@ -264,4 +264,173 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         })();
         return true;
     }
+
+    // ── ADVANCED BROWSER ACTIONS ─────────────────────────────
+
+    if (request.action === "agentDownloadFile") {
+        (async () => {
+            try {
+                const url = request.url;
+                if (!url || /^(safari-extension|file|about|javascript):/.test(url)) {
+                    sendResponse({ ok: false, error: "Invalid download URL" });
+                    return;
+                }
+                const opts = { url };
+                if (request.filename) opts.filename = request.filename;
+                if (request.conflictAction) opts.conflictAction = request.conflictAction;
+                api.downloads.download(opts, (downloadId) => {
+                    if (api.runtime.lastError) {
+                        sendResponse({ ok: false, error: api.runtime.lastError.message });
+                    } else {
+                        sendResponse({ ok: true, downloadId, summary: `Started download: ${url.substring(0, 80)}` });
+                    }
+                });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    if (request.action === "agentGetDownloads") {
+        api.downloads.search({ limit: request.limit || 20, orderBy: ['-startTime'] }, (items) => {
+            const downloads = (items || []).map(d => ({
+                id: d.id, filename: d.filename, url: d.url?.substring(0, 100),
+                state: d.state, fileSize: d.fileSize, bytesReceived: d.bytesReceived
+            }));
+            sendResponse({ ok: true, downloads, summary: `Found ${downloads.length} recent downloads` });
+        });
+        return true;
+    }
+
+    if (request.action === "agentGetHistory") {
+        api.history.search({
+            text: request.query || '',
+            maxResults: Math.min(request.maxResults || 20, 100),
+            startTime: request.startTime || (Date.now() - 7 * 24 * 60 * 60 * 1000)
+        }, (results) => {
+            const history = (results || []).map(h => ({ title: h.title, url: h.url, lastVisitTime: h.lastVisitTime, visitCount: h.visitCount }));
+            sendResponse({ ok: true, history, summary: `Found ${history.length} history items` });
+        });
+        return true;
+    }
+
+    if (request.action === "agentGetCookies") {
+        (async () => {
+            try {
+                const url = request.url;
+                if (!url) { sendResponse({ ok: false, error: "URL required" }); return; }
+                const cookies = await api.cookies.getAll({ url });
+                const safe = cookies.map(c => ({
+                    name: c.name, domain: c.domain,
+                    httpOnly: c.httpOnly, secure: c.secure,
+                    expirationDate: c.expirationDate, sameSite: c.sameSite
+                }));
+                sendResponse({ ok: true, cookies: safe, summary: `Found ${safe.length} cookies for ${url}` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    if (request.action === "agentSetCookie") {
+        (async () => {
+            try {
+                await api.cookies.set({
+                    url: request.url,
+                    name: request.name,
+                    value: request.value,
+                    domain: request.domain,
+                    path: request.path || '/',
+                    secure: request.secure || false,
+                    httpOnly: request.httpOnly || false,
+                    sameSite: request.sameSite || 'lax',
+                    expirationDate: request.expirationDate || (Date.now() / 1000 + 86400 * 30)
+                });
+                sendResponse({ ok: true, summary: `Set cookie "${request.name}" for ${request.url}` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    if (request.action === "agentDeleteCookies") {
+        (async () => {
+            try {
+                await api.cookies.remove({ url: request.url, name: request.name });
+                sendResponse({ ok: true, summary: `Deleted cookie "${request.name}" from ${request.url}` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    if (request.action === "agentCreateWindow") {
+        api.windows.create({
+            url: request.url,
+            type: request.type || 'normal',
+            focused: request.focused !== false,
+            incognito: request.incognito || false,
+            width: request.width,
+            height: request.height
+        }, (win) => {
+            sendResponse({ ok: true, windowId: win.id, summary: `Created new ${request.incognito ? 'incognito ' : ''}window` });
+        });
+        return true;
+    }
+
+    if (request.action === "agentGetWindows") {
+        api.windows.getAll({ populate: true }, (windows) => {
+            const wins = (windows || []).map(w => ({
+                id: w.id, type: w.type, focused: w.focused, incognito: w.incognito,
+                tabCount: w.tabs?.length || 0, state: w.state
+            }));
+            sendResponse({ ok: true, windows: wins, summary: `Found ${wins.length} windows` });
+        });
+        return true;
+    }
+
+    if (request.action === "agentCloseWindow") {
+        api.windows.remove(request.windowId, () => {
+            sendResponse({ ok: true, summary: `Closed window ${request.windowId}` });
+        });
+        return true;
+    }
+
+    if (request.action === "agentMoveTab") {
+        api.tabs.move(request.tabId, { index: request.index ?? -1, windowId: request.windowId }, (tab) => {
+            if (api.runtime.lastError) {
+                sendResponse({ ok: false, error: api.runtime.lastError.message });
+            } else {
+                sendResponse({ ok: true, summary: `Moved tab to position ${request.index}` });
+            }
+        });
+        return true;
+    }
+
+    if (request.action === "agentZoomTab") {
+        (async () => {
+            try {
+                const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+                const currentZoom = await api.tabs.getZoom(tab.id);
+                const newZoom = request.zoom || (request.direction === 'in' ? currentZoom + 0.25 : currentZoom - 0.25);
+                await api.tabs.setZoom(tab.id, Math.max(0.25, Math.min(5, newZoom)));
+                sendResponse({ ok: true, summary: `Zoom set to ${Math.round(newZoom * 100)}%` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    if (request.action === "agentMuteTab") {
+        (async () => {
+            try {
+                const tabId = request.tabId;
+                if (tabId) {
+                    const tab = await api.tabs.get(tabId);
+                    await api.tabs.update(tabId, { muted: !tab.mutedInfo?.muted });
+                    sendResponse({ ok: true, summary: `Tab ${tab.mutedInfo?.muted ? 'unmuted' : 'muted'}` });
+                } else {
+                    const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+                    await api.tabs.update(tab.id, { muted: !tab.mutedInfo?.muted });
+                    sendResponse({ ok: true, summary: `Tab ${tab.mutedInfo?.muted ? 'unmuted' : 'muted'}` });
+                }
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
 });

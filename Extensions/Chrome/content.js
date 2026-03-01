@@ -27,28 +27,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 el.focus();
-                // Clear existing value if requested
-                if (request.clear !== false) {
-                    el.value = '';
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-                // Simulate keypresses for better framework compatibility
                 const text = request.text || '';
-                for (const char of text) {
-                    el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
-                    el.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
-                    // Use native setter to bypass React/Vue controlled component issues
-                    const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
-                    if (nativeSet) {
-                        nativeSet.call(el, el.value + char);
-                    } else {
-                        el.value += char;
+                const isRichEditor = isContentEditable(el) || isRichTextEditor(el);
+
+                if (isRichEditor) {
+                    // For contentEditable, Google Docs, Notion, etc.
+                    // Clear by selecting all and deleting
+                    if (request.clear !== false) {
+                        document.execCommand('selectAll', false, null);
+                        document.execCommand('delete', false, null);
                     }
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+                    // execCommand('insertText') triggers the browser's native input
+                    // pipeline which rich editors hook into
+                    const inserted = document.execCommand('insertText', false, text);
+                    if (!inserted) {
+                        // Fallback: dispatch InputEvent for editors that listen to it
+                        el.dispatchEvent(new InputEvent('beforeinput', {
+                            inputType: 'insertText', data: text, bubbles: true, cancelable: true, composed: true
+                        }));
+                        el.dispatchEvent(new InputEvent('input', {
+                            inputType: 'insertText', data: text, bubbles: true, composed: true
+                        }));
+                    }
+                    sendResponse({ ok: true, summary: `Typed "${text.substring(0, 50)}" in "${getLabel(el)}"` });
+                } else {
+                    // Standard input/textarea elements
+                    if (request.clear !== false) {
+                        el.value = '';
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    for (const char of text) {
+                        el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
+                        el.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
+                        const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+                        if (nativeSet) {
+                            nativeSet.call(el, el.value + char);
+                        } else {
+                            el.value += char;
+                        }
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+                    }
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    sendResponse({ ok: true, summary: `Typed "${text.substring(0, 50)}" in "${getLabel(el)}"` });
                 }
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-                sendResponse({ ok: true, summary: `Typed "${text.substring(0, 50)}" in "${getLabel(el)}"` });
             } else { sendResponse({ ok: false, error: "Element not found for: " + request.selector }); }
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
     }
@@ -268,6 +290,467 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
     }
 
+    if (request.action === "agentPressKey") {
+        try {
+            const el = findElement(request.selector) || document.activeElement || document.body;
+            const key = request.key || 'Enter';
+            const opts = { key, bubbles: true, cancelable: true };
+            if (request.ctrlKey) opts.ctrlKey = true;
+            if (request.shiftKey) opts.shiftKey = true;
+            if (request.altKey) opts.altKey = true;
+            if (request.metaKey) opts.metaKey = true;
+            el.dispatchEvent(new KeyboardEvent('keydown', opts));
+            el.dispatchEvent(new KeyboardEvent('keypress', opts));
+            el.dispatchEvent(new KeyboardEvent('keyup', opts));
+            sendResponse({ ok: true, summary: `Pressed ${request.metaKey ? 'Cmd+' : ''}${request.ctrlKey ? 'Ctrl+' : ''}${request.shiftKey ? 'Shift+' : ''}${request.altKey ? 'Alt+' : ''}${key}` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentClearInput") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                el.focus();
+                if (isContentEditable(el) || isRichTextEditor(el)) {
+                    document.execCommand('selectAll', false, null);
+                    document.execCommand('delete', false, null);
+                } else {
+                    const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+                    if (nativeSet) nativeSet.call(el, '');
+                    else el.value = '';
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                sendResponse({ ok: true, summary: `Cleared "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentSelectText") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                sendResponse({ ok: true, summary: `Selected text in "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentGetFormValues") {
+        try {
+            const form = request.selector ? document.querySelector(request.selector) : document.querySelector('form');
+            if (!form) { sendResponse({ ok: false, error: "No form found" }); return true; }
+            const data = {};
+            const inputs = form.querySelectorAll('input, textarea, select');
+            inputs.forEach(el => {
+                const name = el.name || el.id || getCssSelector(el);
+                if (el.type === 'checkbox' || el.type === 'radio') {
+                    data[name] = el.checked;
+                } else {
+                    data[name] = el.value;
+                }
+            });
+            sendResponse({ ok: true, data, summary: `Read ${Object.keys(data).length} form fields` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentGetStyles") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                const computed = window.getComputedStyle(el);
+                const props = request.properties || ['display', 'visibility', 'color', 'backgroundColor', 'fontSize', 'position'];
+                const styles = {};
+                props.forEach(p => styles[p] = computed.getPropertyValue(p.replace(/([A-Z])/g, '-$1').toLowerCase()));
+                sendResponse({ ok: true, styles, summary: `Got styles for "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentScrollTo") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: request.block || 'center' });
+                sendResponse({ ok: true, summary: `Scrolled to "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentDoubleClick") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
+                sendResponse({ ok: true, summary: `Double-clicked "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentRightClick") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+                sendResponse({ ok: true, summary: `Right-clicked "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentFocusElement") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.focus();
+                sendResponse({ ok: true, summary: `Focused "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    // ── ADVANCED AGENTIC ACTIONS ─────────────────────────────
+
+    if (request.action === "agentDismissPopups") {
+        try {
+            let dismissed = 0;
+            // Common cookie consent / popup selectors
+            const popupSelectors = [
+                '[class*="cookie"] button', '[class*="Cookie"] button',
+                '[id*="cookie"] button', '[id*="Cookie"] button',
+                '[class*="consent"] button', '[id*="consent"] button',
+                '[class*="gdpr"] button', '[id*="gdpr"] button',
+                '[class*="banner"] [class*="close"]', '[class*="banner"] [class*="dismiss"]',
+                '[class*="modal"] [class*="close"]', '[class*="overlay"] [class*="close"]',
+                '[class*="popup"] [class*="close"]', '[class*="dialog"] [class*="close"]',
+                'button[class*="close"]', '[aria-label="Close"]', '[aria-label="Dismiss"]',
+                '[aria-label="close"]', '[aria-label="dismiss"]',
+                '[class*="notification"] [class*="close"]',
+                '.cookie-banner button', '#cookie-banner button',
+                'button[class*="accept"]', 'button[class*="Accept"]',
+                'button[class*="agree"]', 'button[class*="Agree"]',
+                '[role="dialog"] button[class*="close"]',
+                '[role="alertdialog"] button[class*="close"]'
+            ];
+            for (const sel of popupSelectors) {
+                try {
+                    const btns = document.querySelectorAll(sel);
+                    for (const btn of btns) {
+                        if (btn.offsetParent !== null) { // visible
+                            btn.click();
+                            dismissed++;
+                        }
+                    }
+                } catch (e) {}
+            }
+            // Remove fixed/sticky overlays that block the page
+            const allEls = document.querySelectorAll('div, section, aside');
+            for (const el of allEls) {
+                const style = window.getComputedStyle(el);
+                if ((style.position === 'fixed' || style.position === 'sticky') && style.zIndex > 999) {
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width > window.innerWidth * 0.5 && rect.height > 50) {
+                        el.remove();
+                        dismissed++;
+                    }
+                }
+            }
+            sendResponse({ ok: true, summary: `Dismissed ${dismissed} popup(s)/overlay(s)` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentPaste") {
+        try {
+            const el = findElement(request.selector) || document.activeElement;
+            if (el) {
+                el.focus();
+                const text = request.text || '';
+                if (isContentEditable(el) || isRichTextEditor(el)) {
+                    document.execCommand('insertText', false, text);
+                } else {
+                    const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+                    if (nativeSet) nativeSet.call(el, (el.value || '') + text);
+                    else el.value = (el.value || '') + text;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                // Also dispatch paste event for frameworks that listen
+                el.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, clipboardData: new DataTransfer() }));
+                sendResponse({ ok: true, summary: `Pasted "${text.substring(0, 50)}" into "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "No element to paste into" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentWaitForNavigation") {
+        try {
+            const timeout = Math.min(request.timeout || 10000, 30000);
+            if (document.readyState === 'complete') {
+                sendResponse({ ok: true, summary: 'Page already loaded' });
+            } else {
+                const start = Date.now();
+                const check = () => {
+                    if (document.readyState === 'complete') {
+                        sendResponse({ ok: true, summary: 'Page loaded', url: window.location.href });
+                    } else if (Date.now() - start > timeout) {
+                        sendResponse({ ok: false, error: 'Timeout waiting for page load' });
+                    } else {
+                        setTimeout(check, 200);
+                    }
+                };
+                check();
+            }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentGetStructuredData") {
+        try {
+            const data = {};
+            // JSON-LD
+            const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+            data.jsonLd = jsonLd.map(s => { try { return JSON.parse(s.textContent); } catch (e) { return null; } }).filter(Boolean);
+            // OpenGraph
+            data.openGraph = {};
+            document.querySelectorAll('meta[property^="og:"]').forEach(m => {
+                data.openGraph[m.getAttribute('property')] = m.content;
+            });
+            // Twitter Cards
+            data.twitterCard = {};
+            document.querySelectorAll('meta[name^="twitter:"]').forEach(m => {
+                data.twitterCard[m.getAttribute('name')] = m.content;
+            });
+            // Microdata
+            const microdata = document.querySelectorAll('[itemscope]');
+            data.microdata = Array.from(microdata).slice(0, 10).map(el => ({
+                type: el.getAttribute('itemtype') || '',
+                props: Array.from(el.querySelectorAll('[itemprop]')).slice(0, 20).map(p => ({
+                    name: p.getAttribute('itemprop'),
+                    value: (p.content || p.textContent || '').trim().substring(0, 200)
+                }))
+            }));
+            sendResponse({ ok: true, data, summary: `Found ${data.jsonLd.length} JSON-LD, ${Object.keys(data.openGraph).length} OG tags` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentGetPageState") {
+        try {
+            const state = {
+                url: window.location.href,
+                title: document.title,
+                readyState: document.readyState,
+                bodyLength: document.body?.innerText?.length || 0,
+                scrollY: window.scrollY,
+                scrollHeight: document.body?.scrollHeight || 0,
+                viewportHeight: window.innerHeight,
+                viewportWidth: window.innerWidth,
+                hasScrollbar: document.body?.scrollHeight > window.innerHeight,
+                forms: document.forms.length,
+                images: document.images.length,
+                links: document.links.length,
+                iframes: document.querySelectorAll('iframe').length
+            };
+            // Detect potential blockers
+            state.hasOverlay = !!document.querySelector('[class*="overlay"][style*="fixed"], [class*="modal"][style*="display"], [role="dialog"]:not([style*="none"])');
+            state.hasCaptcha = !!document.querySelector('[class*="captcha"], [id*="captcha"], [class*="recaptcha"], iframe[src*="captcha"], iframe[src*="recaptcha"]');
+            state.hasLoginForm = !!document.querySelector('input[type="password"]');
+            state.isErrorPage = /404|500|error|not found/i.test(document.title) || document.querySelectorAll('main, article, [role="main"]').length === 0;
+            sendResponse({ ok: true, state, summary: `Page: ${state.readyState}, ${state.bodyLength} chars, ${state.forms} forms` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentClickAtPosition") {
+        try {
+            const x = request.x || 0;
+            const y = request.y || 0;
+            const el = document.elementFromPoint(x, y);
+            if (el) {
+                el.dispatchEvent(new MouseEvent('mousedown', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                sendResponse({ ok: true, summary: `Clicked at (${x}, ${y}) on "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: `No element at (${x}, ${y})` }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentExtractImages") {
+        try {
+            const images = Array.from(document.querySelectorAll('img[src]')).slice(0, 100).map(img => ({
+                src: img.src,
+                alt: img.alt || '',
+                width: img.naturalWidth || img.width,
+                height: img.naturalHeight || img.height,
+                selector: getCssSelector(img)
+            })).filter(i => i.src && !i.src.startsWith('data:'));
+            sendResponse({ ok: true, images, summary: `Found ${images.length} images` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentSummarizePage") {
+        try {
+            const summary = {};
+            summary.title = document.title;
+            summary.url = window.location.href;
+            summary.description = document.querySelector('meta[name="description"]')?.content || '';
+            // Get headings structure
+            summary.headings = Array.from(document.querySelectorAll('h1, h2, h3')).slice(0, 30).map(h => ({
+                level: parseInt(h.tagName[1]),
+                text: h.textContent.trim().substring(0, 100)
+            }));
+            // Main content
+            const mainEl = document.querySelector('main, article, [role="main"], .content, #content') || document.body;
+            summary.mainText = mainEl.innerText.trim().substring(0, 5000);
+            // Navigation links
+            const nav = document.querySelector('nav, [role="navigation"]');
+            summary.navLinks = nav ? Array.from(nav.querySelectorAll('a')).slice(0, 20).map(a => ({
+                text: a.textContent.trim().substring(0, 50), href: a.href
+            })) : [];
+            // Counts
+            summary.elementCounts = {
+                forms: document.forms.length,
+                buttons: document.querySelectorAll('button, [role="button"]').length,
+                inputs: document.querySelectorAll('input, textarea, select').length,
+                tables: document.querySelectorAll('table').length,
+                images: document.images.length,
+                videos: document.querySelectorAll('video, iframe[src*="youtube"], iframe[src*="vimeo"]').length
+            };
+            sendResponse({ ok: true, data: summary, summary: `Page summary: "${summary.title}" — ${summary.headings.length} headings, ${summary.mainText.length} chars` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentGetSelectOptions") {
+        try {
+            const el = findElement(request.selector);
+            if (el && el.tagName === 'SELECT') {
+                const options = Array.from(el.options).map(o => ({
+                    value: o.value,
+                    text: o.textContent.trim(),
+                    selected: o.selected,
+                    disabled: o.disabled
+                }));
+                sendResponse({ ok: true, options, selected: el.value, summary: `${options.length} options in "${getLabel(el)}"` });
+            } else { sendResponse({ ok: false, error: "Select element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentSetValue") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                el.focus();
+                const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set
+                    || Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+                if (nativeSet) nativeSet.call(el, request.value || '');
+                else el.value = request.value || '';
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                sendResponse({ ok: true, summary: `Set value of "${getLabel(el)}" to "${(request.value || '').substring(0, 50)}"` });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentScrollToPosition") {
+        try {
+            const position = request.position || 'top';
+            if (position === 'top') {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } else if (position === 'bottom') {
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            } else if (typeof position === 'number') {
+                const target = (position / 100) * document.body.scrollHeight;
+                window.scrollTo({ top: target, behavior: 'smooth' });
+            }
+            sendResponse({ ok: true, summary: `Scrolled to ${position}` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentMultiAction") {
+        (async () => {
+            try {
+                const results = [];
+                for (const subAction of (request.actions || [])) {
+                    const result = await new Promise(resolve => {
+                        chrome.runtime.sendMessage({ ...subAction, action: 'agent' + subAction.type.charAt(0).toUpperCase() + subAction.type.slice(1) }, resolve);
+                    });
+                    results.push({ type: subAction.type, result: result || { ok: false, error: 'No response' } });
+                    if (subAction.delay) await new Promise(r => setTimeout(r, Math.min(subAction.delay, 5000)));
+                }
+                sendResponse({ ok: true, results, summary: `Executed ${results.length} actions` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+    }
+
+    if (request.action === "agentFindByContent") {
+        try {
+            const query = (request.query || '').toLowerCase();
+            const matches = [];
+            const allEls = document.querySelectorAll('*');
+            for (const el of allEls) {
+                if (el.children.length > 3) continue; // skip containers
+                const text = (el.textContent || '').trim().toLowerCase();
+                if (text.includes(query) && text.length < query.length * 5 && text.length > 0) {
+                    matches.push({
+                        tag: el.tagName.toLowerCase(),
+                        text: el.textContent.trim().substring(0, 100),
+                        selector: getCssSelector(el),
+                        isInteractive: el.matches('a, button, input, textarea, select, [role="button"], [role="link"], [tabindex]'),
+                        rect: { x: Math.round(el.getBoundingClientRect().x), y: Math.round(el.getBoundingClientRect().y) }
+                    });
+                    if (matches.length >= 20) break;
+                }
+            }
+            sendResponse({ ok: true, matches, summary: `Found ${matches.length} elements matching "${request.query}"` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentRemoveElement") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                const label = getLabel(el);
+                el.remove();
+                sendResponse({ ok: true, summary: `Removed "${label}"` });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentGetElementInfo") {
+        try {
+            const el = findElement(request.selector);
+            if (el) {
+                const rect = el.getBoundingClientRect();
+                const computed = window.getComputedStyle(el);
+                sendResponse({
+                    ok: true,
+                    info: {
+                        tag: el.tagName.toLowerCase(),
+                        id: el.id || '',
+                        classes: Array.from(el.classList),
+                        text: el.textContent?.trim()?.substring(0, 200) || '',
+                        value: el.value || '',
+                        href: el.href || '',
+                        src: el.src || '',
+                        type: el.type || '',
+                        name: el.name || '',
+                        placeholder: el.placeholder || '',
+                        ariaLabel: el.getAttribute('aria-label') || '',
+                        role: el.getAttribute('role') || '',
+                        disabled: el.disabled || false,
+                        visible: computed.display !== 'none' && computed.visibility !== 'hidden' && el.offsetParent !== null,
+                        rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+                        selector: getCssSelector(el),
+                        childCount: el.children.length,
+                        attributes: Array.from(el.attributes).slice(0, 20).map(a => ({ name: a.name, value: a.value.substring(0, 100) }))
+                    },
+                    summary: `Info for ${el.tagName.toLowerCase()}: "${getLabel(el)}"`
+                });
+            } else { sendResponse({ ok: false, error: "Element not found" }); }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
     return true;
 });
 
@@ -368,4 +851,37 @@ function getCssSelector(el) {
         el = el.parentElement;
     }
     return path.join(' > ');
+}
+
+function isContentEditable(el) {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    if (el.getAttribute('contenteditable') === 'true') return true;
+    // Walk up to check if inside a contentEditable container
+    let parent = el.parentElement;
+    while (parent) {
+        if (parent.isContentEditable || parent.getAttribute('contenteditable') === 'true') return true;
+        parent = parent.parentElement;
+    }
+    return false;
+}
+
+function isRichTextEditor(el) {
+    if (!el) return false;
+    // Google Docs
+    if (el.classList.contains('docs-texteventtarget') || el.closest('.docs-texteventtarget')) return true;
+    if (el.closest('.kix-appview-editor')) return true;
+    // Generic rich text editor roles
+    if (el.getAttribute('role') === 'textbox' && el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return true;
+    // Notion, Confluence, and similar block editors
+    if (el.closest('[data-block-id]') || el.closest('[data-content-editable-leaf]')) return true;
+    // CodeMirror / Monaco
+    if (el.closest('.cm-editor') || el.closest('.monaco-editor')) return true;
+    // ProseMirror (used by many editors)
+    if (el.closest('.ProseMirror')) return true;
+    // Slate.js editors
+    if (el.closest('[data-slate-editor]')) return true;
+    // TinyMCE / CKEditor
+    if (el.closest('.mce-content-body') || el.closest('.ck-editor__editable')) return true;
+    return false;
 }

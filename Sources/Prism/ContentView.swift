@@ -3221,6 +3221,12 @@ struct SidebarView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     chatManager.togglePin(id: session.id)
                 }
+            },
+            onExportMarkdown: {
+                ExportHelper.exportAsMarkdown(messages: session.messages, title: session.title)
+            },
+            onExportPDF: {
+                ExportHelper.exportAsPDF(messages: session.messages, title: session.title)
             }
         )
         .opacity(draggedSession?.id == session.id ? 0.4 : 1.0)
@@ -3366,6 +3372,8 @@ struct SidebarRow: View {
     var onRename: () -> Void
     var onCommitRename: () -> Void
     var onPin: () -> Void
+    var onExportMarkdown: () -> Void = {}
+    var onExportPDF: () -> Void = {}
 
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @FocusState private var isFocused: Bool
@@ -3453,6 +3461,21 @@ struct SidebarRow: View {
                     systemImage: session.isPinned ? "pin.slash" : "pin")
             }
             Divider()
+            if !session.messages.isEmpty {
+                Menu("Export Chat") {
+                    Button {
+                        onExportMarkdown()
+                    } label: {
+                        Label("Export as Markdown", systemImage: "doc.text")
+                    }
+                    Button {
+                        onExportPDF()
+                    } label: {
+                        Label("Export as PDF", systemImage: "doc.richtext")
+                    }
+                }
+                Divider()
+            }
             Button("Delete", role: .destructive) {
                 onDelete()
             }
@@ -3468,7 +3491,6 @@ struct HeaderView: View {
     @ObservedObject private var accountManager = AccountManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var geminiCLIService = GeminiCLIService.shared
-    @State private var showExportDone = false
 
     var body: some View {
         HStack {
@@ -3606,23 +3628,19 @@ struct HeaderView: View {
             Spacer()
 
             if columnVisibility == .detailOnly {
-                HStack(spacing: 6) {
-                    exportMenuButton
-
-                    Button(action: onNewChat) {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .padding(8)
-                            .background(
-                                Circle()
-                                    .fill(.ultraThinMaterial)
-                            )
-                            .glassEffect(.regular, in: .circle)
-                    }
-                    .buttonStyle(.plain)
-                    .help("New Chat")
+                Button(action: onNewChat) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .padding(8)
+                        .background(
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                        )
+                        .glassEffect(.regular, in: .circle)
                 }
+                .buttonStyle(.plain)
+                .help("New Chat")
             }
         }
         .padding(.horizontal, 16)
@@ -3666,65 +3684,28 @@ struct HeaderView: View {
         }
     }
 
-    // MARK: - Export
+    // MARK: - Export (delegates to ExportHelper)
+}
 
-    @ViewBuilder
-    private var exportMenuButton: some View {
-        let messages = chatManager.getCurrentMessages()
-        Menu {
-            Button {
-                exportAsMarkdown(messages: messages)
-            } label: {
-                Label("Export as Markdown", systemImage: "doc.text")
-            }
-            Button {
-                exportAsPDF(messages: messages)
-            } label: {
-                Label("Export as PDF", systemImage: "doc.richtext")
-            }
-        } label: {
-            Image(systemName: showExportDone ? "checkmark" : "square.and.arrow.up")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(showExportDone ? .green : .primary)
-                .padding(8)
-                .background(
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                )
-                .glassEffect(.regular, in: .circle)
-                .animation(.easeInOut(duration: 0.3), value: showExportDone)
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help("Export Chat")
-        .disabled(messages.isEmpty)
-        .opacity(messages.isEmpty ? 0.4 : 1)
-    }
+// MARK: - Export Helper
 
-    private func currentSessionTitle() -> String {
-        if let session = chatManager.sessions.first(where: { $0.id == chatManager.currentSessionId }
-        ) {
-            return session.title
-        }
-        return "Chat"
-    }
+enum ExportHelper {
 
-    private func exportAsMarkdown(messages: [Message]) {
-        let md = buildMarkdown(messages: messages)
+    static func exportAsMarkdown(messages: [Message], title: String, completion: (() -> Void)? = nil) {
+        let md = buildMarkdown(messages: messages, title: title)
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "\(sanitizeFilename(currentSessionTitle())).md"
+        panel.nameFieldStringValue = "\(sanitizeFilename(title)).md"
         panel.allowedContentTypes = [.plainText]
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try md.write(to: url, atomically: true, encoding: .utf8)
-            flashExportDone()
+            completion?()
         } catch {}
     }
 
-    private func exportAsPDF(messages: [Message]) {
-        let md = buildMarkdown(messages: messages)
-        let title = currentSessionTitle()
+    static func exportAsPDF(messages: [Message], title: String, completion: (() -> Void)? = nil) {
+        let md = buildMarkdown(messages: messages, title: title)
 
         let attributed = renderMarkdownToAttributed(md)
         let printInfo = NSPrintInfo.shared
@@ -3733,7 +3714,8 @@ struct HeaderView: View {
         printInfo.leftMargin = 50
         printInfo.rightMargin = 50
         let pageWidth = printInfo.paperSize.width - printInfo.leftMargin - printInfo.rightMargin
-        let pageHeight = printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin
+        let headerHeight: CGFloat = 30 // space reserved for branding header
+        let pageHeight = printInfo.paperSize.height - printInfo.topMargin - printInfo.bottomMargin - headerHeight
 
         let textStorage = NSTextStorage(attributedString: attributed)
         let layoutManager = NSLayoutManager()
@@ -3757,25 +3739,53 @@ struct HeaderView: View {
             let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil)
         else { return }
 
+        // Get app icon for branding
+        let appIcon = NSApp.applicationIconImage
+
         for page in 0..<pageCount {
             pdfContext.beginPDFPage(nil)
-            let nsContext = NSGraphicsContext(cgContext: pdfContext, flipped: false)
+
+            // Flip CG context so origin is top-left (required by NSLayoutManager/NSAttributedString)
+            pdfContext.saveGState()
+            pdfContext.translateBy(x: 0, y: printInfo.paperSize.height)
+            pdfContext.scaleBy(x: 1.0, y: -1.0)
+
+            let nsContext = NSGraphicsContext(cgContext: pdfContext, flipped: true)
             NSGraphicsContext.saveGraphicsState()
             NSGraphicsContext.current = nsContext
 
+            // Draw branding header in top-right (flipped coords: y=0 is top)
+            let iconSize: CGFloat = 16
+            let brandAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .foregroundColor: NSColor.gray
+            ]
+            let brandStr = NSAttributedString(string: "Prism Chat", attributes: brandAttrs)
+            let brandSize = brandStr.size()
+            let brandX = printInfo.paperSize.width - printInfo.rightMargin - brandSize.width
+            let brandY: CGFloat = (printInfo.topMargin - iconSize) / 2
+            let brandTextY = brandY + (iconSize - brandSize.height) / 2
+            brandStr.draw(at: NSPoint(x: brandX, y: brandTextY))
+
+            if let icon = appIcon {
+                let iconX = brandX - iconSize - 4
+                let iconRect = NSRect(x: iconX, y: brandY, width: iconSize, height: iconSize)
+                icon.draw(in: iconRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+            }
+
+            // Draw text content
             let yOffset = CGFloat(page) * pageHeight
             let drawOrigin = NSPoint(
-                x: printInfo.leftMargin, y: printInfo.paperSize.height - printInfo.topMargin)
+                x: printInfo.leftMargin, y: printInfo.topMargin + headerHeight - yOffset)
 
             let glyphRange = layoutManager.glyphRange(
                 forBoundingRect: NSRect(x: 0, y: yOffset, width: pageWidth, height: pageHeight),
                 in: textContainer)
-            layoutManager.drawBackground(
-                forGlyphRange: glyphRange, at: NSPoint(x: drawOrigin.x, y: drawOrigin.y - yOffset))
-            layoutManager.drawGlyphs(
-                forGlyphRange: glyphRange, at: NSPoint(x: drawOrigin.x, y: drawOrigin.y - yOffset))
+            layoutManager.drawBackground(forGlyphRange: glyphRange, at: drawOrigin)
+            layoutManager.drawGlyphs(forGlyphRange: glyphRange, at: drawOrigin)
 
             NSGraphicsContext.restoreGraphicsState()
+            pdfContext.restoreGState()
             pdfContext.endPDFPage()
         }
         pdfContext.closePDF()
@@ -3786,12 +3796,12 @@ struct HeaderView: View {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         pdfData.write(to: url, atomically: true)
-        flashExportDone()
+        completion?()
     }
 
-    private func buildMarkdown(messages: [Message]) -> String {
-        let title = currentSessionTitle()
+    static func buildMarkdown(messages: [Message], title: String) -> String {
         var md = "# \(title)\n\n"
+        md += "_Exported from Prism Chat_\n\n---\n\n"
 
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
@@ -3827,15 +3837,15 @@ struct HeaderView: View {
         return md
     }
 
-    private func renderMarkdownToAttributed(_ md: String) -> NSAttributedString {
+    static func renderMarkdownToAttributed(_ md: String) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let defaultFont = NSFont.systemFont(ofSize: 13)
         let boldFont = NSFont.boldSystemFont(ofSize: 13)
         let h1Font = NSFont.systemFont(ofSize: 22, weight: .bold)
         let h3Font = NSFont.systemFont(ofSize: 15, weight: .semibold)
         let codeFont = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
-        let defaultColor = NSColor.textColor
-        let secondaryColor = NSColor.secondaryLabelColor
+        let defaultColor = NSColor.black
+        let secondaryColor = NSColor.darkGray
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 4
         paragraphStyle.paragraphSpacing = 8
@@ -3850,7 +3860,7 @@ struct HeaderView: View {
                     let codeAttrs: [NSAttributedString.Key: Any] = [
                         .font: codeFont, .foregroundColor: defaultColor,
                         .paragraphStyle: paragraphStyle,
-                        .backgroundColor: NSColor.quaternaryLabelColor,
+                        .backgroundColor: NSColor(white: 0.93, alpha: 1.0),
                     ]
                     result.append(
                         NSAttributedString(string: codeBuffer + "\n", attributes: codeAttrs))
@@ -3922,16 +3932,9 @@ struct HeaderView: View {
         return result
     }
 
-    private func sanitizeFilename(_ name: String) -> String {
+    static func sanitizeFilename(_ name: String) -> String {
         let invalidChars = CharacterSet(charactersIn: "/\\:*?\"<>|")
         return name.components(separatedBy: invalidChars).joined(separator: "_")
-    }
-
-    private func flashExportDone() {
-        showExportDone = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            showExportDone = false
-        }
     }
 }
 

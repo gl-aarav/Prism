@@ -888,27 +888,61 @@ document.addEventListener('DOMContentLoaded', () => {
         if (agentBrowserEnabled) {
             messagesForApi.unshift({
                 role: 'system',
-                content: 'You are a powerful browser automation agent. You control the browser by outputting JSON action blocks wrapped in ```agent-action markers. After actions execute, you receive results and can take more actions.\n\n' +
+                content: 'You are a powerful autonomous browser agent. You control the browser by outputting JSON action blocks wrapped in ```agent-action markers. After actions execute, you receive results and can take more actions. You can plan, execute multi-step workflows, recover from errors, and make intelligent decisions.\n\n' +
+                    '## PLANNING RULES:\n' +
+                    '1. Before acting, briefly plan your approach (2-3 sentences max)\n' +
+                    '2. Break complex goals into small, verifiable steps\n' +
+                    '3. After each action, check the result before proceeding\n' +
+                    '4. If an action fails, try alternative selectors or approaches — do NOT repeat the same failed action\n' +
+                    '5. Use getElements or scan to discover page layout when unsure what to click\n' +
+                    '6. Use getPageState to check for blockers (CAPTCHAs, overlays, login walls) before interacting\n' +
+                    '7. Use dismissPopups to remove cookie banners and overlays blocking the page\n' +
+                    '8. When looping through items (e.g. search results), track progress to avoid repeating work\n\n' +
                     '## Page Interaction:\n' +
                     '- {"type":"click","selector":"CSS or text"} - Click element\n' +
-                    '- {"type":"type","selector":"CSS or text","text":"..."} - Type into input\n' +
+                    '- {"type":"doubleClick","selector":"CSS or text"} - Double-click element\n' +
+                    '- {"type":"rightClick","selector":"CSS or text"} - Right-click (context menu)\n' +
+                    '- {"type":"clickAtPosition","x":100,"y":200} - Click at viewport coordinates (for dynamic UIs where selectors fail)\n' +
+                    '- {"type":"type","selector":"CSS or text","text":"...","clear":true} - Type into input/editor. Works with Google Docs, Notion, contentEditable, and standard inputs. Set clear:false to append.\n' +
+                    '- {"type":"pressKey","key":"Enter","selector":"optional","ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false} - Press keyboard key with optional modifiers. Use metaKey for Cmd on Mac.\n' +
+                    '- {"type":"clearInput","selector":"CSS or text"} - Clear an input field or rich editor\n' +
+                    '- {"type":"paste","selector":"CSS or text","text":"..."} - Paste text (triggers paste event for framework compatibility)\n' +
+                    '- {"type":"setValue","selector":"CSS","value":"..."} - Set input value directly (React-compatible native setter)\n' +
                     '- {"type":"select","selector":"CSS","value":"..."} - Choose dropdown option\n' +
+                    '- {"type":"getSelectOptions","selector":"CSS"} - List all options in a dropdown\n' +
                     '- {"type":"scroll","direction":"up|down","amount":300} - Scroll page\n' +
+                    '- {"type":"scrollTo","selector":"CSS or text"} - Scroll element into view\n' +
+                    '- {"type":"scrollToPosition","position":"top|bottom|50"} - Scroll to top, bottom, or percentage\n' +
                     '- {"type":"hover","selector":"CSS or text"} - Hover over element\n' +
+                    '- {"type":"focus","selector":"CSS or text"} - Focus element\n' +
                     '- {"type":"drag","selector":"CSS","dx":100,"dy":0} - Drag element\n' +
                     '- {"type":"toggleCheckbox","selector":"CSS"} - Toggle checkbox/radio\n' +
                     '- {"type":"fillForm","fields":[{"selector":"#id","value":"..."}]} - Fill multiple form fields\n' +
+                    '- {"type":"selectText","selector":"CSS"} - Select all text inside an element\n' +
+                    '- {"type":"removeElement","selector":"CSS"} - Remove an element from the page (e.g. ad, overlay)\n\n' +
+                    '## Page Analysis:\n' +
                     '- {"type":"getElements"} - List interactive elements on page\n' +
+                    '- {"type":"getElementInfo","selector":"CSS or text"} - Detailed info about one element (tag, rect, attributes, visibility)\n' +
                     '- {"type":"extractText","selector":"CSS"} - Get text from elements\n' +
                     '- {"type":"extractLinks"} - Get all page links\n' +
                     '- {"type":"extractTable","selector":"table"} - Extract table as JSON\n' +
-                    '- {"type":"highlight","selector":"CSS","color":"yellow"} - Highlight elements\n' +
-                    '- {"type":"wait","seconds":2} - Wait/pause for N seconds (max 30)\n' +
-                    '- {"type":"waitFor","selector":"CSS","timeout":5000} - Wait for element\n' +
+                    '- {"type":"extractImages"} - Get all images (src, alt, dimensions)\n' +
+                    '- {"type":"getFormValues","selector":"form"} - Read all form field values\n' +
+                    '- {"type":"getStyles","selector":"CSS","properties":["display","color"]} - Get computed CSS styles\n' +
                     '- {"type":"getAttribute","selector":"CSS","attribute":"href"} - Get attribute\n' +
                     '- {"type":"readSelection"} - Get user-selected text\n' +
                     '- {"type":"readPageMeta"} - Get page metadata (title, description, etc.)\n' +
+                    '- {"type":"getStructuredData"} - Extract JSON-LD, OpenGraph, Twitter Cards, microdata\n' +
+                    '- {"type":"getPageState"} - Check page state: loading, forms, CAPTCHAs, overlays, errors\n' +
+                    '- {"type":"summarizePage"} - Get structured page summary (headings, content, nav, counts)\n' +
+                    '- {"type":"findByContent","query":"search text"} - Find elements by text content with positions\n' +
+                    '- {"type":"highlight","selector":"CSS","color":"yellow"} - Highlight elements\n' +
                     '- {"type":"scan"} - Take a screenshot of the page + get page dimensions.\n\n' +
+                    '## Timing & Synchronization:\n' +
+                    '- {"type":"wait","seconds":2} - Wait/pause for N seconds (max 30)\n' +
+                    '- {"type":"waitFor","selector":"CSS","timeout":5000} - Wait for element to appear\n' +
+                    '- {"type":"waitForNavigation","timeout":10000} - Wait for page to finish loading after navigation\n' +
+                    '- {"type":"dismissPopups"} - Auto-dismiss cookie banners, modals, and overlays blocking the page\n\n' +
                     '## Browser Control:\n' +
                     '- {"type":"navigate","url":"https://..."} - Go to URL\n' +
                     '- {"type":"openTab","url":"https://...","active":true} - Open new tab\n' +
@@ -920,9 +954,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"reloadTab"} - Reload current tab\n' +
                     '- {"type":"duplicateTab"} - Duplicate tab\n' +
                     '- {"type":"pinTab"} - Pin/unpin tab\n' +
+                    '- {"type":"moveTab","tabId":1,"index":0} - Move tab to position\n' +
                     '- {"type":"captureTab"} - Screenshot visible tab\n' +
                     '- {"type":"createBookmark","title":"...","url":"..."} - Add bookmark\n' +
-                    '- {"type":"searchBookmarks","query":"..."} - Search bookmarks\n\n' +
+                    '- {"type":"searchBookmarks","query":"..."} - Search bookmarks\n' +
+                    '- {"type":"zoomTab","direction":"in|out"} or {"type":"zoomTab","zoom":1.5} - Zoom in/out\n' +
+                    '- {"type":"muteTab"} - Mute/unmute current tab\n\n' +
+                    '## Windows:\n' +
+                    '- {"type":"createWindow","url":"https://...","incognito":false} - Open new window\n' +
+                    '- {"type":"getWindows"} - List all windows\n' +
+                    '- {"type":"closeWindow","windowId":1} - Close a window\n\n' +
+                    '## File & Download Management:\n' +
+                    '- {"type":"downloadFile","url":"https://...","filename":"optional.pdf"} - Download a file\n' +
+                    '- {"type":"getDownloads"} - List recent downloads\n\n' +
+                    '## Cookies & Sessions:\n' +
+                    '- {"type":"getCookies","url":"https://..."} - List cookies for a URL\n' +
+                    '- {"type":"setCookie","url":"...","name":"...","value":"..."} - Set a cookie\n' +
+                    '- {"type":"deleteCookies","url":"...","name":"..."} - Delete a specific cookie\n\n' +
+                    '## History:\n' +
+                    '- {"type":"getHistory","query":"optional search","maxResults":20} - Search browser history\n\n' +
                     '## Web & Information:\n' +
                     '- {"type":"webSearch","query":"..."} - Search DuckDuckGo\n' +
                     '- {"type":"fetchUrl","url":"https://..."} - Read any webpage content\n' +
@@ -930,6 +980,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"weather","location":"City"} - Current weather\n' +
                     '- {"type":"translate","text":"...","from":"en","to":"es"} - Translate text\n' +
                     '- {"type":"dictionary","word":"..."} - Word definition\n\n' +
+                    '## SELF-HEALING SELECTORS:\n' +
+                    'The agent automatically tries multiple strategies to find elements:\n' +
+                    '1. CSS selector → 2. XPath → 3. aria-label → 4. Text content match\n' +
+                    'You can use any of these as the "selector" value:\n' +
+                    '- CSS: "#myId", ".myClass", "button[type=submit]"\n' +
+                    '- Text: "Submit", "Sign In", "Add to Cart" (matches element text)\n' +
+                    '- text= prefix: "text=Continue" (explicit text search)\n' +
+                    '- XPath: "//button[contains(text(),\'Submit\')]"\n' +
+                    'If a selector fails, try text content instead. Use getElements or findByContent to discover actual selectors.\n\n' +
+                    '## Tips for Rich Text Editors (Google Docs, Notion, etc.):\n' +
+                    '- For Google Docs: click the editing area first (e.g. ".kix-appview-editor"), then use type with that selector\n' +
+                    '- Use focus to ensure the editor is active before typing\n' +
+                    '- Use pressKey for keyboard shortcuts (Enter, Tab, Backspace, Escape, arrow keys, Cmd+A, etc.)\n' +
+                    '- The type action uses document.execCommand("insertText") for contentEditable elements, which works with most rich editors\n\n' +
+                    '## MULTI-STEP WORKFLOW TIPS:\n' +
+                    '- For multi-page workflows (login → navigate → action), use waitForNavigation after clicking links\n' +
+                    '- For cross-site data transfer, extract data from one tab, switchTab, then paste/type into another\n' +
+                    '- For bulk operations, use getElements to find all targets, then loop through them\n' +
+                    '- If the page has dynamic content (React, single-page apps), use waitFor to ensure elements load\n' +
+                    '- Use getPageState to detect CAPTCHAs, login walls, and errors before interacting\n' +
+                    '- Use dismissPopups early to clear cookie banners and modal overlays\n\n' +
                     'Output: ```agent-action\n{"type":"..."}\n```\n' +
                     'CRITICAL: You MUST wrap every action JSON in ```agent-action fences. Never output bare JSON outside fences. Actions without ```agent-action will NOT execute.\n' +
                     'You may output multiple action blocks. Explain each step briefly. When done, give final summary without action blocks.'
@@ -1371,6 +1442,41 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'weather': return { icon: '\uD83C\uDF24\uFE0F', label: 'Checked weather in ' + (action.location || '') };
             case 'translate': return { icon: '\uD83C\uDF10', label: 'Translated text' + (action.to ? ' to ' + action.to : '') };
             case 'dictionary': return { icon: '\uD83D\uDCD6', label: 'Looked up "' + (action.word || '') + '"' };
+            case 'doubleClick': return { icon: '\uD83D\uDC46', label: 'Double-clicked ' + sel };
+            case 'rightClick': return { icon: '\uD83D\uDC46', label: 'Right-clicked ' + sel };
+            case 'pressKey': return { icon: '\u2328\uFE0F', label: 'Pressed ' + (action.key || '') + (action.metaKey ? ' (⌘)' : '') + (action.ctrlKey ? ' (Ctrl)' : '') };
+            case 'clearInput': return { icon: '\uD83E\uDDF9', label: 'Cleared input ' + sel };
+            case 'scrollTo': return { icon: '\uD83D\uDCDC', label: 'Scrolled to ' + sel };
+            case 'focus': return { icon: '\uD83C\uDFAF', label: 'Focused ' + sel };
+            case 'selectText': return { icon: '\u2702\uFE0F', label: 'Selected text in ' + sel };
+            case 'getFormValues': return { icon: '\uD83D\uDCCB', label: 'Read form values' };
+            case 'getStyles': return { icon: '\uD83C\uDFA8', label: 'Read styles from ' + sel };
+            case 'clickAtPosition': return { icon: '\uD83D\uDC46', label: 'Clicked at (' + (action.x || 0) + ', ' + (action.y || 0) + ')' };
+            case 'paste': return { icon: '\uD83D\uDCCB', label: 'Pasted text into ' + sel };
+            case 'setValue': return { icon: '\u270F\uFE0F', label: 'Set value of ' + sel };
+            case 'getSelectOptions': return { icon: '\uD83D\uDCCB', label: 'Listed options in ' + sel };
+            case 'scrollToPosition': return { icon: '\uD83D\uDCDC', label: 'Scrolled to ' + (action.position || 'position') };
+            case 'removeElement': return { icon: '\uD83D\uDDD1\uFE0F', label: 'Removed element ' + sel };
+            case 'getElementInfo': return { icon: '\uD83D\uDD0D', label: 'Inspected element ' + sel };
+            case 'extractImages': return { icon: '\uD83D\uDDBC\uFE0F', label: 'Extracted all images' };
+            case 'getStructuredData': return { icon: '\uD83D\uDCCA', label: 'Extracted structured data' };
+            case 'getPageState': return { icon: '\uD83D\uDCCB', label: 'Checked page state' };
+            case 'summarizePage': return { icon: '\uD83D\uDCC4', label: 'Summarized page' };
+            case 'findByContent': return { icon: '\uD83D\uDD0D', label: 'Found elements matching "' + (action.query || '').substring(0, 30) + '"' };
+            case 'dismissPopups': return { icon: '\u274C', label: 'Dismissed popups/overlays' };
+            case 'waitForNavigation': return { icon: '\u23F3', label: 'Waited for page load' };
+            case 'moveTab': return { icon: '\u21C4', label: 'Moved tab to index ' + (action.index || 0) };
+            case 'zoomTab': return { icon: '\uD83D\uDD0D', label: 'Zoomed ' + (action.direction || action.zoom || '') };
+            case 'muteTab': return { icon: '\uD83D\uDD07', label: 'Toggled tab mute' };
+            case 'createWindow': return { icon: '\uD83D\uDDA5\uFE0F', label: 'Opened new window' + (action.incognito ? ' (incognito)' : '') };
+            case 'getWindows': return { icon: '\uD83D\uDDA5\uFE0F', label: 'Listed all windows' };
+            case 'closeWindow': return { icon: '\u2716\uFE0F', label: 'Closed window ' + (action.windowId || '') };
+            case 'downloadFile': return { icon: '\u2B07\uFE0F', label: 'Downloaded ' + (action.filename || action.url || '').substring(0, 30) };
+            case 'getDownloads': return { icon: '\uD83D\uDCC2', label: 'Listed recent downloads' };
+            case 'getCookies': return { icon: '\uD83C\uDF6A', label: 'Listed cookies for ' + (action.url ? safeHost(action.url) : 'page') };
+            case 'setCookie': return { icon: '\uD83C\uDF6A', label: 'Set cookie "' + (action.name || '') + '"' };
+            case 'deleteCookies': return { icon: '\uD83C\uDF6A', label: 'Deleted cookie "' + (action.name || '') + '"' };
+            case 'getHistory': return { icon: '\uD83D\uDCDC', label: 'Searched history' + (action.query ? ' for "' + action.query.substring(0, 20) + '"' : '') };
             default: return { icon: '\u26A1', label: action.type };
         }
     }
@@ -1415,7 +1521,34 @@ document.addEventListener('DOMContentLoaded', () => {
                     result = await api.tabs.sendMessage(tab.id, { action: 'agentClick', selector: action.selector });
                     break;
                 case 'type':
-                    result = await api.tabs.sendMessage(tab.id, { action: 'agentType', selector: action.selector, text: action.text });
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentType', selector: action.selector, text: action.text, clear: action.clear });
+                    break;
+                case 'pressKey':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentPressKey', selector: action.selector, key: action.key, ctrlKey: action.ctrlKey, shiftKey: action.shiftKey, altKey: action.altKey, metaKey: action.metaKey });
+                    break;
+                case 'clearInput':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentClearInput', selector: action.selector });
+                    break;
+                case 'doubleClick':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentDoubleClick', selector: action.selector });
+                    break;
+                case 'rightClick':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentRightClick', selector: action.selector });
+                    break;
+                case 'focus':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentFocusElement', selector: action.selector });
+                    break;
+                case 'selectText':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentSelectText', selector: action.selector });
+                    break;
+                case 'scrollTo':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentScrollTo', selector: action.selector });
+                    break;
+                case 'getFormValues':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentGetFormValues', selector: action.selector });
+                    break;
+                case 'getStyles':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentGetStyles', selector: action.selector, properties: action.properties });
                     break;
                 case 'select':
                     result = await api.tabs.sendMessage(tab.id, { action: 'agentSelect', selector: action.selector, value: action.value });
@@ -1578,6 +1711,112 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'dictionary':
                     result = await new Promise(resolve => {
                         api.runtime.sendMessage({ action: 'agentDictionary', word: action.word }, resolve);
+                    });
+                    break;
+
+                // New DOM-level actions
+                case 'clickAtPosition':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentClickAtPosition', x: action.x, y: action.y });
+                    break;
+                case 'paste':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentPaste', selector: action.selector, text: action.text });
+                    break;
+                case 'setValue':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentSetValue', selector: action.selector, value: action.value });
+                    break;
+                case 'getSelectOptions':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentGetSelectOptions', selector: action.selector });
+                    break;
+                case 'scrollToPosition':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentScrollToPosition', position: action.position });
+                    break;
+                case 'removeElement':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentRemoveElement', selector: action.selector });
+                    break;
+                case 'getElementInfo':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentGetElementInfo', selector: action.selector });
+                    break;
+                case 'extractImages':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentExtractImages' });
+                    break;
+                case 'getStructuredData':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentGetStructuredData' });
+                    break;
+                case 'getPageState':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentGetPageState' });
+                    break;
+                case 'summarizePage':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentSummarizePage' });
+                    break;
+                case 'findByContent':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentFindByContent', query: action.query });
+                    break;
+                case 'dismissPopups':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentDismissPopups' });
+                    break;
+                case 'waitForNavigation':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentWaitForNavigation', timeout: action.timeout });
+                    break;
+
+                // New browser-level actions
+                case 'moveTab':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentMoveTab', tabId: action.tabId, index: action.index, windowId: action.windowId }, resolve);
+                    });
+                    break;
+                case 'zoomTab':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentZoomTab', direction: action.direction, zoom: action.zoom }, resolve);
+                    });
+                    break;
+                case 'muteTab':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentMuteTab', tabId: action.tabId }, resolve);
+                    });
+                    break;
+                case 'createWindow':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentCreateWindow', url: action.url, incognito: action.incognito }, resolve);
+                    });
+                    break;
+                case 'getWindows':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentGetWindows' }, resolve);
+                    });
+                    break;
+                case 'closeWindow':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentCloseWindow', windowId: action.windowId }, resolve);
+                    });
+                    break;
+                case 'downloadFile':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentDownloadFile', url: action.url, filename: action.filename }, resolve);
+                    });
+                    break;
+                case 'getDownloads':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentGetDownloads' }, resolve);
+                    });
+                    break;
+                case 'getCookies':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentGetCookies', url: action.url }, resolve);
+                    });
+                    break;
+                case 'setCookie':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentSetCookie', url: action.url, name: action.name, value: action.value, domain: action.domain, path: action.path, secure: action.secure, httpOnly: action.httpOnly, expirationDate: action.expirationDate }, resolve);
+                    });
+                    break;
+                case 'deleteCookies':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentDeleteCookies', url: action.url, name: action.name }, resolve);
+                    });
+                    break;
+                case 'getHistory':
+                    result = await new Promise(resolve => {
+                        api.runtime.sendMessage({ action: 'agentGetHistory', query: action.query, maxResults: action.maxResults }, resolve);
                     });
                     break;
 
