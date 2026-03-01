@@ -946,6 +946,13 @@ class OllamaService {
                             images.append(data.base64EncodedString())
                         }
 
+                        // Also read from attachments array (used by extension screenshots)
+                        if let attachments = msg.attachments {
+                            for att in attachments where att.type == "image" {
+                                images.append(att.data.base64EncodedString())
+                            }
+                        }
+
                         if let pdfData = msg.pdfData {
                             if isVisionModel {
                                 // Vision models can see the PDF pages as images (simplification: sending raw PDF bytes if supported,

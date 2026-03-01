@@ -27,46 +27,60 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 el.focus();
+                // Also click to ensure focus is registered (helps with Google Docs, etc.)
+                el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
                 const text = request.text || '';
                 const isRichEditor = isContentEditable(el) || isRichTextEditor(el);
 
                 if (isRichEditor) {
                     // For contentEditable, Google Docs, Notion, etc.
-                    // Clear by selecting all and deleting
                     if (request.clear !== false) {
                         document.execCommand('selectAll', false, null);
                         document.execCommand('delete', false, null);
                     }
-                    // execCommand('insertText') triggers the browser's native input
-                    // pipeline which rich editors hook into
+
+                    // Try execCommand first (works for most contentEditable)
                     const inserted = document.execCommand('insertText', false, text);
+
                     if (!inserted) {
-                        // Fallback: dispatch InputEvent for editors that listen to it
-                        el.dispatchEvent(new InputEvent('beforeinput', {
-                            inputType: 'insertText', data: text, bubbles: true, cancelable: true, composed: true
-                        }));
-                        el.dispatchEvent(new InputEvent('input', {
-                            inputType: 'insertText', data: text, bubbles: true, composed: true
-                        }));
+                        // Fallback: type character by character with full keyboard events
+                        for (const char of text) {
+                            const kc = char.toUpperCase().charCodeAt(0);
+                            const keyOpts = { key: char, code: 'Key' + char.toUpperCase(), keyCode: kc, which: kc, bubbles: true, cancelable: true, composed: true };
+                            el.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
+                            el.dispatchEvent(new InputEvent('beforeinput', {
+                                inputType: 'insertText', data: char, bubbles: true, cancelable: true, composed: true
+                            }));
+                            el.dispatchEvent(new InputEvent('input', {
+                                inputType: 'insertText', data: char, bubbles: true, composed: true
+                            }));
+                            el.dispatchEvent(new KeyboardEvent('keyup', keyOpts));
+                        }
                     }
                     sendResponse({ ok: true, summary: `Typed "${text.substring(0, 50)}" in "${getLabel(el)}"` });
                 } else {
                     // Standard input/textarea elements
+                    const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
                     if (request.clear !== false) {
-                        el.value = '';
+                        if (nativeSet) nativeSet.call(el, ''); else el.value = '';
                         el.dispatchEvent(new Event('input', { bubbles: true }));
                     }
+                    // Type character by character with proper keyCode/code
                     for (const char of text) {
-                        el.dispatchEvent(new KeyboardEvent('keydown', { key: char, bubbles: true }));
-                        el.dispatchEvent(new KeyboardEvent('keypress', { key: char, bubbles: true }));
-                        const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+                        const kc = char.toUpperCase().charCodeAt(0);
+                        const keyOpts = { key: char, code: 'Key' + char.toUpperCase(), keyCode: kc, which: kc, bubbles: true, cancelable: true, composed: true };
+                        el.dispatchEvent(new KeyboardEvent('keydown', keyOpts));
+                        el.dispatchEvent(new KeyboardEvent('keypress', { ...keyOpts, charCode: char.charCodeAt(0) }));
                         if (nativeSet) {
                             nativeSet.call(el, el.value + char);
                         } else {
                             el.value += char;
                         }
                         el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }));
+                        el.dispatchEvent(new KeyboardEvent('keyup', keyOpts));
                     }
                     el.dispatchEvent(new Event('change', { bubbles: true }));
                     sendResponse({ ok: true, summary: `Typed "${text.substring(0, 50)}" in "${getLabel(el)}"` });
@@ -294,15 +308,143 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         try {
             const el = findElement(request.selector) || document.activeElement || document.body;
             const key = request.key || 'Enter';
-            const opts = { key, bubbles: true, cancelable: true };
+
+            // Proper keyCode/code mapping for sites that check these
+            const keyCodeMap = {
+                'Enter': 13, 'Tab': 9, 'Escape': 27, 'Backspace': 8, 'Delete': 46,
+                'ArrowUp': 38, 'ArrowDown': 40, 'ArrowLeft': 37, 'ArrowRight': 39,
+                'Home': 36, 'End': 35, 'PageUp': 33, 'PageDown': 34,
+                ' ': 32, 'Space': 32
+            };
+            const codeMap = {
+                'Enter': 'Enter', 'Tab': 'Tab', 'Escape': 'Escape',
+                'Backspace': 'Backspace', 'Delete': 'Delete',
+                'ArrowUp': 'ArrowUp', 'ArrowDown': 'ArrowDown',
+                'ArrowLeft': 'ArrowLeft', 'ArrowRight': 'ArrowRight',
+                'Home': 'Home', 'End': 'End', 'PageUp': 'PageUp', 'PageDown': 'PageDown',
+                ' ': 'Space', 'Space': 'Space'
+            };
+            const kc = keyCodeMap[key] || (key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0);
+            const code = codeMap[key] || (key.length === 1 ? 'Key' + key.toUpperCase() : key);
+
+            const opts = {
+                key, code, keyCode: kc, which: kc, charCode: 0,
+                bubbles: true, cancelable: true, composed: true
+            };
             if (request.ctrlKey) opts.ctrlKey = true;
             if (request.shiftKey) opts.shiftKey = true;
             if (request.altKey) opts.altKey = true;
             if (request.metaKey) opts.metaKey = true;
+
+            // Dispatch the synthetic keyboard events (for frameworks listening to them)
             el.dispatchEvent(new KeyboardEvent('keydown', opts));
-            el.dispatchEvent(new KeyboardEvent('keypress', opts));
+            el.dispatchEvent(new KeyboardEvent('keypress', { ...opts, charCode: kc }));
             el.dispatchEvent(new KeyboardEvent('keyup', opts));
-            sendResponse({ ok: true, summary: `Pressed ${request.metaKey ? 'Cmd+' : ''}${request.ctrlKey ? 'Ctrl+' : ''}${request.shiftKey ? 'Shift+' : ''}${request.altKey ? 'Alt+' : ''}${key}` });
+
+            // Programmatically perform the default action since synthetic events are untrusted
+            let extra = '';
+
+            if (key === 'Enter' && !request.ctrlKey && !request.metaKey && !request.altKey) {
+                if (el.tagName === 'INPUT' && el.type !== 'textarea') {
+                    const form = el.closest('form');
+                    if (form) {
+                        const submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+                        if (submitBtn) {
+                            submitBtn.click();
+                            extra = ' (clicked submit)';
+                        } else if (form.requestSubmit) {
+                            form.requestSubmit();
+                            extra = ' (submitted form)';
+                        } else {
+                            form.submit();
+                            extra = ' (submitted form)';
+                        }
+                    }
+                } else if (el.tagName === 'TEXTAREA') {
+                    // Insert newline in textarea
+                    const start = el.selectionStart || 0;
+                    const end = el.selectionEnd || 0;
+                    const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+                    const newVal = el.value.substring(0, start) + '\n' + el.value.substring(end);
+                    if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                    el.selectionStart = el.selectionEnd = start + 1;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    extra = ' (inserted newline)';
+                } else if (isContentEditable(el) || isRichTextEditor(el)) {
+                    document.execCommand('insertLineBreak', false, null);
+                    extra = ' (inserted line break)';
+                }
+            } else if (key === 'Backspace') {
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    const start = el.selectionStart || 0;
+                    const end = el.selectionEnd || 0;
+                    const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+                    if (start !== end) {
+                        const newVal = el.value.substring(0, start) + el.value.substring(end);
+                        if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                        el.selectionStart = el.selectionEnd = start;
+                    } else if (start > 0) {
+                        const newVal = el.value.substring(0, start - 1) + el.value.substring(start);
+                        if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                        el.selectionStart = el.selectionEnd = start - 1;
+                    }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    extra = ' (deleted char)';
+                } else if (isContentEditable(el) || isRichTextEditor(el)) {
+                    document.execCommand('delete', false, null);
+                    extra = ' (deleted in editor)';
+                }
+            } else if (key === 'Delete') {
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    const start = el.selectionStart || 0;
+                    const end = el.selectionEnd || 0;
+                    const nativeSet = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+                    if (start !== end) {
+                        const newVal = el.value.substring(0, start) + el.value.substring(end);
+                        if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                        el.selectionStart = el.selectionEnd = start;
+                    } else if (start < el.value.length) {
+                        const newVal = el.value.substring(0, start) + el.value.substring(start + 1);
+                        if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                        el.selectionStart = el.selectionEnd = start;
+                    }
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    extra = ' (deleted char)';
+                } else if (isContentEditable(el) || isRichTextEditor(el)) {
+                    document.execCommand('forwardDelete', false, null);
+                    extra = ' (deleted in editor)';
+                }
+            } else if (key === 'Tab') {
+                const focusable = Array.from(document.querySelectorAll(
+                    'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                )).filter(e => e.offsetParent !== null);
+                const idx = focusable.indexOf(el);
+                if (idx >= 0) {
+                    const next = request.shiftKey ? focusable[idx - 1] : focusable[idx + 1];
+                    if (next) { next.focus(); extra = ` (focused ${getLabel(next).substring(0, 30)})`; }
+                }
+            } else if (key === 'Escape') {
+                el.blur();
+                extra = ' (blurred element)';
+            } else if (key === 'a' && (request.ctrlKey || request.metaKey)) {
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    el.select();
+                    extra = ' (selected all)';
+                } else {
+                    document.execCommand('selectAll', false, null);
+                    extra = ' (selected all)';
+                }
+            } else if (key === ' ' || key === 'Space') {
+                // Space on buttons/checkboxes should click them
+                if (el.tagName === 'BUTTON' || el.type === 'checkbox' || el.type === 'radio' || el.getAttribute('role') === 'button') {
+                    el.click();
+                    extra = ' (activated element)';
+                }
+            }
+
+            const modifiers = (request.metaKey ? 'Cmd+' : '') + (request.ctrlKey ? 'Ctrl+' : '') +
+                (request.shiftKey ? 'Shift+' : '') + (request.altKey ? 'Alt+' : '');
+            sendResponse({ ok: true, summary: `Pressed ${modifiers}${key}${extra}` });
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
     }
 

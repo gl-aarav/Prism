@@ -211,7 +211,25 @@ class ExtensionServer {
                 guard let role = msgDict["role"] as? String,
                     let content = msgDict["content"] as? String
                 else { return nil }
-                return Message(content: content, isUser: role == "user")
+
+                // Parse images (screenshot data URLs from agent browser mode)
+                var attachments: [MessageAttachment]?
+                if let images = msgDict["images"] as? [String], !images.isEmpty {
+                    attachments = images.compactMap { dataUrl -> MessageAttachment? in
+                        // Handle data URL format: data:image/png;base64,...
+                        if let commaIndex = dataUrl.firstIndex(of: ",") {
+                            let base64 = String(dataUrl[dataUrl.index(after: commaIndex)...])
+                            guard let data = Data(base64Encoded: base64) else { return nil }
+                            return MessageAttachment(type: "image", data: data)
+                        }
+                        // Handle raw base64 (no data URL prefix)
+                        guard let data = Data(base64Encoded: dataUrl) else { return nil }
+                        return MessageAttachment(type: "image", data: data)
+                    }
+                    if attachments?.isEmpty == true { attachments = nil }
+                }
+
+                return Message(content: content, attachments: attachments, isUser: role == "user")
             }
 
             guard !history.isEmpty else {
