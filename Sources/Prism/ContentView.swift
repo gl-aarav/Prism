@@ -1681,6 +1681,7 @@ struct ContentView: View {
     @AppStorage("ActiveToolName") private var activeToolName: String = ""
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
+    @State private var streamingMessageId: UUID? = nil  // currently streaming message for scroll tracking
     @State private var chatPreviewImage: NSImage? = nil
     @State private var chatPreviewVisible: Bool = false
     @State private var chatPreviewSourceRect: CGRect = .zero
@@ -1814,12 +1815,9 @@ struct ContentView: View {
                                         if messages.isEmpty {
                                             EmptyStateView(appTheme: appTheme)
                                         } else {
+                                            let lastMessageId = messages.last?.id
+                                            let lastUserMessageId = messages.last(where: { $0.isUser })?.id
                                             ForEach(messages) { message in
-                                                let isLast = message.id == messages.last?.id
-                                                let isLastUserMessage =
-                                                    message.isUser
-                                                    && messages.last(where: { $0.isUser })?.id
-                                                        == message.id
                                                 MessageView(
                                                     message: message,
                                                     liveContent: streamBuffer[message.id]
@@ -1829,20 +1827,20 @@ struct ContentView: View {
                                                         ?? nil,
                                                     onRegenerate: (!message.isUser
                                                         && !isLoading
-                                                        && isLast)
+                                                        && message.id == lastMessageId)
                                                         ? {
                                                             regenerateResponse(
                                                                 for: message.id)
                                                         }
                                                         : nil,
-                                                    onEdit: (isLastUserMessage && !isLoading)
+                                                    onEdit: (message.id == lastUserMessageId && !isLoading)
                                                         ? { newContent in
                                                             editAndResend(
                                                                 message: message,
                                                                 newContent: newContent)
                                                         }
                                                         : nil,
-                                                    canEdit: isLastUserMessage && !isLoading,
+                                                    canEdit: message.id == lastUserMessageId && !isLoading,
                                                     onImageTap: { img, rect in
                                                         chatPreviewImage = img
                                                         chatPreviewSourceRect = rect
@@ -1900,19 +1898,25 @@ struct ContentView: View {
                                 .onChange(of: chatManager.currentSessionId) { _, _ in
                                     handleScroll(proxy: proxy)
                                 }
+                                .onChange(of: streamingMessageId) { _, newId in
+                                    // Initial scroll when a new streaming message appears
+                                    guard let msgId = newId, isLoading else { return }
+                                    DispatchQueue.main.async {
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            proxy.scrollTo(msgId, anchor: .bottom)
+                                        }
+                                    }
+                                }
                                 .onChange(of: streamBuffer) { _, _ in
-                                    guard isLoading else { return }
-                                    // Throttle: cancel pending scroll, schedule new one
+                                    // Continuous scroll during streaming
+                                    guard isLoading, let msgId = streamingMessageId else { return }
                                     scrollWorkItem?.cancel()
-                                    let work = DispatchWorkItem { [weak chatManager] in
-                                        guard let messages = chatManager?.getCurrentMessages(),
-                                            let lastId = messages.last?.id
-                                        else { return }
-                                        proxy.scrollTo(lastId, anchor: .bottom)
+                                    let work = DispatchWorkItem {
+                                        proxy.scrollTo(msgId, anchor: .bottom)
                                     }
                                     scrollWorkItem = work
                                     DispatchQueue.main.asyncAfter(
-                                        deadline: .now() + 0.05, execute: work)
+                                        deadline: .now() + 0.1, execute: work)
                                 }
                                 .onChange(of: isLoading) { _, loading in
                                     if loading {
@@ -2375,6 +2379,8 @@ struct ContentView: View {
 
                     DispatchQueue.main.async {
                         self.chatManager.addMessage(aiMsg)
+                        self.streamBuffer[aiMsgId] = ""
+                        self.streamingMessageId = aiMsgId
                     }
 
                     do {
@@ -2403,22 +2409,23 @@ struct ContentView: View {
                             }
 
                             if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
-                                let contentToUpdate = fullContent
-                                let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
-                                let imgToUpdate = receivedImage
+                                let contentSnapshot = fullContent
+                                let thinkingSnapshot = fullThinking.isEmpty ? nil : fullThinking
 
                                 DispatchQueue.main.async {
-                                    self.chatManager.updateMessage(
-                                        id: aiMsgId, content: contentToUpdate,
-                                        thinkingContent: thinkingToUpdate,
-                                        image: imgToUpdate,
-                                        isStreaming: true)
+                                    self.streamBuffer[aiMsgId] = contentSnapshot
+                                    if let t = thinkingSnapshot {
+                                        self.streamThinkingBuffer[aiMsgId] = t
+                                    }
                                 }
                                 lastUpdateTime = Date()
                             }
                         }
                         let finalImage = receivedImage
                         DispatchQueue.main.async {
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.streamingMessageId = nil
                             self.chatManager.updateMessage(
                                 id: aiMsgId, content: fullContent,
                                 thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
@@ -2432,6 +2439,9 @@ struct ContentView: View {
                         }
                     } catch {
                         DispatchQueue.main.async {
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.streamingMessageId = nil
                             self.chatManager.updateMessage(
                                 id: aiMsgId, content: "Error: \(error.localizedDescription)",
                                 isStreaming: false)
@@ -2455,6 +2465,8 @@ struct ContentView: View {
 
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
+                    self.streamBuffer[aiMsgId] = ""
+                    self.streamingMessageId = aiMsgId
                 }
 
                 do {
@@ -2468,16 +2480,17 @@ struct ContentView: View {
                         accumulatedContent += contentSnapshot
 
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
-                            let contentToUpdate = accumulatedContent
+                            let contentSnapshot = accumulatedContent
                             DispatchQueue.main.async {
-                                self.chatManager.updateMessage(
-                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                                self.streamBuffer[aiMsgId] = contentSnapshot
                             }
                             lastUpdateTime = Date()
                         }
                     }
 
                     DispatchQueue.main.async {
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamingMessageId = nil
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: accumulatedContent, isStreaming: false)
                         if let versions = existingVersions {
@@ -2488,6 +2501,8 @@ struct ContentView: View {
                     }
                 } catch {
                     DispatchQueue.main.async {
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamingMessageId = nil
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: "Error: \(error.localizedDescription)",
                             isStreaming: false)
@@ -2500,12 +2515,13 @@ struct ContentView: View {
                 let activeModel = selectedOllamaModel
                 var aiMsg = Message(content: "", model: activeModel, isUser: false)
                 aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
 
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
+                    self.streamBuffer[aiMsgId] = ""
+                    self.streamingMessageId = aiMsgId
                 }
-
-                // Removed redeclaration of activeModel
 
                 do {
                     var fullContent = ""
@@ -2522,18 +2538,22 @@ struct ContentView: View {
                         }
 
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
-                            let contentToUpdate = fullContent
-                            let thinkingToUpdate = fullThinking.isEmpty ? nil : fullThinking
+                            let contentSnapshot = fullContent
+                            let thinkingSnapshot = fullThinking.isEmpty ? nil : fullThinking
 
                             DispatchQueue.main.async {
-                                self.chatManager.updateMessage(
-                                    id: aiMsgId, content: contentToUpdate,
-                                    thinkingContent: thinkingToUpdate, isStreaming: true)
+                                self.streamBuffer[aiMsgId] = contentSnapshot
+                                if let t = thinkingSnapshot {
+                                    self.streamThinkingBuffer[aiMsgId] = t
+                                }
                             }
                             lastUpdateTime = Date()
                         }
                     }
                     DispatchQueue.main.async {
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                        self.streamingMessageId = nil
                         self.chatManager.updateMessage(
                             id: aiMsgId,
                             content: fullContent,
@@ -2547,6 +2567,9 @@ struct ContentView: View {
                     }
                 } catch {
                     DispatchQueue.main.async {
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                        self.streamingMessageId = nil
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: "Error: \(error.localizedDescription)",
                             isStreaming: false)
@@ -2578,6 +2601,8 @@ struct ContentView: View {
 
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
+                    self.streamBuffer[aiMsgId] = ""
+                    self.streamingMessageId = aiMsgId
                 }
 
                 do {
@@ -2594,15 +2619,16 @@ struct ContentView: View {
                         fullContent += contentChunk
 
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
-                            let contentToUpdate = fullContent
+                            let contentSnapshot = fullContent
                             DispatchQueue.main.async {
-                                self.chatManager.updateMessage(
-                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                                self.streamBuffer[aiMsgId] = contentSnapshot
                             }
                             lastUpdateTime = Date()
                         }
                     }
                     DispatchQueue.main.async {
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamingMessageId = nil
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: fullContent, isStreaming: false)
                         if let versions = existingVersions {
@@ -2613,6 +2639,8 @@ struct ContentView: View {
                     }
                 } catch {
                     DispatchQueue.main.async {
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamingMessageId = nil
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: "Error: \(error.localizedDescription)",
                             isStreaming: false)
@@ -2636,6 +2664,8 @@ struct ContentView: View {
 
                 DispatchQueue.main.async {
                     self.chatManager.addMessage(aiMsg)
+                    self.streamBuffer[aiMsgId] = ""
+                    self.streamingMessageId = aiMsgId
                 }
 
                 do {
@@ -2648,15 +2678,16 @@ struct ContentView: View {
                         fullContent += contentChunk
 
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
-                            let contentToUpdate = fullContent
+                            let contentSnapshot = fullContent
                             DispatchQueue.main.async {
-                                self.chatManager.updateMessage(
-                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                                self.streamBuffer[aiMsgId] = contentSnapshot
                             }
                             lastUpdateTime = Date()
                         }
                     }
                     DispatchQueue.main.async {
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamingMessageId = nil
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: fullContent, isStreaming: false)
                         if let versions = existingVersions {
@@ -2667,6 +2698,8 @@ struct ContentView: View {
                     }
                 } catch {
                     DispatchQueue.main.async {
+                        self.streamBuffer.removeValue(forKey: aiMsgId)
+                        self.streamingMessageId = nil
                         self.chatManager.updateMessage(
                             id: aiMsgId, content: "Error: \(error.localizedDescription)",
                             isStreaming: false)
@@ -5988,6 +6021,8 @@ struct MessageView: View, Equatable {
     @State private var isThinkingExpanded = false
     @State private var isEditing = false
     @State private var editText = ""
+    @State private var cachedStreamingBlocks: [MarkdownBlock] = []
+    @State private var cachedStreamingContent: String = ""
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @Environment(\.colorScheme) private var colorScheme
@@ -5996,6 +6031,33 @@ struct MessageView: View, Equatable {
     static func == (lhs: MessageView, rhs: MessageView) -> Bool {
         return lhs.message == rhs.message && lhs.liveContent == rhs.liveContent
             && lhs.liveThinking == rhs.liveThinking && lhs.canEdit == rhs.canEdit
+    }
+
+    /// Appends a blinking cursor to the last block for streaming display.
+    private func blocksWithCursor(_ blocks: [MarkdownBlock], showCursor: Bool) -> [MarkdownBlock] {
+        guard showCursor, let lastBlock = blocks.last else { return blocks }
+        let modifiedType: MarkdownBlockType
+        switch lastBlock.type {
+        case .text(let t):
+            modifiedType = .text(t + " ▋")
+        case .code(let lang, let code):
+            modifiedType = .code(lang, code + " ▋")
+        default:
+            modifiedType = lastBlock.type
+        }
+        let cursorBlock = MarkdownBlock(type: modifiedType)
+        return Array(blocks.dropLast()) + [cursorBlock]
+    }
+
+    /// Renders streaming content using cached markdown blocks.
+    @ViewBuilder
+    private func streamingContentView(activeContent: String) -> some View {
+        let blocks = cachedStreamingBlocks.isEmpty
+            ? Message.parseMarkdown(activeContent)
+            : cachedStreamingBlocks
+        let displayBlocks = blocksWithCursor(blocks, showCursor: isCursorVisible)
+        MarkdownView(blocks: displayBlocks)
+            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
     }
 
     var body: some View {
@@ -6238,17 +6300,15 @@ struct MessageView: View, Equatable {
                             .padding(.bottom, 4)
                         }
                         let activeContent = liveContent ?? message.content
+                        let isActivelyStreaming = liveContent != nil || message.isStreaming
 
-                        if message.isStreaming && activeContent.isEmpty
+                        if isActivelyStreaming && activeContent.isEmpty
                             && (liveThinking ?? message.thinkingContent) == nil
                         {
                             ThinkingIndicator()
-                        } else if !activeContent.isEmpty || message.isStreaming {
-                            if message.isStreaming {
-                                let displayContent = activeContent + (isCursorVisible ? " ▋" : "")
-                                MarkdownView(blocks: Message.parseMarkdown(displayContent))
-                                    .foregroundStyle(
-                                        colorScheme == .dark ? Color.white : Color.black)
+                        } else if !activeContent.isEmpty || isActivelyStreaming {
+                            if isActivelyStreaming {
+                                streamingContentView(activeContent: activeContent)
                             } else {
                                 MarkdownView(blocks: message.blocks)
                                     .equatable()
@@ -6363,7 +6423,8 @@ struct MessageView: View, Equatable {
         }
         .padding(.vertical, 4)
         .onReceive(cursorTimer) { _ in
-            if message.isStreaming {
+            // Only toggle cursor for messages that are actively streaming
+            if liveContent != nil || message.isStreaming {
                 isCursorVisible.toggle()
             }
         }
@@ -6379,6 +6440,13 @@ struct MessageView: View, Equatable {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
                     isThinkingExpanded = false
                 }
+                // Cache parsed markdown blocks to avoid re-parsing on cursor blinks
+                cachedStreamingContent = val
+                cachedStreamingBlocks = Message.parseMarkdown(val)
+            } else if newValue == nil {
+                // Streaming ended, clear cache
+                cachedStreamingBlocks = []
+                cachedStreamingContent = ""
             }
         }
         .onChange(of: message.thinkingContent) { _, newValue in
