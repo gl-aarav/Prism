@@ -642,7 +642,7 @@ struct ModelComparisonView: View {
             .padding(.vertical, 12)
 
             // Synthesize options bar (thinking + web search)
-            if synthesizeProvider == "Ollama" {
+            if synthesizeProvider == "Ollama" || synthesizeProvider == "NVIDIA API" {
                 HStack(spacing: 10) {
                     // Thinking level
                     if synthesizeHasThinkingCapability {
@@ -798,9 +798,14 @@ struct ModelComparisonView: View {
 
     /// Whether the synthesize model has thinking capability
     private var synthesizeHasThinkingCapability: Bool {
-        guard synthesizeProvider == "Ollama" else { return false }
-        let lower = synthesizeModel.lowercased()
-        return lower.contains("deepseek") || lower.contains("gpt-oss") || lower.contains("r1")
+        if synthesizeProvider == "Ollama" {
+            let lower = synthesizeModel.lowercased()
+            return lower.contains("deepseek") || lower.contains("gpt-oss") || lower.contains("r1")
+        } else if synthesizeProvider == "NVIDIA API" {
+            let lower = synthesizeModel.lowercased()
+            return lower.contains("deepseek") || lower.contains("glm")
+        }
+        return false
     }
 
     /// Compute the effective thinking level for a given provider/model.
@@ -823,6 +828,12 @@ struct ModelComparisonView: View {
                 return level == "high" ? "true" : "false"
             }
             return "false"
+        } else if provider == "NVIDIA API" {
+            let lower = model.lowercased()
+            if lower.contains("deepseek") || lower.contains("glm") {
+                return level == "high" ? "true" : "false"
+            }
+            return "none"
         }
         return "none"
     }
@@ -943,20 +954,36 @@ struct ModelComparisonView: View {
                         return
                     }
                     var full = ""
+                    var fullThinking = ""
                     var lastUpdateTime = Date()
-                    for try await (chunk, _) in nvidiaService.sendMessageStream(
+                    let nvidiaEnableThinking = synthThinking == "true"
+                    for try await (chunk, thinkChunk) in nvidiaService.sendMessageStream(
                         history: history, apiKey: nvidiaKey, model: synthesizeModel,
-                        systemPrompt: ""
+                        systemPrompt: "",
+                        enableThinking: nvidiaEnableThinking
                     ) {
                         full += chunk
+                        if let t = thinkChunk { fullThinking += t }
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
                             let content = full
-                            await MainActor.run { state.synthesizedResponse = content }
+                            let thinking = fullThinking
+                            await MainActor.run {
+                                state.synthesizedResponse = content
+                                if !thinking.isEmpty {
+                                    state.synthesizedThinking = thinking
+                                }
+                            }
                             lastUpdateTime = Date()
                         }
                     }
                     let finalNvidiaContent = full
-                    await MainActor.run { state.synthesizedResponse = finalNvidiaContent }
+                    let finalNvidiaThinking = fullThinking
+                    await MainActor.run {
+                        state.synthesizedResponse = finalNvidiaContent
+                        if !finalNvidiaThinking.isEmpty {
+                            state.synthesizedThinking = finalNvidiaThinking
+                        }
+                    }
 
                 case "GitHub Copilot":
                     guard copilotService.isAuthenticated else {
@@ -1252,9 +1279,12 @@ struct ModelComparisonView: View {
                         var fullContent = ""
                         var fullThinking = ""
                         var lastUpdateTime = Date()
+                        let nvidiaThinking = effectiveThinkingLevel(
+                            provider: provider, model: model, level: slotThinkingLevel)
                         for try await (chunk, thinkChunk) in nvidiaService.sendMessageStream(
                             history: history, apiKey: nvidiaKey, model: model,
-                            systemPrompt: systemPrompt
+                            systemPrompt: systemPrompt,
+                            enableThinking: nvidiaThinking == "true"
                         ) {
                             fullContent += chunk
                             if let t = thinkChunk { fullThinking += t }
@@ -1445,6 +1475,10 @@ struct ComparisonCard: View {
             if lower.contains("gpt-oss") {
                 return .threeState
             } else if lower.contains("deepseek") || lower.contains("r1") {
+                return .binary
+            }
+        } else if slot.provider == "NVIDIA API" {
+            if lower.contains("deepseek") || lower.contains("glm") {
                 return .binary
             }
         }
