@@ -64,11 +64,16 @@ class ComparisonStateManager: ObservableObject {
 struct ModelComparisonView: View {
     @AppStorage("GeminiKey") private var geminiKey: String = ""
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
+    @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
+    @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
+    @ObservedObject private var copilotService = GitHubCopilotService.shared
+    @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
+    @ObservedObject private var geminiCLIService = GeminiCLIService.shared
     @ObservedObject private var state = ComparisonStateManager.shared
 
     @AppStorage("ComparePrompt") private var prompt: String = ""
@@ -96,6 +101,7 @@ struct ModelComparisonView: View {
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
+    private let nvidiaService = NvidiaService()
     private let webSearchService = WebSearchService()
 
     // Convenience accessor for slots
@@ -143,7 +149,12 @@ struct ModelComparisonView: View {
                         },
                         ollamaManager: ollamaManager,
                         geminiManager: geminiManager,
-                        hasOllamaAPIKey: !ollamaAPIKey.isEmpty
+                        nvidiaManager: nvidiaManager,
+                        copilotModelManager: copilotModelManager,
+                        geminiCLIService: geminiCLIService,
+                        hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
+                        hasNvidiaKey: !nvidiaKey.isEmpty,
+                        hasCopilotAuth: copilotService.isAuthenticated
                     )
                 }
                 .padding(.horizontal, 20)
@@ -462,6 +473,68 @@ struct ModelComparisonView: View {
                             }
                         }
                     }
+                    if !nvidiaKey.isEmpty {
+                        Menu("NVIDIA API") {
+                            ForEach(NvidiaModelManager.modelGroups, id: \.name) { group in
+                                Section(group.name) {
+                                    ForEach(group.models, id: \.self) { model in
+                                        Button(action: {
+                                            synthesizeProvider = "NVIDIA API"
+                                            synthesizeModel = model
+                                        }) {
+                                            if synthesizeProvider == "NVIDIA API"
+                                                && synthesizeModel == model
+                                            {
+                                                Label(
+                                                    nvidiaManager.displayName(for: model),
+                                                    systemImage: "checkmark")
+                                            } else {
+                                                Text(nvidiaManager.displayName(for: model))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if copilotService.isAuthenticated {
+                        Menu("GitHub Copilot") {
+                            ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                                Button(action: {
+                                    synthesizeProvider = "GitHub Copilot"
+                                    synthesizeModel = model
+                                }) {
+                                    if synthesizeProvider == "GitHub Copilot"
+                                        && synthesizeModel == model
+                                    {
+                                        Label(
+                                            copilotModelManager.displayName(for: model),
+                                            systemImage: "checkmark")
+                                    } else {
+                                        Text(copilotModelManager.displayName(for: model))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if geminiCLIService.isAvailable {
+                        Menu("Gemini CLI") {
+                            ForEach(GeminiCLIService.availableModels, id: \.id) { model in
+                                Button(action: {
+                                    synthesizeProvider = "Gemini CLI"
+                                    synthesizeModel = model.id
+                                }) {
+                                    if synthesizeProvider == "Gemini CLI"
+                                        && synthesizeModel == model.id
+                                    {
+                                        Label(model.name, systemImage: "checkmark")
+                                    } else {
+                                        Text(model.name)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: synthesizeProviderIcon)
@@ -702,6 +775,9 @@ struct ModelComparisonView: View {
         case "Apple Foundation": return "apple.logo"
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
+        case "NVIDIA API": return "bolt.fill"
+        case "GitHub Copilot": return "person.crop.circle"
+        case "Gemini CLI": return "terminal"
         default: return "cpu"
         }
     }
@@ -852,6 +928,70 @@ struct ModelComparisonView: View {
                     var full = ""
                     for try await chunk in appleFoundationService.sendMessageStream(
                         history: history, systemPrompt: ""
+                    ) {
+                        full += chunk
+                        let content = full
+                        await MainActor.run { state.synthesizedResponse = content }
+                    }
+
+                case "NVIDIA API":
+                    guard !nvidiaKey.isEmpty else {
+                        await MainActor.run {
+                            state.synthesizedResponse = "Error: No NVIDIA API key set."
+                            isSynthesizing = false
+                        }
+                        return
+                    }
+                    var full = ""
+                    var lastUpdateTime = Date()
+                    for try await (chunk, _) in nvidiaService.sendMessageStream(
+                        history: history, apiKey: nvidiaKey, model: synthesizeModel,
+                        systemPrompt: ""
+                    ) {
+                        full += chunk
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let content = full
+                            await MainActor.run { state.synthesizedResponse = content }
+                            lastUpdateTime = Date()
+                        }
+                    }
+                    let finalNvidiaContent = full
+                    await MainActor.run { state.synthesizedResponse = finalNvidiaContent }
+
+                case "GitHub Copilot":
+                    guard copilotService.isAuthenticated else {
+                        await MainActor.run {
+                            state.synthesizedResponse = "Error: GitHub Copilot not authenticated."
+                            isSynthesizing = false
+                        }
+                        return
+                    }
+                    var full = ""
+                    var lastUpdateTime = Date()
+                    for try await (chunk, _) in GitHubCopilotService.shared.sendMessageStream(
+                        history: history, model: synthesizeModel, systemPrompt: ""
+                    ) {
+                        full += chunk
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let content = full
+                            await MainActor.run { state.synthesizedResponse = content }
+                            lastUpdateTime = Date()
+                        }
+                    }
+                    let finalCopilotContent = full
+                    await MainActor.run { state.synthesizedResponse = finalCopilotContent }
+
+                case "Gemini CLI":
+                    guard GeminiCLIService.shared.isAvailable else {
+                        await MainActor.run {
+                            state.synthesizedResponse = "Error: Gemini CLI not available."
+                            isSynthesizing = false
+                        }
+                        return
+                    }
+                    var full = ""
+                    for try await chunk in GeminiCLIService.shared.sendMessageStream(
+                        history: history, model: synthesizeModel, systemPrompt: ""
                     ) {
                         full += chunk
                         let content = full
@@ -1091,11 +1231,128 @@ struct ModelComparisonView: View {
                                 }
                             }
                         }
-                        let elapsed = Date().timeIntervalSince(startTime)
+                        let afElapsed = Date().timeIntervalSince(startTime)
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
                                 state.slots[idx].isLoading = false
-                                state.slots[idx].elapsedTime = elapsed
+                                state.slots[idx].elapsedTime = afElapsed
+                            }
+                        }
+
+                    case "NVIDIA API":
+                        guard !nvidiaKey.isEmpty else {
+                            await MainActor.run {
+                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                    state.slots[idx].error = "No NVIDIA API key set"
+                                    state.slots[idx].isLoading = false
+                                }
+                            }
+                            return
+                        }
+                        var fullContent = ""
+                        var fullThinking = ""
+                        var lastUpdateTime = Date()
+                        for try await (chunk, thinkChunk) in nvidiaService.sendMessageStream(
+                            history: history, apiKey: nvidiaKey, model: model,
+                            systemPrompt: systemPrompt
+                        ) {
+                            fullContent += chunk
+                            if let t = thinkChunk { fullThinking += t }
+
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                let content = fullContent
+                                let thinking = fullThinking
+                                await MainActor.run {
+                                    if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                        state.slots[idx].response = content
+                                        if !thinking.isEmpty {
+                                            state.slots[idx].thinkingContent = thinking
+                                        }
+                                    }
+                                }
+                                lastUpdateTime = Date()
+                            }
+                        }
+                        let nvidiaElapsed = Date().timeIntervalSince(startTime)
+                        let finalNvidiaContent = fullContent
+                        let finalNvidiaThinking = fullThinking
+                        await MainActor.run {
+                            if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                state.slots[idx].response = finalNvidiaContent
+                                if !finalNvidiaThinking.isEmpty {
+                                    state.slots[idx].thinkingContent = finalNvidiaThinking
+                                }
+                                state.slots[idx].isLoading = false
+                                state.slots[idx].elapsedTime = nvidiaElapsed
+                            }
+                        }
+
+                    case "GitHub Copilot":
+                        guard copilotService.isAuthenticated else {
+                            await MainActor.run {
+                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                    state.slots[idx].error = "GitHub Copilot not authenticated"
+                                    state.slots[idx].isLoading = false
+                                }
+                            }
+                            return
+                        }
+                        var fullContent = ""
+                        var lastUpdateTime = Date()
+                        for try await (chunk, _) in GitHubCopilotService.shared.sendMessageStream(
+                            history: history, model: model, systemPrompt: systemPrompt
+                        ) {
+                            fullContent += chunk
+
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                let content = fullContent
+                                await MainActor.run {
+                                    if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                        state.slots[idx].response = content
+                                    }
+                                }
+                                lastUpdateTime = Date()
+                            }
+                        }
+                        let copilotElapsed = Date().timeIntervalSince(startTime)
+                        let finalCopilotContent = fullContent
+                        await MainActor.run {
+                            if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                state.slots[idx].response = finalCopilotContent
+                                state.slots[idx].isLoading = false
+                                state.slots[idx].elapsedTime = copilotElapsed
+                            }
+                        }
+
+                    case "Gemini CLI":
+                        guard GeminiCLIService.shared.isAvailable else {
+                            await MainActor.run {
+                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                    state.slots[idx].error = "Gemini CLI not available"
+                                    state.slots[idx].isLoading = false
+                                }
+                            }
+                            return
+                        }
+                        var fullContent = ""
+                        for try await chunk in GeminiCLIService.shared.sendMessageStream(
+                            history: history, model: model, systemPrompt: systemPrompt
+                        ) {
+                            fullContent += chunk
+                            let content = fullContent
+                            await MainActor.run {
+                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                    state.slots[idx].response = content
+                                }
+                            }
+                        }
+                        let cliElapsed = Date().timeIntervalSince(startTime)
+                        let finalCLIContent = fullContent
+                        await MainActor.run {
+                            if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                state.slots[idx].response = finalCLIContent
+                                state.slots[idx].isLoading = false
+                                state.slots[idx].elapsedTime = cliElapsed
                             }
                         }
 
@@ -1147,7 +1404,12 @@ struct ComparisonCard: View {
 
     @ObservedObject var ollamaManager: OllamaModelManager
     @ObservedObject var geminiManager: GeminiModelManager
+    @ObservedObject var nvidiaManager: NvidiaModelManager
+    @ObservedObject var copilotModelManager: GitHubCopilotModelManager
+    @ObservedObject var geminiCLIService: GeminiCLIService
     var hasOllamaAPIKey: Bool = false
+    var hasNvidiaKey: Bool = false
+    var hasCopilotAuth: Bool = false
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var isHovered: Bool = false
@@ -1163,6 +1425,9 @@ struct ComparisonCard: View {
         case "Apple Foundation": return "apple.logo"
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
+        case "NVIDIA API": return "bolt.fill"
+        case "GitHub Copilot": return "person.crop.circle"
+        case "Gemini CLI": return "terminal"
         default: return "cpu"
         }
     }
@@ -1456,6 +1721,53 @@ struct ComparisonCard: View {
                             Label(model, systemImage: "checkmark")
                         } else {
                             Text(model)
+                        }
+                    }
+                }
+            }
+            if hasNvidiaKey {
+                Menu("NVIDIA API") {
+                    ForEach(NvidiaModelManager.modelGroups, id: \.name) { group in
+                        Section(group.name) {
+                            ForEach(group.models, id: \.self) { model in
+                                Button(action: { onChangeProvider("NVIDIA API", model) }) {
+                                    if slot.provider == "NVIDIA API" && slot.model == model {
+                                        Label(
+                                            nvidiaManager.displayName(for: model),
+                                            systemImage: "checkmark")
+                                    } else {
+                                        Text(nvidiaManager.displayName(for: model))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if hasCopilotAuth {
+                Menu("GitHub Copilot") {
+                    ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                        Button(action: { onChangeProvider("GitHub Copilot", model) }) {
+                            if slot.provider == "GitHub Copilot" && slot.model == model {
+                                Label(
+                                    copilotModelManager.displayName(for: model),
+                                    systemImage: "checkmark")
+                            } else {
+                                Text(copilotModelManager.displayName(for: model))
+                            }
+                        }
+                    }
+                }
+            }
+            if geminiCLIService.isAvailable {
+                Menu("Gemini CLI") {
+                    ForEach(GeminiCLIService.availableModels, id: \.id) { model in
+                        Button(action: { onChangeProvider("Gemini CLI", model.id) }) {
+                            if slot.provider == "Gemini CLI" && slot.model == model.id {
+                                Label(model.name, systemImage: "checkmark")
+                            } else {
+                                Text(model.name)
+                            }
                         }
                     }
                 }
