@@ -12,7 +12,7 @@
 *   **Google Gemini**: Harness the power of Google's latest cloud models (Gemini 1.5 Pro/Flash) for complex reasoning, coding, and multimodal analysis.
 *   **Ollama Integration**: Run privacy-focused local models (like Llama 3, DeepSeek, Mistral) directly on your machine. Zero data leaves your device.
 *   **Apple Foundation Models**: Access Apple's on-device foundation models (Apple Intelligence) for private, lightning-fast AI responses.
-*   **Apple Shortcuts**: Trigger system automations, control your smart home, or chain complex workflows directly from the chat.
+*   **Apple Shortcuts**: Trigger system ai shortcuts.
 
 ### ✍️ System-Wide AI Writing Layer
 Transform any text field on your Mac into an AI-powered workspace using macOS Accessibility APIs:
