@@ -64,19 +64,19 @@ class AppleFoundationService {
 
     #if canImport(FoundationModels)
         @available(macOS 26.0, *)
-        private class InnerFoundationHandler {
+        private class InnerFoundationHandler: @unchecked Sendable {
             private var session: LanguageModelSession?
             private var isInitializing = true
 
             init() {
-                Task.detached { [weak self] in
+                Task {
                     let newSession = LanguageModelSession(
                         instructions: Instructions(
                             "You are a helpful assistant found in the Prism menu bar app."))
                     newSession.prewarm()
                     await MainActor.run {
-                        self?.session = newSession
-                        self?.isInitializing = false
+                        self.session = newSession
+                        self.isInitializing = false
                     }
                 }
             }
