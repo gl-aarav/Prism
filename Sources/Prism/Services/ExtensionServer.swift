@@ -107,6 +107,22 @@ class ExtensionServer {
                 }
             }
 
+            // NVIDIA API - only show if there are configured accounts with API keys
+            let nvidiaAccounts = AccountManager.shared.nvidiaAccounts().filter {
+                !$0.apiKey.isEmpty
+            }
+            for account in nvidiaAccounts {
+                let prefix =
+                    nvidiaAccounts.count > 1 ? "\(account.displayName): " : "NVIDIA: "
+                for model in NvidiaModelManager.shared.availableModels {
+                    allModels.append([
+                        "id": "nvidia:\(model)|\(account.id.uuidString)",
+                        "name":
+                            "\(prefix)\(NvidiaModelManager.shared.displayName(for: model))",
+                    ])
+                }
+            }
+
             let response = HttpResponse.ok(.json(allModels))
             return self.applyCORS(to: response)
         }
@@ -242,6 +258,7 @@ class ExtensionServer {
             let isApple = modelId.hasPrefix("apple:")
             let isCopilot = modelId.hasPrefix("copilot:")
             let isGeminiCLI = modelId.hasPrefix("geminicli:")
+            let isNvidia = modelId.hasPrefix("nvidia:")
 
             // Parse model name and optional account ID (format: "provider:model|accountUUID")
             let afterPrefix = modelId.components(separatedBy: ":").dropFirst().joined(
@@ -389,6 +406,40 @@ class ExtensionServer {
                                 for try await chunk in GeminiCLIService.shared.sendMessageStream(
                                     history: history, model: actualModel, systemPrompt: systemPrompt
                                 ) {
+                                    if !chunk.isEmpty {
+                                        let event = "data: \(try self.jsonEscape(chunk))\n\n"
+                                        try? writer.write(Array(event.utf8))
+                                    }
+                                }
+                            }
+                        } else if isNvidia {
+                            // NVIDIA API
+                            var apiKey =
+                                UserDefaults.standard.string(forKey: "NvidiaKey") ?? ""
+                            if let accId = accountId, let uuid = UUID(uuidString: accId),
+                                let account = AccountManager.shared.accounts.first(where: {
+                                    $0.id == uuid
+                                })
+                            {
+                                apiKey = account.apiKey
+                            }
+                            if apiKey.isEmpty {
+                                let event =
+                                    "data: \(try self.jsonEscapeDict(["error": "NVIDIA API Key missing. Set it in Prism Settings."]))\n\n"
+                                try? writer.write(Array(event.utf8))
+                            } else {
+                                let nvidia = NvidiaService()
+                                let enableThinking = thinkingLevel == "high"
+                                let stream = nvidia.sendMessageStream(
+                                    history: history, apiKey: apiKey, model: actualModel,
+                                    systemPrompt: systemPrompt,
+                                    enableThinking: enableThinking)
+                                for try await (chunk, thinkingChunk) in stream {
+                                    if let thinking = thinkingChunk, !thinking.isEmpty {
+                                        let thinkEvent =
+                                            "data: \(try self.jsonEscapeDict(["thinking": thinking]))\n\n"
+                                        try? writer.write(Array(thinkEvent.utf8))
+                                    }
                                     if !chunk.isEmpty {
                                         let event = "data: \(try self.jsonEscape(chunk))\n\n"
                                         try? writer.write(Array(event.utf8))
