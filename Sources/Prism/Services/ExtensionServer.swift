@@ -448,7 +448,7 @@ class ExtensionServer {
                             }
                         }
 
-                        let endEvent = "data: [DONE]\n\n"
+                        let endEvent = "data: [DONE]\n\n\n"
                         try? writer.write(Array(endEvent.utf8))
                     } catch {
                         let errorEvent =

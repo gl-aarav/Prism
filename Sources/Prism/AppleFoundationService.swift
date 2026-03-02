@@ -86,6 +86,14 @@ class AppleFoundationService {
             > {
                 return AsyncThrowingStream { continuation in
                     Task {
+                        // Wait for session initialization (up to 15 seconds)
+                        if self.session == nil && self.isInitializing {
+                            for _ in 0..<30 {
+                                try? await Task.sleep(nanoseconds: 500_000_000)
+                                if self.session != nil || !self.isInitializing { break }
+                            }
+                        }
+
                         guard let session = self.session else {
                             let errorMsg =
                                 self.isInitializing

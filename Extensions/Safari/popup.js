@@ -323,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         modelSelect.innerHTML = '';
-        const groups = { 'Apple': [], 'Gemini': [], 'Ollama': [], 'Copilot': [], 'Other': [] };
+        const groups = { 'Apple': [], 'Gemini': [], 'Ollama': [], 'Copilot': [], 'NVIDIA': [], 'Other': [] };
         models.forEach(m => {
             let name = m.name;
             let group = 'Other';
@@ -338,10 +338,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     name = name.substring(8);
                 }
             }
+            else if (m.id.startsWith('nvidia:')) {
+                group = 'NVIDIA';
+                name = name.replace(/^NVIDIA:\s*/, '');
+            }
             groups[group].push({ id: m.id, name });
         });
 
-        ['Apple', 'Copilot', 'Gemini', 'Ollama', 'Other'].forEach(groupName => {
+        ['Apple', 'Copilot', 'Gemini', 'NVIDIA', 'Ollama', 'Other'].forEach(groupName => {
             if (groups[groupName].length > 0) {
                 const optgroup = document.createElement('optgroup');
                 optgroup.label = groupName;
@@ -402,6 +406,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>';
         if (modelId.startsWith('copilot:'))
             return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><path d="M12 2L3 7l9 5 9-5-9-5zM3 17l9 5 9-5M3 12l9 5 9-5"/></svg>';
+        if (modelId.startsWith('nvidia:'))
+            return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><path d="M13 3v7h7M3 11v10h18V11H3zM7 14h2v4H7zM11 14h2v4h-2zM15 14h2v4h-2z"/></svg>';
         return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="url(#headerGrad)" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>';
     }
 
@@ -425,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const thinkingDropdown = document.getElementById('thinkingDropdown');
         if (!thinkingDropdown) return;
 
-        if (modelId.startsWith('copilot:') || modelId.startsWith('apple:')) {
+        if (modelId.startsWith('copilot:') || modelId.startsWith('apple:') || modelId.startsWith('nvidia:')) {
             thinkingBtn.style.display = 'none';
             thinkingDropdownOpen = false;
             thinkingDropdown.style.display = 'none';
