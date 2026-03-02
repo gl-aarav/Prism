@@ -1820,7 +1820,9 @@ struct ContentView: View {
                                             EmptyStateView(appTheme: appTheme)
                                         } else {
                                             let lastMessageId = messages.last?.id
-                                            let lastUserMessageId = messages.last(where: { $0.isUser })?.id
+                                            let lastUserMessageId = messages.last(where: {
+                                                $0.isUser
+                                            })?.id
                                             ForEach(messages) { message in
                                                 MessageView(
                                                     message: message,
@@ -1837,14 +1839,16 @@ struct ContentView: View {
                                                                 for: message.id)
                                                         }
                                                         : nil,
-                                                    onEdit: (message.id == lastUserMessageId && !isLoading)
+                                                    onEdit: (message.id == lastUserMessageId
+                                                        && !isLoading)
                                                         ? { newContent in
                                                             editAndResend(
                                                                 message: message,
                                                                 newContent: newContent)
                                                         }
                                                         : nil,
-                                                    canEdit: message.id == lastUserMessageId && !isLoading,
+                                                    canEdit: message.id == lastUserMessageId
+                                                        && !isLoading,
                                                     onImageTap: { img, rect in
                                                         chatPreviewImage = img
                                                         chatPreviewSourceRect = rect
@@ -6047,7 +6051,8 @@ struct MessageView: View, Equatable {
     /// Renders streaming content using cached markdown blocks.
     @ViewBuilder
     private func streamingContentView(activeContent: String) -> some View {
-        let blocks = cachedStreamingBlocks.isEmpty
+        let blocks =
+            cachedStreamingBlocks.isEmpty
             ? Message.parseMarkdown(activeContent)
             : cachedStreamingBlocks
         let displayBlocks = blocksWithCursor(blocks, showCursor: isCursorVisible)
