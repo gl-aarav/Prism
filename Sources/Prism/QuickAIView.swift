@@ -1896,13 +1896,12 @@ extension QuickAIView {
             .onChange(of: chatManager.getCurrentMessages().count) { _, _ in
                 let messages = chatManager.getCurrentMessages()
                 guard let lastId = messages.last?.id else { return }
+                // No animation to avoid LazyVStack layout loops
                 DispatchQueue.main.async {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo(lastId, anchor: .bottom)
-                    }
+                    proxy.scrollTo(lastId, anchor: .bottom)
                 }
             }
-            // Throttled auto-scroll during generation
+            // Throttled auto-scroll during generation — no animation to prevent freezes
             .onChange(of: streamBuffer) { _, _ in
                 let messages = chatManager.getCurrentMessages()
                 guard let lastId = messages.last?.id, isLoading else { return }
@@ -1911,24 +1910,15 @@ extension QuickAIView {
                     proxy.scrollTo(lastId, anchor: .bottom)
                 }
                 quickScrollWorkItem = work
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
             }
             .onChange(of: isLoading) { _, loading in
-                if loading {
+                quickScrollWorkItem?.cancel()
+                if !loading {
+                    // Generation finished — final scroll with animation
                     let messages = chatManager.getCurrentMessages()
                     if let lastId = messages.last?.id {
-                        DispatchQueue.main.async {
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                proxy.scrollTo(lastId, anchor: .bottom)
-                            }
-                        }
-                    }
-                } else {
-                    // Generation finished — final scroll
-                    quickScrollWorkItem?.cancel()
-                    let messages = chatManager.getCurrentMessages()
-                    if let lastId = messages.last?.id {
-                        DispatchQueue.main.async {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                             withAnimation(.easeOut(duration: 0.2)) {
                                 proxy.scrollTo(lastId, anchor: .bottom)
                             }

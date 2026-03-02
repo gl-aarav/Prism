@@ -792,8 +792,12 @@ class ChatManager: ObservableObject {
     }
 
     func saveSessions() {
-        if let data = try? JSONEncoder().encode(sessions) {
-            try? data.write(to: savePath)
+        let currentSessions = sessions
+        let url = savePath
+        Task.detached(priority: .background) {
+            if let data = try? JSONEncoder().encode(currentSessions) {
+                try? data.write(to: url)
+            }
         }
     }
 
@@ -1901,14 +1905,16 @@ struct ContentView: View {
                                 .onChange(of: streamingMessageId) { _, newId in
                                     // Initial scroll when a new streaming message appears
                                     guard let msgId = newId, isLoading else { return }
-                                    DispatchQueue.main.async {
-                                        withAnimation(.easeOut(duration: 0.2)) {
-                                            proxy.scrollTo(msgId, anchor: .bottom)
-                                        }
+                                    scrollWorkItem?.cancel()
+                                    let work = DispatchWorkItem {
+                                        proxy.scrollTo(msgId, anchor: .bottom)
                                     }
+                                    scrollWorkItem = work
+                                    DispatchQueue.main.asyncAfter(
+                                        deadline: .now() + 0.05, execute: work)
                                 }
                                 .onChange(of: streamBuffer) { _, _ in
-                                    // Continuous scroll during streaming
+                                    // Throttled scroll during streaming — no animation to avoid layout loops
                                     guard isLoading, let msgId = streamingMessageId else { return }
                                     scrollWorkItem?.cancel()
                                     let work = DispatchWorkItem {
@@ -1916,24 +1922,15 @@ struct ContentView: View {
                                     }
                                     scrollWorkItem = work
                                     DispatchQueue.main.asyncAfter(
-                                        deadline: .now() + 0.1, execute: work)
+                                        deadline: .now() + 0.3, execute: work)
                                 }
                                 .onChange(of: isLoading) { _, loading in
-                                    if loading {
+                                    scrollWorkItem?.cancel()
+                                    if !loading {
+                                        // Generation finished — final scroll with animation
                                         let messages = chatManager.getCurrentMessages()
                                         if let lastId = messages.last?.id {
-                                            DispatchQueue.main.async {
-                                                withAnimation(.easeOut(duration: 0.2)) {
-                                                    proxy.scrollTo(lastId, anchor: .bottom)
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        // Generation finished — final scroll
-                                        scrollWorkItem?.cancel()
-                                        let messages = chatManager.getCurrentMessages()
-                                        if let lastId = messages.last?.id {
-                                            DispatchQueue.main.async {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                                 withAnimation(.easeOut(duration: 0.2)) {
                                                     proxy.scrollTo(lastId, anchor: .bottom)
                                                 }
@@ -2088,12 +2085,10 @@ struct ContentView: View {
         } else {
             // Same Session
             if currentCount > lastMessageCount {
-                // New Message -> Animate
+                // New Message — no animation to avoid LazyVStack layout loops
                 if let lastId = messages.last?.id {
                     DispatchQueue.main.async {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo(lastId, anchor: .bottom)
-                        }
+                        proxy.scrollTo(lastId, anchor: .bottom)
                     }
                 }
             }
