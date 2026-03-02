@@ -45,6 +45,9 @@ struct QuickAIView: View {
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
     @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
         "gemini-2.5-flash"
+    @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
+    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
+        "llama-3.1-70b-instruct"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
@@ -58,6 +61,7 @@ struct QuickAIView: View {
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
+    private let nvidiaService = NvidiaService()
     private let shortcutService = ShortcutService()
     private let appleFoundationService = AppleFoundationService()
     private let webSearchService = WebSearchService()
@@ -306,6 +310,7 @@ struct QuickAIView: View {
         case "ChatGPT": return "message"
         case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
         case "Gemini CLI": return "terminal"
+        case "NVIDIA API": return "bolt.fill"
         default: return "cpu"
         }
     }
@@ -815,6 +820,96 @@ struct QuickAIView: View {
                             id: aiMsgId, content: "Error: \(error.localizedDescription)",
                             isStreaming: false)
                         self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "NVIDIA API"
+                || selectedProvider.hasPrefix("NVIDIA API|")
+            {
+                var apiKey = nvidiaKey
+                if selectedProvider.contains("|"),
+                    let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
+                    let uuid = UUID(uuidString: uuidStr),
+                    let account = AccountManager.shared.accounts.first(where: { $0.id == uuid })
+                {
+                    apiKey = account.apiKey
+                }
+                if !apiKey.isEmpty {
+                    let aiMsgId = UUID()
+                    let activeModel = selectedNvidiaModel
+                    var aiMsg = Message(
+                        content: "",
+                        model: "NVIDIA: \(NvidiaModelManager.shared.displayName(for: activeModel))",
+                        isUser: false)
+                    aiMsg.id = aiMsgId
+                    aiMsg.isStreaming = true
+
+                    DispatchQueue.main.async {
+                        self.chatManager.addMessage(aiMsg)
+                        self.streamBuffer[aiMsgId] = ""
+                        self.streamThinkingBuffer[aiMsgId] = ""
+                    }
+
+                    do {
+                        var fullContent = ""
+                        var fullThinking = ""
+                        var lastUpdateTime = Date()
+
+                        for try await (contentChunk, thinkingChunk)
+                            in nvidiaService
+                            .sendMessageStream(
+                                history: chatManager.getCurrentMessages(), apiKey: apiKey,
+                                model: activeModel, systemPrompt: systemPrompt)
+                        {
+                            fullContent += contentChunk
+                            if let thinking = thinkingChunk {
+                                fullThinking += thinking
+                            }
+
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                let contentSnapshot = fullContent
+                                let thinkingSnapshot = fullThinking
+                                DispatchQueue.main.async {
+                                    self.streamBuffer[aiMsgId] = contentSnapshot
+                                    if thinkingSnapshot.isEmpty {
+                                        self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                                    } else {
+                                        self.streamThinkingBuffer[aiMsgId] = thinkingSnapshot
+                                    }
+                                }
+                                lastUpdateTime = Date()
+                            }
+                        }
+
+                        DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId,
+                                content: fullContent,
+                                thinkingContent: fullThinking.isEmpty ? nil : fullThinking)
+                            if let versions = existingVersions {
+                                self.chatManager.attachVersions(versions, to: aiMsgId)
+                            }
+                            self.chatManager.finalizeMessageUpdate()
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.isLoading = false
+                        }
+                    } catch {
+                        DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                            self.chatManager.finalizeMessageUpdate()
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.isLoading = false
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        let aiMsg = Message(
+                            content: "Please set your NVIDIA API Key in the main app settings.",
+                            isUser: false)
+                        self.chatManager.addMessage(aiMsg)
                         self.isLoading = false
                     }
                 }
@@ -1763,6 +1858,12 @@ extension QuickAIView {
                     }
                     Button(action: { selectedProvider = "Ollama" }) {
                         Label("Ollama", systemImage: getProviderIcon("Ollama"))
+                    }
+                    if AccountManager.shared.nvidiaAccounts().contains(where: { !$0.apiKey.isEmpty }
+                    ) {
+                        Button(action: { selectedProvider = "NVIDIA API" }) {
+                            Label("NVIDIA API", systemImage: getProviderIcon("NVIDIA API"))
+                        }
                     }
                     if copilotService.isAuthenticated {
                         let copilotAccounts = AccountManager.shared.copilotAccounts()

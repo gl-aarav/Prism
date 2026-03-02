@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Account Configuration
 
 enum ProviderType: String {
-    case gemini, ollama, copilot
+    case gemini, ollama, copilot, nvidia
 }
 
 struct ProviderAccount: Identifiable, Codable, Equatable {
@@ -31,6 +31,11 @@ struct ProviderAccount: Identifiable, Codable, Equatable {
     static func copilotAccount(name: String = "GitHub Copilot") -> ProviderAccount {
         ProviderAccount(
             providerType: "copilot", displayName: name, apiKey: "", endpoint: "", isActive: true)
+    }
+
+    static func nvidiaAccount(name: String = "NVIDIA", apiKey: String) -> ProviderAccount {
+        ProviderAccount(
+            providerType: "nvidia", displayName: name, apiKey: apiKey, endpoint: "", isActive: true)
     }
 }
 
@@ -67,6 +72,14 @@ class AccountManager: ObservableObject {
         if !accounts.contains(where: { $0.providerType == "ollama" }) {
             accounts.append(.ollamaAccount(endpoint: ollamaURL, apiKey: ollamaAPIKey))
             didMigrate = true
+        }
+
+        // Migrate legacy NVIDIA key
+        if let nvidiaKey = defaults.string(forKey: "NvidiaKey"), !nvidiaKey.isEmpty {
+            if !accounts.contains(where: { $0.providerType == "nvidia" }) {
+                accounts.append(.nvidiaAccount(apiKey: nvidiaKey))
+                didMigrate = true
+            }
         }
 
         // Migrate GitHub Copilot if signed in
@@ -167,6 +180,10 @@ class AccountManager: ObservableObject {
         accounts.filter { $0.providerType == "copilot" && $0.isActive }
     }
 
+    func nvidiaAccounts() -> [ProviderAccount] {
+        accounts.filter { $0.providerType == "nvidia" && $0.isActive }
+    }
+
     /// Returns true if there are any configured & active accounts for a provider type
     func hasActiveAccount(type: String) -> Bool {
         switch type {
@@ -176,6 +193,8 @@ class AccountManager: ObservableObject {
             return !ollamaAccounts().isEmpty
         case "copilot":
             return GitHubCopilotService.shared.isAuthenticated
+        case "nvidia":
+            return nvidiaAccounts().contains(where: { !$0.apiKey.isEmpty })
         default:
             return false
         }
@@ -188,6 +207,7 @@ class AccountManager: ObservableObject {
         case "gemini": accts = geminiAccounts()
         case "ollama": accts = ollamaAccounts()
         case "copilot": accts = copilotAccounts()
+        case "nvidia": accts = nvidiaAccounts()
         default: return type
         }
         guard index < accts.count else { return type }
@@ -228,6 +248,10 @@ class AccountManager: ObservableObject {
         if let firstOllama = ollamaAccounts().first {
             defaults.set(firstOllama.endpoint, forKey: "OllamaURL")
             defaults.set(firstOllama.apiKey, forKey: "OllamaAPIKey")
+        }
+
+        if let firstNvidia = nvidiaAccounts().first {
+            defaults.set(firstNvidia.apiKey, forKey: "NvidiaKey")
         }
     }
 }

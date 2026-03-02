@@ -1693,13 +1693,18 @@ struct ContentView: View {
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
+    private let nvidiaService = NvidiaService()
     private let webSearchService = WebSearchService()
     private let shortcutService = ShortcutService()
     private let appleFoundationService = AppleFoundationService()
 
+    @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
+    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
+        "llama-3.1-70b-instruct"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var accountManager = AccountManager.shared
+    @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
 
     var thinkingMode: ThinkingMode {
         if selectedProvider == "Gemini API" || selectedProvider.hasPrefix("Gemini API|") {
@@ -1893,6 +1898,8 @@ struct ContentView: View {
                                             || selectedProvider.hasPrefix("Gemini API|"),
                                         isCopilot: selectedProvider == "GitHub Copilot"
                                             || selectedProvider.hasPrefix("GitHub Copilot|"),
+                                        isNvidia: selectedProvider == "NVIDIA API"
+                                            || selectedProvider.hasPrefix("NVIDIA API|"),
                                         isGeminiCLI: selectedProvider == "Gemini CLI",
                                         webSearchEnabled: $webSearchEnabled,
                                         hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
@@ -2703,6 +2710,99 @@ struct ContentView: View {
                             id: aiMsgId, content: "Error: \(error.localizedDescription)",
                             isStreaming: false)
                         self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "NVIDIA API"
+                || selectedProvider.hasPrefix("NVIDIA API|")
+            {
+                // Resolve API key for multi-account
+                var apiKey = nvidiaKey
+                if selectedProvider.contains("|"),
+                    let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
+                    let uuid = UUID(uuidString: uuidStr),
+                    let account = accountManager.accounts.first(where: { $0.id == uuid })
+                {
+                    apiKey = account.apiKey
+                }
+                if !apiKey.isEmpty {
+                    let aiMsgId = UUID()
+                    let activeModel = selectedNvidiaModel
+                    var aiMsg = Message(
+                        content: "",
+                        model: "NVIDIA: \(NvidiaModelManager.shared.displayName(for: activeModel))",
+                        isUser: false)
+                    aiMsg.id = aiMsgId
+                    aiMsg.isStreaming = true
+
+                    DispatchQueue.main.async {
+                        self.chatManager.addMessage(aiMsg)
+                        self.streamBuffer[aiMsgId] = ""
+                        self.streamingMessageId = aiMsgId
+                    }
+
+                    do {
+                        var fullContent = ""
+                        var fullThinking = ""
+                        var lastUpdateTime = Date()
+
+                        for try await (contentChunk, thinkingChunk)
+                            in nvidiaService
+                            .sendMessageStream(
+                                history: currentHistory, apiKey: apiKey,
+                                model: activeModel,
+                                systemPrompt: effectiveSystemPrompt)
+                        {
+                            fullContent += contentChunk
+                            if let thinking = thinkingChunk {
+                                fullThinking += thinking
+                            }
+
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                let contentSnapshot = fullContent
+                                let thinkingSnapshot = fullThinking.isEmpty ? nil : fullThinking
+
+                                DispatchQueue.main.async {
+                                    self.streamBuffer[aiMsgId] = contentSnapshot
+                                    if let t = thinkingSnapshot {
+                                        self.streamThinkingBuffer[aiMsgId] = t
+                                    }
+                                }
+                                lastUpdateTime = Date()
+                            }
+                        }
+                        DispatchQueue.main.async {
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.streamingMessageId = nil
+                            self.chatManager.updateMessage(
+                                id: aiMsgId,
+                                content: fullContent,
+                                thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
+                                isStreaming: false)
+                            if let versions = existingVersions {
+                                self.chatManager.attachVersions(versions, to: aiMsgId)
+                            }
+                            self.chatManager.finalizeMessageUpdate()
+                            self.isLoading = false
+                        }
+                    } catch {
+                        DispatchQueue.main.async {
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.streamingMessageId = nil
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                                isStreaming: false)
+                            self.chatManager.finalizeMessageUpdate()
+                            self.isLoading = false
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        let aiMsg = Message(
+                            content: "Please enter your NVIDIA API Key in settings.", isUser: false)
+                        self.chatManager.addMessage(aiMsg)
                         self.isLoading = false
                     }
                 }
@@ -3657,6 +3757,31 @@ struct HeaderView: View {
                     }
                 }
 
+                // Only show NVIDIA if there are configured accounts with API keys
+                let nvidiaAccounts = accountManager.nvidiaAccounts().filter { !$0.apiKey.isEmpty }
+                if !nvidiaAccounts.isEmpty {
+                    Section("NVIDIA API") {
+                        if nvidiaAccounts.count == 1 {
+                            Button(action: { selectedProvider = "NVIDIA API" }) {
+                                Label(
+                                    nvidiaAccounts[0].displayName,
+                                    systemImage: getProviderIcon("NVIDIA API"))
+                            }
+                        } else {
+                            ForEach(Array(nvidiaAccounts.enumerated()), id: \.element.id) {
+                                index, account in
+                                Button(action: {
+                                    selectedProvider = "NVIDIA API|\(account.id.uuidString)"
+                                }) {
+                                    Label(
+                                        account.displayName,
+                                        systemImage: getProviderIcon("NVIDIA API"))
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Only show GitHub Copilot if signed in
                 if copilotService.isAuthenticated {
                     let copilotAccounts = accountManager.copilotAccounts()
@@ -3787,6 +3912,7 @@ struct HeaderView: View {
         case "ChatGPT": return "message"
         case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
         case "Gemini CLI": return "terminal"
+        case "NVIDIA API": return "bolt.fill"
         default: return "cpu"
         }
     }
@@ -4225,6 +4351,7 @@ struct InputView: View {
     var isOllama: Bool = false
     var isGemini: Bool = false
     var isCopilot: Bool = false
+    var isNvidia: Bool = false
     var isGeminiCLI: Bool = false
     @Binding var webSearchEnabled: Bool
     var hasOllamaAPIKey: Bool = false
@@ -4236,10 +4363,13 @@ struct InputView: View {
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
     @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
         "gemini-2.5-flash"
+    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
+        "llama-3.1-70b-instruct"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
     @ObservedObject var geminiCLIService = GeminiCLIService.shared
+    @ObservedObject var nvidiaManager = NvidiaModelManager.shared
     @ObservedObject private var slashCommandManager = SlashCommandManager.shared
 
     @State private var isFocused: Bool = false
@@ -4248,6 +4378,8 @@ struct InputView: View {
     @State private var newCustomModelName = ""
     @State private var showAddCustomGeminiModel = false
     @State private var newCustomGeminiModelName = ""
+    @State private var showAddCustomNvidiaModel = false
+    @State private var newCustomNvidiaModelName = ""
     @State private var glassHover: Bool = false
     @State private var slashMatches: [SlashCommand] = []
     @State private var slashSelectedIndex: Int = 0
@@ -4552,6 +4684,97 @@ struct InputView: View {
                     }
                     .menuStyle(.borderlessButton)
                     .help("Select Copilot Model")
+                }
+
+                if isNvidia {
+                    Menu {
+                        if !nvidiaManager.favoriteModels.isEmpty {
+                            Section("Favorites") {
+                                ForEach(nvidiaManager.favoriteModels, id: \.self) { model in
+                                    Button(action: { selectedNvidiaModel = model }) {
+                                        if selectedNvidiaModel == model {
+                                            Label(
+                                                nvidiaManager.displayName(for: model),
+                                                systemImage: "checkmark")
+                                        } else {
+                                            Text(nvidiaManager.displayName(for: model))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        ForEach(NvidiaModelManager.modelGroups, id: \.name) { group in
+                            let nonFavModels = group.models.filter { !nvidiaManager.isFavorite($0) }
+                            if !nonFavModels.isEmpty {
+                                Section(group.name) {
+                                    ForEach(nonFavModels, id: \.self) { model in
+                                        Button(action: { selectedNvidiaModel = model }) {
+                                            if selectedNvidiaModel == model {
+                                                Label(
+                                                    nvidiaManager.displayName(for: model),
+                                                    systemImage: "checkmark")
+                                            } else {
+                                                Text(nvidiaManager.displayName(for: model))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Divider()
+
+                        Menu("Manage Favorites") {
+                            ForEach(NvidiaModelManager.shared.availableModels, id: \.self) {
+                                model in
+                                Button(action: { nvidiaManager.toggleFavorite(model) }) {
+                                    if nvidiaManager.isFavorite(model) {
+                                        Label(
+                                            nvidiaManager.displayName(for: model),
+                                            systemImage: "star.fill")
+                                    } else {
+                                        Label(
+                                            nvidiaManager.displayName(for: model),
+                                            systemImage: "star")
+                                    }
+                                }
+                            }
+                        }
+
+                        Button(action: { showAddCustomNvidiaModel = true }) {
+                            Label("Add Custom Model...", systemImage: "plus")
+                        }
+                    } label: {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                Circle()
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.08)
+                                            : Color.black.opacity(0.04))
+                            )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .help("Select NVIDIA Model")
+                    .alert("Add Custom NVIDIA Model", isPresented: $showAddCustomNvidiaModel) {
+                        TextField(
+                            "Model Name (e.g., nvidia/model-name)",
+                            text: $newCustomNvidiaModelName)
+                        Button("Add") {
+                            nvidiaManager.addCustomModel(newCustomNvidiaModelName)
+                            selectedNvidiaModel = newCustomNvidiaModelName
+                            newCustomNvidiaModelName = ""
+                        }
+                        Button("Cancel", role: .cancel) {
+                            newCustomNvidiaModelName = ""
+                        }
+                    } message: {
+                        Text("Enter the model name as it appears in the NVIDIA API.")
+                    }
                 }
 
                 if isGeminiCLI {
@@ -6507,6 +6730,9 @@ struct SettingsView: View {
     @AppStorage("QuickAIChatBarTintIntensity") private var quickAIChatBarTintIntensity: Double = 0.5
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
+    @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
+    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
+        "llama-3.1-70b-instruct"
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
 
     // AI Autocomplete settings
@@ -6524,6 +6750,7 @@ struct SettingsView: View {
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
+    @ObservedObject var nvidiaManager = NvidiaModelManager.shared
     @ObservedObject var accountManager = AccountManager.shared
     @ObservedObject var copilotService = GitHubCopilotService.shared
     @ObservedObject var updateManager = UpdateManager.shared
@@ -6531,6 +6758,7 @@ struct SettingsView: View {
     @State private var newCustomModelName = ""
     @State private var showAddCustomGeminiModel = false
     @State private var newCustomGeminiModelName = ""
+    @State private var newCustomNvidiaModelName = ""
     @State private var editingAccountId: UUID? = nil
     @State private var editingAccountName: String = ""
 
@@ -7041,6 +7269,109 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
+    private var nvidiaSection: some View {
+        let nvidiaAccts = accountManager.nvidiaAccounts()
+        Section(header: Label("NVIDIA API", systemImage: "bolt.fill")) {
+            ForEach(nvidiaAccts) { (account: ProviderAccount) in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        if editingAccountId == account.id {
+                            TextField("Name", text: $editingAccountName)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 150)
+                            Button("Save") {
+                                accountManager.renameAccount(
+                                    id: account.id, newName: editingAccountName)
+                                editingAccountId = nil
+                            }
+                            .buttonStyle(.borderless)
+                        } else {
+                            Label(account.displayName, systemImage: "person.circle")
+                                .font(.headline)
+                            Spacer()
+                            Button {
+                                editingAccountName = account.displayName
+                                editingAccountId = account.id
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.borderless)
+                            if nvidiaAccts.count > 1 {
+                                Button(role: .destructive) {
+                                    accountManager.removeAccount(id: account.id)
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                    }
+                    SecureField(
+                        "API Key",
+                        text: Binding(
+                            get: { account.apiKey },
+                            set: { newKey in
+                                accountManager.updateAccount(id: account.id, apiKey: newKey)
+                            }
+                        )
+                    )
+                    .textFieldStyle(.roundedBorder)
+                }
+                .padding(.vertical, 4)
+            }
+
+            Picker(selection: $selectedNvidiaModel) {
+                ForEach(NvidiaModelManager.shared.sortedModels, id: \.self) { model in
+                    Text(NvidiaModelManager.shared.displayName(for: model)).tag(model)
+                }
+            } label: {
+                Label("Default Model", systemImage: "cpu")
+            }
+
+            Button {
+                accountManager.addAccount(
+                    providerType: .nvidia, displayName: "NVIDIA \(nvidiaAccts.count + 1)")
+            } label: {
+                Label("Add NVIDIA Account", systemImage: "plus.circle")
+            }
+        }
+
+        Section(header: Label("NVIDIA Custom Models", systemImage: "bolt")) {
+            HStack {
+                TextField(
+                    "Add model (e.g. meta/llama-3.1-405b-instruct)",
+                    text: $newCustomNvidiaModelName
+                )
+                .textFieldStyle(.roundedBorder)
+                Button("Add") {
+                    nvidiaManager.addCustomModel(newCustomNvidiaModelName)
+                    newCustomNvidiaModelName = ""
+                }
+            }
+
+            ForEach(nvidiaManager.customModels, id: \.self) { model in
+                HStack {
+                    Text(model)
+                        .font(.system(.callout, design: .monospaced))
+                    Spacer()
+                    Button(role: .destructive) {
+                        nvidiaManager.removeCustomModel(model)
+                    } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                .padding(8)
+                .background(Color.gray.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+    }
+
+    @ViewBuilder
     private var copilotSection: some View {
         Section(
             header: Label("GitHub Copilot", systemImage: "chevron.left.forwardslash.chevron.right")
@@ -7513,6 +7844,7 @@ struct SettingsView: View {
             // AI Providers
             geminiSection
             ollamaSection
+            nvidiaSection
             copilotSection
 
             systemPromptSection
