@@ -87,7 +87,8 @@ class AppleFoundationService {
                 return AsyncThrowingStream { continuation in
                     Task {
                         guard let session = self.session else {
-                            let errorMsg = self.isInitializing
+                            let errorMsg =
+                                self.isInitializing
                                 ? "Apple Intelligence is still loading. Please try again in a moment."
                                 : "Session not initialized"
                             continuation.finish(
