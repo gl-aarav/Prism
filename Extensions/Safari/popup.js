@@ -431,10 +431,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const thinkingDropdown = document.getElementById('thinkingDropdown');
         if (!thinkingDropdown) return;
 
-        if (modelId.startsWith('copilot:') || modelId.startsWith('apple:') || modelId.startsWith('nvidia:')) {
+        if (modelId.startsWith('copilot:') || modelId.startsWith('apple:')) {
             thinkingBtn.style.display = 'none';
             thinkingDropdownOpen = false;
             thinkingDropdown.style.display = 'none';
+        } else if (modelId.startsWith('nvidia:')) {
+            const model = modelId.replace('nvidia:', '');
+            if (model.includes('deepseek') || model.includes('glm')) {
+                thinkingBtn.style.display = 'flex';
+                levels = [{ value: 'off', label: 'Off' }, { value: 'high', label: 'On' }];
+            } else {
+                thinkingBtn.style.display = 'none';
+                thinkingDropdownOpen = false;
+                thinkingDropdown.style.display = 'none';
+                return;
+            }
         } else {
             thinkingBtn.style.display = 'flex';
 

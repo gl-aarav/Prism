@@ -1724,6 +1724,12 @@ struct ContentView: View {
             }
             // All others (llama3, etc) -> None
             return .none
+        } else if selectedProvider == "NVIDIA API" || selectedProvider.hasPrefix("NVIDIA API|") {
+            let lower = selectedNvidiaModel.lowercased()
+            if lower.contains("deepseek") || lower.contains("glm") {
+                return .binary  // On/Off
+            }
+            return .none
         }
         return .none
     }
@@ -2751,7 +2757,8 @@ struct ContentView: View {
                             .sendMessageStream(
                                 history: currentHistory, apiKey: apiKey,
                                 model: activeModel,
-                                systemPrompt: effectiveSystemPrompt)
+                                systemPrompt: effectiveSystemPrompt,
+                                enableThinking: thinkingLevel == "high")
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {

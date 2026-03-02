@@ -118,7 +118,7 @@ class NvidiaService {
                         } else {
                             msgDict["content"] = msg.content
                         }
-                        
+
                         return msgDict
                     })
 
@@ -132,7 +132,7 @@ class NvidiaService {
                 ]
 
                 if enableThinking {
-                    body["chat_template_kwargs"] = ["thinking": true]
+                    body["chat_template_kwargs"] = ["enable_thinking": true]
                 }
 
                 do {
@@ -165,6 +165,9 @@ class NvidiaService {
                     }
 
                     // Parse SSE stream (OpenAI-compatible format)
+                    var insideThinkTag = false
+                    var thinkTagBuffer = ""
+
                     for try await line in result.lines {
                         if line.hasPrefix("data: ") {
                             let jsonStr = String(line.dropFirst(6))
@@ -177,15 +180,47 @@ class NvidiaService {
                                 let delta = choices.first?["delta"] as? [String: Any]
                             else { continue }
 
-                            // Handle thinking content if present
+                            // Handle reasoning_content field (NIM standard)
                             if let reasoning = delta["reasoning_content"] as? String,
                                 !reasoning.isEmpty
                             {
                                 continuation.yield(("", reasoning))
                             }
 
+                            // Handle content with <think> tag fallback
                             if let content = delta["content"] as? String, !content.isEmpty {
-                                continuation.yield((content, nil))
+                                var remaining = content
+                                while !remaining.isEmpty {
+                                    if insideThinkTag {
+                                        if let endRange = remaining.range(of: "</think>") {
+                                            let thought = remaining[
+                                                remaining.startIndex..<endRange.lowerBound]
+                                            thinkTagBuffer += thought
+                                            continuation.yield(("", String(thinkTagBuffer)))
+                                            thinkTagBuffer = ""
+                                            insideThinkTag = false
+                                            remaining = String(remaining[endRange.upperBound...])
+                                        } else {
+                                            thinkTagBuffer += remaining
+                                            continuation.yield(("", remaining))
+                                            remaining = ""
+                                        }
+                                    } else {
+                                        if let startRange = remaining.range(of: "<think>") {
+                                            let before = remaining[
+                                                remaining.startIndex..<startRange.lowerBound]
+                                            if !before.isEmpty {
+                                                continuation.yield((String(before), nil))
+                                            }
+                                            insideThinkTag = true
+                                            thinkTagBuffer = ""
+                                            remaining = String(remaining[startRange.upperBound...])
+                                        } else {
+                                            continuation.yield((remaining, nil))
+                                            remaining = ""
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

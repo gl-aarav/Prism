@@ -859,7 +859,8 @@ struct QuickAIView: View {
                             in nvidiaService
                             .sendMessageStream(
                                 history: chatManager.getCurrentMessages(), apiKey: apiKey,
-                                model: activeModel, systemPrompt: systemPrompt)
+                                model: activeModel, systemPrompt: systemPrompt,
+                                enableThinking: thinkingLevel == "high")
                         {
                             fullContent += contentChunk
                             if let thinking = thinkingChunk {
@@ -2617,6 +2618,47 @@ extension QuickAIView {
                     .menuStyle(.borderlessButton)
                     .tint(colorScheme == .dark ? .white : .black)
                     .help("Select NVIDIA Model")
+                }
+
+                // NVIDIA Thinking toggle
+                if selectedProvider == "NVIDIA API" || selectedProvider.hasPrefix("NVIDIA API|") {
+                    let lower = selectedNvidiaModel.lowercased()
+                    if lower.contains("deepseek") || lower.contains("glm") {
+                        Menu {
+                            Button {
+                                thinkingLevel = "high"
+                            } label: {
+                                if thinkingLevel == "high" {
+                                    Label("Reasoning: On", systemImage: "checkmark")
+                                        .foregroundStyle(
+                                            colorScheme == .dark ? Color.white : Color.primary)
+                                } else {
+                                    Text("Reasoning: On")
+                                }
+                            }
+                            Button {
+                                thinkingLevel = "low"
+                            } label: {
+                                if thinkingLevel != "high" {
+                                    Label("Reasoning: Off", systemImage: "checkmark")
+                                        .foregroundStyle(
+                                            colorScheme == .dark ? Color.white : Color.primary)
+                                } else {
+                                    Text("Reasoning: Off")
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "brain")
+                                .font(.system(size: 16))
+                                .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                                .padding(6)
+                                .background(Circle().fill(Color.primary.opacity(0.06)))
+                                .glassEffect(.regular, in: .circle)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .tint(colorScheme == .dark ? .white : .black)
+                        .help("Reasoning Effort")
+                    }
                 }
 
                 // Web Search Toggle (Ollama only)
