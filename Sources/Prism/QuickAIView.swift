@@ -2558,6 +2558,67 @@ extension QuickAIView {
                     .help("Select Gemini CLI Model")
                 }
 
+                // NVIDIA model picker
+                if selectedProvider == "NVIDIA API" || selectedProvider.hasPrefix("NVIDIA API|") {
+                    Menu {
+                        let nvidiaManager = NvidiaModelManager.shared
+                        if !nvidiaManager.favoriteModels.isEmpty {
+                            Section("Favorites") {
+                                ForEach(nvidiaManager.favoriteModels, id: \.self) { model in
+                                    Button(action: { selectedNvidiaModel = model }) {
+                                        if selectedNvidiaModel == model {
+                                            Label(
+                                                nvidiaManager.displayName(for: model),
+                                                systemImage: "checkmark"
+                                            )
+                                            .foregroundStyle(
+                                                colorScheme == .dark ? Color.white : Color.primary
+                                            )
+                                        } else {
+                                            Text(nvidiaManager.displayName(for: model))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        ForEach(NvidiaModelManager.modelGroups, id: \.name) { group in
+                            let nonFavModels = group.models.filter { !nvidiaManager.isFavorite($0) }
+                            if !nonFavModels.isEmpty {
+                                Section(group.name) {
+                                    ForEach(nonFavModels, id: \.self) { model in
+                                        Button(action: { selectedNvidiaModel = model }) {
+                                            if selectedNvidiaModel == model {
+                                                Label(
+                                                    nvidiaManager.displayName(for: model),
+                                                    systemImage: "checkmark"
+                                                )
+                                                .foregroundStyle(
+                                                    colorScheme == .dark
+                                                        ? Color.white : Color.primary
+                                                )
+                                            } else {
+                                                Text(nvidiaManager.displayName(for: model))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                    } label: {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .padding(6)
+                            .background(Circle().fill(Color.primary.opacity(0.06)))
+                            .glassEffect(.regular, in: .circle)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .tint(colorScheme == .dark ? .white : .black)
+                    .help("Select NVIDIA Model")
+                }
+
                 // Web Search Toggle (Ollama only)
                 if !ollamaAPIKey.isEmpty && selectedProvider.contains("Ollama") {
                     Button(action: { webSearchEnabled.toggle() }) {
