@@ -17,7 +17,7 @@ class NvidiaService {
     ) -> AsyncThrowingStream<(String, String?), Error> {
         return AsyncThrowingStream { continuation in
             Task {
-                let modelName = model.isEmpty ? "llama-3.1-70b-instruct" : model
+                let modelName = model.isEmpty ? "meta/llama-3.1-70b-instruct" : model
 
                 guard
                     let url = URL(
