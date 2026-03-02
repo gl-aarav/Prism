@@ -44,10 +44,82 @@ class NvidiaService {
 
                 messages.append(
                     contentsOf: history.map { msg in
-                        [
-                            "role": msg.isUser ? "user" : "assistant",
-                            "content": msg.content,
-                        ] as [String: Any]
+                        var msgDict: [String: Any] = ["role": msg.isUser ? "user" : "assistant"]
+
+                        let compressImage: (Data) -> String? = { data in
+                            guard let image = NSImage(data: data) else { return nil }
+
+                            let maxDimension: CGFloat = 1024.0
+                            var targetSize = image.size
+
+                            if image.size.width > maxDimension || image.size.height > maxDimension {
+                                let aspectRatio = image.size.width / image.size.height
+                                if aspectRatio > 1 {
+                                    targetSize.width = maxDimension
+                                    targetSize.height = maxDimension / aspectRatio
+                                } else {
+                                    targetSize.height = maxDimension
+                                    targetSize.width = maxDimension * aspectRatio
+                                }
+                            }
+
+                            let newImage = NSImage(size: targetSize)
+                            newImage.lockFocus()
+                            image.draw(
+                                in: NSRect(origin: .zero, size: targetSize),
+                                from: NSRect(origin: .zero, size: image.size), operation: .copy,
+                                fraction: 1.0)
+                            newImage.unlockFocus()
+
+                            guard let tiff = newImage.tiffRepresentation,
+                                let bitmap = NSBitmapImageRep(data: tiff),
+                                let jpegData = bitmap.representation(
+                                    using: .jpeg, properties: [.compressionFactor: 0.6])
+                            else {
+                                return nil
+                            }
+
+                            return jpegData.base64EncodedString()
+                        }
+
+                        if let imageData = msg.imageData,
+                            let base64String = compressImage(imageData)
+                        {
+                            msgDict["content"] = [
+                                ["type": "text", "text": msg.content],
+                                [
+                                    "type": "image_url",
+                                    "image_url": [
+                                        "url": "data:image/jpeg;base64,\(base64String)"
+                                    ],
+                                ],
+                            ]
+                        } else if let attachments = msg.attachments, !attachments.isEmpty {
+                            var contentArr: [[String: Any]] = [
+                                ["type": "text", "text": msg.content]
+                            ]
+                            for attachment in attachments {
+                                if attachment.type == "image",
+                                    let base64String = compressImage(attachment.data)
+                                {
+                                    contentArr.append([
+                                        "type": "image_url",
+                                        "image_url": [
+                                            "url": "data:image/jpeg;base64,\(base64String)"
+                                        ],
+                                    ])
+                                }
+                            }
+                            if contentArr.count > 1 {
+                                msgDict["content"] = contentArr
+                            } else {
+                                msgDict["content"] = msg.content
+                            }
+                        } else {
+                            msgDict["content"] = msg.content
+                        }
+                        
+                        return msgDict
                     })
 
                 var body: [String: Any] = [
