@@ -6940,7 +6940,6 @@ struct SettingsView: View {
     @AppStorage("QuickAITintIntensity") private var quickAITintIntensity: Double = 0.5
     @AppStorage("QuickAIChatBarTintIntensity") private var quickAIChatBarTintIntensity: Double = 0.5
     @AppStorage("BackgroundImagePath") private var backgroundImagePath: String = ""
-    @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
     @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
     @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
         "llama-3.1-70b-instruct"
@@ -7421,17 +7420,6 @@ struct SettingsView: View {
                             get: { account.endpoint },
                             set: { newURL in
                                 accountManager.updateAccount(id: account.id, endpoint: newURL)
-                            }
-                        )
-                    )
-                    .textFieldStyle(.roundedBorder)
-
-                    SecureField(
-                        "API Key (optional, for web search)",
-                        text: Binding(
-                            get: { account.apiKey },
-                            set: { newKey in
-                                accountManager.updateAccount(id: account.id, apiKey: newKey)
                             }
                         )
                     )
