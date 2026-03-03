@@ -265,8 +265,8 @@ struct ModelComparisonView: View {
             Spacer()
 
             // Slot count indicator
-            HStack(spacing: 6) {
-                ForEach(0..<4, id: \.self) { i in
+            HStack(spacing: 4) {
+                ForEach(0..<10, id: \.self) { i in
                     Circle()
                         .fill(
                             i < slots.count
@@ -276,7 +276,7 @@ struct ModelComparisonView: View {
                                     ))
                                 : AnyShapeStyle(Color.gray.opacity(0.2))
                         )
-                        .frame(width: 8, height: 8)
+                        .frame(width: 6, height: 6)
                 }
             }
             .padding(.horizontal, 12)
@@ -284,7 +284,7 @@ struct ModelComparisonView: View {
             .glassEffect(.regular, in: .capsule)
 
             // Add model button
-            if slots.count < 4 {
+            if slots.count < 10 {
                 Button(action: addSlot) {
                     HStack(spacing: 6) {
                         Image(systemName: "plus")
@@ -1088,13 +1088,19 @@ struct ModelComparisonView: View {
     // MARK: - Actions
 
     private func addSlot() {
-        guard slots.count < 4 else { return }
+        guard slots.count < 10 else { return }
         // Cycle through default providers
         let defaults: [(String, String)] = [
             ("Gemini API", "gemini-2.5-flash"),
             ("Ollama", "llama3.3"),
             ("Apple Foundation", "Apple Foundation"),
             ("Gemini API", "gemini-2.5-pro"),
+            ("NVIDIA API", "meta/llama-3.3-70b-instruct"),
+            ("GitHub Copilot", "gpt-4o"),
+            ("Gemini CLI", "gemini-2.5-flash"),
+            ("Gemini API", "gemini-2.5-flash-lite"),
+            ("Ollama", "deepseek-r1"),
+            ("ChatGPT", "ChatGPT"),
         ]
         let newDefault = defaults[slots.count % defaults.count]
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
