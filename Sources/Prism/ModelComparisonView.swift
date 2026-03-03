@@ -67,6 +67,8 @@ struct ModelComparisonView: View {
     @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+    @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
+    @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
 
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
@@ -102,6 +104,7 @@ struct ModelComparisonView: View {
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
     private let nvidiaService = NvidiaService()
+    private let shortcutService = ShortcutService()
     private let webSearchService = WebSearchService()
 
     // Convenience accessor for slots
@@ -154,7 +157,9 @@ struct ModelComparisonView: View {
                         geminiCLIService: geminiCLIService,
                         hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
                         hasNvidiaKey: !nvidiaKey.isEmpty,
-                        hasCopilotAuth: copilotService.isAuthenticated
+                        hasCopilotAuth: copilotService.isAuthenticated,
+                        shortcutChatGPT: shortcutChatGPT,
+                        shortcutPrivateCloud: shortcutPrivateCloud
                     )
                 }
                 .padding(.horizontal, 20)
@@ -535,6 +540,29 @@ struct ModelComparisonView: View {
                             }
                         }
                     }
+                    Divider()
+                    Section("Shortcuts") {
+                        Button(action: {
+                            synthesizeProvider = "ChatGPT"
+                            synthesizeModel = "ChatGPT"
+                        }) {
+                            if synthesizeProvider == "ChatGPT" {
+                                Label("ChatGPT", systemImage: "checkmark")
+                            } else {
+                                Label("ChatGPT", systemImage: "message")
+                            }
+                        }
+                        Button(action: {
+                            synthesizeProvider = "Private Cloud"
+                            synthesizeModel = "Private Cloud"
+                        }) {
+                            if synthesizeProvider == "Private Cloud" {
+                                Label("Private Cloud", systemImage: "checkmark")
+                            } else {
+                                Label("Private Cloud", systemImage: "lock.icloud")
+                            }
+                        }
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: synthesizeProviderIcon)
@@ -778,6 +806,8 @@ struct ModelComparisonView: View {
         case "NVIDIA API": return "bolt.fill"
         case "GitHub Copilot": return "person.crop.circle"
         case "Gemini CLI": return "terminal"
+        case "ChatGPT": return "message"
+        case "Private Cloud": return "lock.icloud"
         default: return "cpu"
         }
     }
@@ -1024,6 +1054,16 @@ struct ModelComparisonView: View {
                         let content = full
                         await MainActor.run { state.synthesizedResponse = content }
                     }
+
+                case "ChatGPT":
+                    let result = try await shortcutService.runShortcut(
+                        name: shortcutChatGPT, input: synthesisPrompt, image: nil)
+                    await MainActor.run { state.synthesizedResponse = result.0 }
+
+                case "Private Cloud":
+                    let result = try await shortcutService.runShortcut(
+                        name: shortcutPrivateCloud, input: synthesisPrompt, image: nil)
+                    await MainActor.run { state.synthesizedResponse = result.0 }
 
                 default:
                     await MainActor.run {
@@ -1386,6 +1426,32 @@ struct ModelComparisonView: View {
                             }
                         }
 
+                    case "ChatGPT":
+                        let shortcutName = self.shortcutChatGPT
+                        let result = try await shortcutService.runShortcut(
+                            name: shortcutName, input: trimmed, image: nil)
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        await MainActor.run {
+                            if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                state.slots[idx].response = result.0
+                                state.slots[idx].isLoading = false
+                                state.slots[idx].elapsedTime = elapsed
+                            }
+                        }
+
+                    case "Private Cloud":
+                        let shortcutName = self.shortcutPrivateCloud
+                        let result = try await shortcutService.runShortcut(
+                            name: shortcutName, input: trimmed, image: nil)
+                        let elapsed = Date().timeIntervalSince(startTime)
+                        await MainActor.run {
+                            if let idx = slots.firstIndex(where: { $0.id == slotId }) {
+                                state.slots[idx].response = result.0
+                                state.slots[idx].isLoading = false
+                                state.slots[idx].elapsedTime = elapsed
+                            }
+                        }
+
                     default:
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
@@ -1440,6 +1506,8 @@ struct ComparisonCard: View {
     var hasOllamaAPIKey: Bool = false
     var hasNvidiaKey: Bool = false
     var hasCopilotAuth: Bool = false
+    var shortcutChatGPT: String = "Ask ChatGPT"
+    var shortcutPrivateCloud: String = "Ask AI Private"
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var isHovered: Bool = false
@@ -1458,6 +1526,8 @@ struct ComparisonCard: View {
         case "NVIDIA API": return "bolt.fill"
         case "GitHub Copilot": return "person.crop.circle"
         case "Gemini CLI": return "terminal"
+        case "ChatGPT": return "message"
+        case "Private Cloud": return "lock.icloud"
         default: return "cpu"
         }
     }
@@ -1803,6 +1873,23 @@ struct ComparisonCard: View {
                                 Text(model.name)
                             }
                         }
+                    }
+                }
+            }
+            Divider()
+            Section("Shortcuts") {
+                Button(action: { onChangeProvider("ChatGPT", "ChatGPT") }) {
+                    if slot.provider == "ChatGPT" {
+                        Label("ChatGPT", systemImage: "checkmark")
+                    } else {
+                        Label("ChatGPT", systemImage: "message")
+                    }
+                }
+                Button(action: { onChangeProvider("Private Cloud", "Private Cloud") }) {
+                    if slot.provider == "Private Cloud" {
+                        Label("Private Cloud", systemImage: "checkmark")
+                    } else {
+                        Label("Private Cloud", systemImage: "lock.icloud")
                     }
                 }
             }
