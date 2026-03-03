@@ -265,22 +265,19 @@ struct ModelComparisonView: View {
             Spacer()
 
             // Slot count indicator
-            HStack(spacing: 4) {
-                ForEach(0..<10, id: \.self) { i in
-                    Circle()
-                        .fill(
-                            i < slots.count
-                                ? AnyShapeStyle(
-                                    LinearGradient(
-                                        colors: appTheme.colors, startPoint: .top, endPoint: .bottom
-                                    ))
-                                : AnyShapeStyle(Color.gray.opacity(0.2))
-                        )
-                        .frame(width: 6, height: 6)
-                }
+            HStack(spacing: 5) {
+                Text("\(slots.count)")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary.opacity(0.8))
+                Text("/")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary.opacity(0.5))
+                Text("10")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary.opacity(0.6))
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
             .glassEffect(.regular, in: .capsule)
 
             // Add model button
