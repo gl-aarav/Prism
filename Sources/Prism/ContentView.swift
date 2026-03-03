@@ -845,8 +845,12 @@ class WebSearchService {
         -> [WebSearchResult]
     {
         // Use DuckDuckGo Instant Answer API (free, no API key required)
-        guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://api.duckduckgo.com/?q=\(encodedQuery)&format=json&no_html=1&skip_disambig=1")
+        guard
+            let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+            let url = URL(
+                string:
+                    "https://api.duckduckgo.com/?q=\(encodedQuery)&format=json&no_html=1&skip_disambig=1"
+            )
         else {
             throw URLError(.badURL)
         }
@@ -861,8 +865,9 @@ class WebSearchService {
 
         // Add abstract if available
         if let abstract = json["AbstractText"] as? String, !abstract.isEmpty,
-           let source = json["AbstractSource"] as? String,
-           let abstractURL = json["AbstractURL"] as? String {
+            let source = json["AbstractSource"] as? String,
+            let abstractURL = json["AbstractURL"] as? String
+        {
             results.append(WebSearchResult(title: source, url: abstractURL, content: abstract))
         }
 
@@ -875,7 +880,8 @@ class WebSearchService {
         if let topics = json["RelatedTopics"] as? [[String: Any]] {
             for topic in topics where results.count < maxResults {
                 if let text = topic["Text"] as? String, !text.isEmpty,
-                   let firstURL = topic["FirstURL"] as? String {
+                    let firstURL = topic["FirstURL"] as? String
+                {
                     let title = String(text.prefix(100))
                     results.append(WebSearchResult(title: title, url: firstURL, content: text))
                 }
@@ -883,7 +889,9 @@ class WebSearchService {
         }
 
         // If instant answers didn't return enough, try HTML search
-        if results.isEmpty || (results.count < 2 && results.first.map({ $0.content.count < 50 }) ?? true) {
+        if results.isEmpty
+            || (results.count < 2 && results.first.map({ $0.content.count < 50 }) ?? true)
+        {
             let htmlResults = try await searchHTML(query: query, maxResults: maxResults)
             results.append(contentsOf: htmlResults)
         }
@@ -893,8 +901,9 @@ class WebSearchService {
 
     /// Fallback: fetch search results from DuckDuckGo's HTML endpoint
     private func searchHTML(query: String, maxResults: Int) async throws -> [WebSearchResult] {
-        guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://html.duckduckgo.com/html/?q=\(encodedQuery)")
+        guard
+            let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+            let url = URL(string: "https://html.duckduckgo.com/html/?q=\(encodedQuery)")
         else { return [] }
 
         var request = URLRequest(url: url)
@@ -903,7 +912,8 @@ class WebSearchService {
             forHTTPHeaderField: "User-Agent")
 
         let (data, _) = try await session.data(for: request)
-        guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) else { return [] }
+        guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii)
+        else { return [] }
 
         var results: [WebSearchResult] = []
 
@@ -922,19 +932,23 @@ class WebSearchService {
 
         for (i, match) in linkMatches.prefix(maxResults).enumerated() {
             guard let urlRange = Range(match.range(at: 1), in: html),
-                  let titleRange = Range(match.range(at: 2), in: html) else { continue }
+                let titleRange = Range(match.range(at: 2), in: html)
+            else { continue }
 
             let resultUrl = String(html[urlRange])
             let rawTitle = String(html[titleRange])
-            let title = rawTitle
+            let title =
+                rawTitle
                 .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
             var snippet = title
             if i < snippetMatches.count,
-               let snippetRange = Range(snippetMatches[i].range(at: 1), in: html) {
+                let snippetRange = Range(snippetMatches[i].range(at: 1), in: html)
+            {
                 let rawSnippet = String(html[snippetRange])
-                let cleaned = rawSnippet
+                let cleaned =
+                    rawSnippet
                     .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !cleaned.isEmpty { snippet = cleaned }
@@ -1102,23 +1116,26 @@ class OllamaService {
 
                 // Add web search tool definition when enabled
                 if webSearchEnabled && webSearchService != nil {
-                    body["tools"] = [[
-                        "type": "function",
-                        "function": [
-                            "name": "web_search",
-                            "description": "Search the web for current information about any topic",
-                            "parameters": [
-                                "type": "object",
-                                "properties": [
-                                    "query": [
-                                        "type": "string",
-                                        "description": "The search query"
-                                    ]
+                    body["tools"] = [
+                        [
+                            "type": "function",
+                            "function": [
+                                "name": "web_search",
+                                "description":
+                                    "Search the web for current information about any topic",
+                                "parameters": [
+                                    "type": "object",
+                                    "properties": [
+                                        "query": [
+                                            "type": "string",
+                                            "description": "The search query",
+                                        ]
+                                    ],
+                                    "required": ["query"],
                                 ],
-                                "required": ["query"]
-                            ]
+                            ] as [String: Any],
                         ] as [String: Any]
-                    ] as [String: Any]]
+                    ]
                 }
 
                 // Apply native thinking parameter
@@ -1177,7 +1194,9 @@ class OllamaService {
                             if let done = json["done"] as? Bool, done {
                                 if let message = json["message"] as? [String: Any] {
                                     // Check for tool calls on the final message
-                                    if let calls = message["tool_calls"] as? [[String: Any]], !calls.isEmpty {
+                                    if let calls = message["tool_calls"] as? [[String: Any]],
+                                        !calls.isEmpty
+                                    {
                                         pendingToolCalls = calls
                                     }
                                     let content = message["content"] as? String
@@ -1195,7 +1214,8 @@ class OllamaService {
                             guard let message = json["message"] as? [String: Any] else { continue }
 
                             // Check for tool calls in streaming chunks
-                            if let calls = message["tool_calls"] as? [[String: Any]], !calls.isEmpty {
+                            if let calls = message["tool_calls"] as? [[String: Any]], !calls.isEmpty
+                            {
                                 if pendingToolCalls != nil {
                                     pendingToolCalls!.append(contentsOf: calls)
                                 } else {
@@ -1216,8 +1236,8 @@ class OllamaService {
 
                         // If no tool calls or no search service, we're done
                         guard let toolCalls = pendingToolCalls,
-                              let searchService = webSearchService,
-                              webSearchEnabled
+                            let searchService = webSearchService,
+                            webSearchEnabled
                         else {
                             break
                         }
@@ -1226,13 +1246,13 @@ class OllamaService {
                         messages.append([
                             "role": "assistant",
                             "content": "",
-                            "tool_calls": toolCalls
+                            "tool_calls": toolCalls,
                         ])
 
                         for call in toolCalls {
                             guard let function = call["function"] as? [String: Any],
-                                  let name = function["name"] as? String,
-                                  name == "web_search"
+                                let name = function["name"] as? String,
+                                name == "web_search"
                             else { continue }
 
                             // Parse arguments (may be dict or JSON string)
@@ -1240,8 +1260,10 @@ class OllamaService {
                             if let a = function["arguments"] as? [String: Any] {
                                 args = a
                             } else if let argsStr = function["arguments"] as? String,
-                                      let argsData = argsStr.data(using: .utf8),
-                                      let a = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
+                                let argsData = argsStr.data(using: .utf8),
+                                let a = try? JSONSerialization.jsonObject(with: argsData)
+                                    as? [String: Any]
+                            {
                                 args = a
                             } else {
                                 continue
@@ -1253,12 +1275,14 @@ class OllamaService {
                                     let context = searchService.buildSearchContext(results: results)
                                     messages.append([
                                         "role": "tool",
-                                        "content": context.isEmpty ? "No results found for: \(query)" : context
+                                        "content": context.isEmpty
+                                            ? "No results found for: \(query)" : context,
                                     ])
                                 } catch {
                                     messages.append([
                                         "role": "tool",
-                                        "content": "Web search failed: \(error.localizedDescription)"
+                                        "content":
+                                            "Web search failed: \(error.localizedDescription)",
                                     ])
                                 }
                             }
@@ -3027,7 +3051,7 @@ struct ContentView: View {
                     transcript += "\(role): \(msg.content)\n"
                 }
                 transcript += "Assistant:"
-                
+
                 let lastUserImage = currentHistory.last(where: { $0.isUser })?.image
 
                 do {

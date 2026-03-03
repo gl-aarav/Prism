@@ -308,8 +308,7 @@ class ExtensionServer {
 
                             var currentHistory = history
                             if webSearchEnabled {
-                                if let lastUserMsg = currentHistory.last(where: { $0.isUser })
-                                {
+                                if let lastUserMsg = currentHistory.last(where: { $0.isUser }) {
                                     let webSearchService = WebSearchService()
                                     do {
                                         let searchResults = try await webSearchService.search(
