@@ -774,8 +774,6 @@ struct ModelComparisonView: View {
                     .padding(16)
                 }
                 .frame(maxHeight: 350)
-                .animation(
-                    .spring(response: 0.4, dampingFraction: 0.8), value: state.synthesizedResponse)
 
                 if !state.synthesizedResponse.isEmpty && !isSynthesizing {
                     HStack {
@@ -1584,7 +1582,6 @@ struct ComparisonCard: View {
                 isHovered = hovering
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: slot.response)
     }
 
     // MARK: - Card Header
