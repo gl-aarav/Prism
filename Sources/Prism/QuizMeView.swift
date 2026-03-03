@@ -17,6 +17,10 @@ struct QuizMeView: View {
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
+    @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
+    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String = "llama-3.1-70b-instruct"
+    @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
+    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String = "gemini-2.5-flash"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
@@ -33,6 +37,10 @@ struct QuizMeView: View {
 
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
+    @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
+    @ObservedObject private var copilotService = GitHubCopilotService.shared
+    @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
+    @ObservedObject private var geminiCLIService = GeminiCLIService.shared
 
     @State private var questions: [QuizQuestion] = []
     @State private var isGenerating: Bool = false
@@ -52,6 +60,7 @@ struct QuizMeView: View {
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
+    private let nvidiaService = NvidiaService()
     private let webSearchService = WebSearchService()
 
     private var quizHasThinkingCapability: Bool {
@@ -326,6 +335,42 @@ struct QuizMeView: View {
                                     quizModel = model
                                 }) {
                                     Text(model)
+                                }
+                            }
+                        }
+                        if !nvidiaKey.isEmpty {
+                            Menu("NVIDIA API") {
+                                ForEach(nvidiaManager.availableModels, id: \.self) { model in
+                                    Button(action: {
+                                        quizProvider = "NVIDIA API"
+                                        quizModel = model
+                                    }) {
+                                        Text(nvidiaManager.displayName(for: model))
+                                    }
+                                }
+                            }
+                        }
+                        if copilotService.isAuthenticated {
+                            Menu("GitHub Copilot") {
+                                ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                                    Button(action: {
+                                        quizProvider = "GitHub Copilot"
+                                        quizModel = model
+                                    }) {
+                                        Text(copilotModelManager.displayName(for: model))
+                                    }
+                                }
+                            }
+                        }
+                        if geminiCLIService.isAvailable {
+                            Menu("Gemini CLI") {
+                                ForEach(GeminiCLIService.availableModels, id: \.id) { model in
+                                    Button(action: {
+                                        quizProvider = "Gemini CLI"
+                                        quizModel = model.id
+                                    }) {
+                                        Text(model.name)
+                                    }
                                 }
                             }
                         }
@@ -872,6 +917,9 @@ struct QuizMeView: View {
         case "Apple Foundation": return "apple.logo"
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
+        case "NVIDIA API": return "bolt.fill"
+        case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
+        case "Gemini CLI": return "terminal"
         default: return "cpu"
         }
     }
@@ -1048,6 +1096,32 @@ struct QuizMeView: View {
                         fullContent += chunk
                     }
 
+                case "NVIDIA API":
+                    guard !nvidiaKey.isEmpty else {
+                        await MainActor.run { isRegenerating = false }
+                        return
+                    }
+                    for try await (chunk, _) in nvidiaService.sendMessageStream(
+                        history: history, apiKey: nvidiaKey, model: quizModel,
+                        systemPrompt: ""
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "GitHub Copilot":
+                    for try await (chunk, _) in copilotService.sendMessageStream(
+                        history: history, model: quizModel, systemPrompt: ""
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "Gemini CLI":
+                    for try await chunk in geminiCLIService.sendMessageStream(
+                        history: history, model: quizModel, systemPrompt: ""
+                    ) {
+                        fullContent += chunk
+                    }
+
                 default:
                     await MainActor.run { isRegenerating = false }
                     return
@@ -1155,6 +1229,49 @@ struct QuizMeView: View {
                 case "Apple Foundation":
                     for try await chunk in appleFoundationService.sendMessageStream(
                         history: history, systemPrompt: ""
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "NVIDIA API":
+                    guard !nvidiaKey.isEmpty else {
+                        await MainActor.run {
+                            generationError = "No NVIDIA API key set. Please configure in Settings."
+                            isGenerating = false
+                        }
+                        return
+                    }
+                    for try await (chunk, _) in nvidiaService.sendMessageStream(
+                        history: history, apiKey: nvidiaKey, model: quizModel,
+                        systemPrompt: ""
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "GitHub Copilot":
+                    guard copilotService.isAuthenticated else {
+                        await MainActor.run {
+                            generationError = "GitHub Copilot not authenticated. Please sign in."
+                            isGenerating = false
+                        }
+                        return
+                    }
+                    for try await (chunk, _) in copilotService.sendMessageStream(
+                        history: history, model: quizModel, systemPrompt: ""
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "Gemini CLI":
+                    guard geminiCLIService.isAvailable else {
+                        await MainActor.run {
+                            generationError = "Gemini CLI not available. Please install it first."
+                            isGenerating = false
+                        }
+                        return
+                    }
+                    for try await chunk in geminiCLIService.sendMessageStream(
+                        history: history, model: quizModel, systemPrompt: ""
                     ) {
                         fullContent += chunk
                     }

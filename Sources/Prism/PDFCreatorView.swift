@@ -1151,6 +1151,10 @@ struct PDFCreatorView: View {
     @AppStorage("GeminiKey") private var geminiKey: String = ""
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
+    @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
+    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String = "llama-3.1-70b-instruct"
+    @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
+    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String = "gemini-2.5-flash"
     @AppStorage("PDFProvider") private var pdfProvider: String = "Gemini API"
     @AppStorage("PDFModel") private var pdfModel: String = "gemini-2.5-flash"
     @Environment(\.colorScheme) private var colorScheme
@@ -1158,6 +1162,10 @@ struct PDFCreatorView: View {
     @StateObject private var store = PDFCreatorStore.shared
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
+    @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
+    @ObservedObject private var copilotService = GitHubCopilotService.shared
+    @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
+    @ObservedObject private var geminiCLIService = GeminiCLIService.shared
 
     @State private var prompt: String = ""
     @State private var selectedPageSize: String = "Letter"
@@ -1180,6 +1188,7 @@ struct PDFCreatorView: View {
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
+    private let nvidiaService = NvidiaService()
     private let webSearchService = WebSearchService()
 
     private var pdfHasThinkingCapability: Bool {
@@ -1192,6 +1201,9 @@ struct PDFCreatorView: View {
         case "Apple Foundation": return "apple.logo"
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
+        case "NVIDIA API": return "bolt.fill"
+        case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
+        case "Gemini CLI": return "terminal"
         default: return "cpu"
         }
     }
@@ -1800,6 +1812,42 @@ struct PDFCreatorView: View {
                             }
                         }
                     }
+                    if !nvidiaKey.isEmpty {
+                        Menu("NVIDIA API") {
+                            ForEach(nvidiaManager.availableModels, id: \.self) { model in
+                                Button(action: {
+                                    pdfProvider = "NVIDIA API"
+                                    pdfModel = model
+                                }) {
+                                    Text(nvidiaManager.displayName(for: model))
+                                }
+                            }
+                        }
+                    }
+                    if copilotService.isAuthenticated {
+                        Menu("GitHub Copilot") {
+                            ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                                Button(action: {
+                                    pdfProvider = "GitHub Copilot"
+                                    pdfModel = model
+                                }) {
+                                    Text(copilotModelManager.displayName(for: model))
+                                }
+                            }
+                        }
+                    }
+                    if geminiCLIService.isAvailable {
+                        Menu("Gemini CLI") {
+                            ForEach(GeminiCLIService.availableModels, id: \.id) { model in
+                                Button(action: {
+                                    pdfProvider = "Gemini CLI"
+                                    pdfModel = model.id
+                                }) {
+                                    Text(model.name)
+                                }
+                            }
+                        }
+                    }
                 } label: {
                     Image(systemName: providerIcon)
                         .font(.system(size: 14, weight: .medium))
@@ -2309,6 +2357,49 @@ struct PDFCreatorView: View {
                 case "Apple Foundation":
                     for try await chunk in appleFoundationService.sendMessageStream(
                         history: history, systemPrompt: systemPrompt
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "NVIDIA API":
+                    guard !nvidiaKey.isEmpty else {
+                        await MainActor.run {
+                            generationError = "No NVIDIA API key set. Please configure in Settings."
+                            isGenerating = false
+                        }
+                        return
+                    }
+                    for try await (chunk, _) in nvidiaService.sendMessageStream(
+                        history: history, apiKey: nvidiaKey, model: pdfModel,
+                        systemPrompt: systemPrompt
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "GitHub Copilot":
+                    guard copilotService.isAuthenticated else {
+                        await MainActor.run {
+                            generationError = "GitHub Copilot not authenticated. Please sign in."
+                            isGenerating = false
+                        }
+                        return
+                    }
+                    for try await (chunk, _) in copilotService.sendMessageStream(
+                        history: history, model: pdfModel, systemPrompt: systemPrompt
+                    ) {
+                        fullContent += chunk
+                    }
+
+                case "Gemini CLI":
+                    guard geminiCLIService.isAvailable else {
+                        await MainActor.run {
+                            generationError = "Gemini CLI not available. Please install it first."
+                            isGenerating = false
+                        }
+                        return
+                    }
+                    for try await chunk in geminiCLIService.sendMessageStream(
+                        history: history, model: pdfModel, systemPrompt: systemPrompt
                     ) {
                         fullContent += chunk
                     }
