@@ -931,10 +931,12 @@ struct QuickAIView: View {
                     transcript += "\(role): \(msg.content)\n"
                 }
                 transcript += "Assistant:"
+                
+                let lastUserImage = chatManager.getCurrentMessages().last(where: { $0.isUser })?.image
 
                 do {
                     let result = try await shortcutService.runShortcut(
-                        name: shortcutName, input: transcript, image: nil)
+                        name: shortcutName, input: transcript, image: lastUserImage)
                     DispatchQueue.main.async {
                         let aiMsg = Message(content: result.0, image: nil, isUser: false)
                         self.chatManager.addMessage(aiMsg)

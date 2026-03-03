@@ -2849,10 +2849,12 @@ struct ContentView: View {
                     transcript += "\(role): \(msg.content)\n"
                 }
                 transcript += "Assistant:"
+                
+                let lastUserImage = currentHistory.last(where: { $0.isUser })?.image
 
                 do {
                     let result = try await shortcutService.runShortcut(
-                        name: shortcutName, input: transcript, image: nil)
+                        name: shortcutName, input: transcript, image: lastUserImage)
                     DispatchQueue.main.async {
                         self.chatManager.updateMessage(
                             id: aiMsgId,
