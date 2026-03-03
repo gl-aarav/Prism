@@ -49,7 +49,7 @@ class NvidiaService {
                         let compressImage: (Data) -> String? = { data in
                             guard let image = NSImage(data: data) else { return nil }
 
-                            let maxDimension: CGFloat = 1024.0
+                            let maxDimension: CGFloat = 2048.0
                             var targetSize = image.size
 
                             if image.size.width > maxDimension || image.size.height > maxDimension {
@@ -74,7 +74,7 @@ class NvidiaService {
                             guard let tiff = newImage.tiffRepresentation,
                                 let bitmap = NSBitmapImageRep(data: tiff),
                                 let jpegData = bitmap.representation(
-                                    using: .jpeg, properties: [.compressionFactor: 0.6])
+                                    using: .jpeg, properties: [.compressionFactor: 0.9])
                             else {
                                 return nil
                             }
