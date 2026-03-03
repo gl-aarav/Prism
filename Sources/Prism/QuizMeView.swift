@@ -18,9 +18,11 @@ struct QuizMeView: View {
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
-    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String = "llama-3.1-70b-instruct"
+    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
+        "llama-3.1-70b-instruct"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
-    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String = "gemini-2.5-flash"
+    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
+        "gemini-2.5-flash"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 

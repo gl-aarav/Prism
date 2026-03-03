@@ -110,7 +110,10 @@ class PDFCreatorStore: ObservableObject {
 
     func deleteItem(_ item: PDFDocumentItem) {
         items.removeAll { $0.id == item.id }
-        for ext in ["pdf", "md", "docx", "txt", "html", "swift", "py", "js", "css", "json", "csv", "xml", "yaml"] {
+        for ext in [
+            "pdf", "md", "docx", "txt", "html", "swift", "py", "js", "css", "json", "csv", "xml",
+            "yaml",
+        ] {
             let path = saveDir.appendingPathComponent("\(item.id.uuidString).\(ext)")
             try? FileManager.default.removeItem(at: path)
         }
@@ -119,7 +122,10 @@ class PDFCreatorStore: ObservableObject {
 
     func clearAll() {
         for item in items {
-            for ext in ["pdf", "md", "docx", "txt", "html", "swift", "py", "js", "css", "json", "csv", "xml", "yaml"] {
+            for ext in [
+                "pdf", "md", "docx", "txt", "html", "swift", "py", "js", "css", "json", "csv",
+                "xml", "yaml",
+            ] {
                 let path = saveDir.appendingPathComponent("\(item.id.uuidString).\(ext)")
                 try? FileManager.default.removeItem(at: path)
             }
@@ -1152,9 +1158,11 @@ struct PDFCreatorView: View {
     @AppStorage("OllamaURL") private var ollamaURL: String = "http://localhost:11434"
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
     @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
-    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String = "llama-3.1-70b-instruct"
+    @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
+        "llama-3.1-70b-instruct"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
-    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String = "gemini-2.5-flash"
+    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
+        "gemini-2.5-flash"
     @AppStorage("PDFProvider") private var pdfProvider: String = "Gemini API"
     @AppStorage("PDFModel") private var pdfModel: String = "gemini-2.5-flash"
     @Environment(\.colorScheme) private var colorScheme
@@ -1422,12 +1430,16 @@ struct PDFCreatorView: View {
                         ("doc.text", "Essay", "Write a well-structured essay about"),
                         ("list.bullet", "Study Guide", "Create a comprehensive study guide for"),
                         ("chart.bar", "Report", "Generate a professional report with data on"),
-                        ("chevron.left.forwardslash.chevron.right", "Code File", "Write clean, well-documented code for"),
+                        (
+                            "chevron.left.forwardslash.chevron.right", "Code File",
+                            "Write clean, well-documented code for"
+                        ),
                         ("globe", "Web Page", "Create an HTML page with CSS for"),
                         ("tablecells", "CSV Data", "Generate a CSV dataset with sample data for"),
                     ]
 
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8)], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8)], spacing: 8)
+                    {
                         ForEach(templates, id: \.1) { icon, label, promptPrefix in
                             Button(action: {
                                 prompt = promptPrefix + " "
@@ -1643,7 +1655,8 @@ struct PDFCreatorView: View {
                     font: .system(size: 12),
                     action: {
                         // Re-generate using the same content as the prompt
-                        let titlePrompt = item.title.isEmpty ? String(item.content.prefix(100)) : item.title
+                        let titlePrompt =
+                            item.title.isEmpty ? String(item.content.prefix(100)) : item.title
                         prompt = "Regenerate: \(titlePrompt)"
                         selectedFormat = item.format ?? "pdf"
                         selectedPageSize = item.pageSize
@@ -2001,13 +2014,20 @@ struct PDFCreatorView: View {
                         Image(
                             systemName: selectedFormat == "pdf"
                                 ? "doc.richtext"
-                                : selectedFormat == "md" ? "doc.plaintext"
-                                : selectedFormat == "html" ? "globe"
-                                : selectedFormat == "csv" ? "tablecells"
-                                : ["swift", "py", "js"].contains(selectedFormat) ? "chevron.left.forwardslash.chevron.right"
-                                : selectedFormat == "css" ? "paintbrush"
-                                : ["json", "xml", "yaml"].contains(selectedFormat) ? "curlybraces"
-                                : "doc.text"
+                                : selectedFormat == "md"
+                                    ? "doc.plaintext"
+                                    : selectedFormat == "html"
+                                        ? "globe"
+                                        : selectedFormat == "csv"
+                                            ? "tablecells"
+                                            : ["swift", "py", "js"].contains(selectedFormat)
+                                                ? "chevron.left.forwardslash.chevron.right"
+                                                : selectedFormat == "css"
+                                                    ? "paintbrush"
+                                                    : ["json", "xml", "yaml"].contains(
+                                                        selectedFormat)
+                                                        ? "curlybraces"
+                                                        : "doc.text"
                         )
                         .font(.system(size: 12, weight: .medium))
                         Text(selectedFormat.uppercased())
