@@ -643,10 +643,10 @@ struct QuickAIView: View {
                 let searchQuery =
                     chatManager.getCurrentMessages().last(where: { $0.isUser })?.content ?? ""
                 var ollamaSystemPrompt = systemPrompt
-                if webSearchEnabled && !ollamaAPIKey.isEmpty {
+                if webSearchEnabled {
                     do {
                         let searchResults = try await webSearchService.search(
-                            query: searchQuery, apiKey: ollamaAPIKey)
+                            query: searchQuery)
                         let searchContext = webSearchService.buildSearchContext(
                             results: searchResults)
                         if !searchContext.isEmpty {
@@ -665,7 +665,9 @@ struct QuickAIView: View {
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: chatManager.getCurrentMessages(), endpoint: ollamaURL,
                         model: activeModel, systemPrompt: ollamaSystemPrompt,
-                        thinkingLevel: thinkingLevel
+                        thinkingLevel: thinkingLevel,
+                        webSearchEnabled: webSearchEnabled,
+                        webSearchService: webSearchEnabled ? webSearchService : nil
                     ) {
                         fullContent += contentChunk
                         if let thinking = thinkingChunk {
@@ -2664,7 +2666,7 @@ extension QuickAIView {
                 }
 
                 // Web Search Toggle (Ollama only)
-                if !ollamaAPIKey.isEmpty && selectedProvider.contains("Ollama") {
+                if selectedProvider.contains("Ollama") {
                     Button(action: { webSearchEnabled.toggle() }) {
                         Image(systemName: "globe")
                             .font(.system(size: 16))

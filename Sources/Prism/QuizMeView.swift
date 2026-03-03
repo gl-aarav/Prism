@@ -452,7 +452,7 @@ struct QuizMeView: View {
                             .fixedSize()
                         }
 
-                        if !ollamaAPIKey.isEmpty {
+                        if quizProvider == "Ollama" {
                             Button(action: { quizWebSearchEnabled.toggle() }) {
                                 HStack(spacing: 5) {
                                     Image(systemName: "globe")
@@ -1073,10 +1073,10 @@ struct QuizMeView: View {
                     let regenThinking = effectiveThinkingLevel(
                         provider: quizProvider, model: quizModel, level: quizThinkingLevel)
                     var regenSystemPrompt = ""
-                    if quizWebSearchEnabled && !ollamaAPIKey.isEmpty {
+                    if quizWebSearchEnabled {
                         do {
                             let searchResults = try await webSearchService.search(
-                                query: topic, apiKey: ollamaAPIKey)
+                                query: topic)
                             let searchContext = webSearchService.buildSearchContext(
                                 results: searchResults)
                             if !searchContext.isEmpty { regenSystemPrompt = searchContext }
@@ -1210,10 +1210,10 @@ struct QuizMeView: View {
                     let quizThinking = effectiveThinkingLevel(
                         provider: quizProvider, model: quizModel, level: quizThinkingLevel)
                     var quizSystemPrompt = ""
-                    if quizWebSearchEnabled && !ollamaAPIKey.isEmpty {
+                    if quizWebSearchEnabled {
                         do {
                             let searchResults = try await webSearchService.search(
-                                query: trimmed, apiKey: ollamaAPIKey)
+                                query: trimmed)
                             let searchContext = webSearchService.buildSearchContext(
                                 results: searchResults)
                             if !searchContext.isEmpty { quizSystemPrompt = searchContext }

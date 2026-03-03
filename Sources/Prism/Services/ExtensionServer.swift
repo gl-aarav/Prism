@@ -308,15 +308,12 @@ class ExtensionServer {
 
                             var currentHistory = history
                             if webSearchEnabled {
-                                let ollamaAPIKey =
-                                    UserDefaults.standard.string(forKey: "OllamaAPIKey") ?? ""
-                                if !ollamaAPIKey.isEmpty,
-                                    let lastUserMsg = currentHistory.last(where: { $0.isUser })
+                                if let lastUserMsg = currentHistory.last(where: { $0.isUser })
                                 {
                                     let webSearchService = WebSearchService()
                                     do {
                                         let searchResults = try await webSearchService.search(
-                                            query: lastUserMsg.content, apiKey: ollamaAPIKey)
+                                            query: lastUserMsg.content)
                                         let searchContext = webSearchService.buildSearchContext(
                                             results: searchResults)
                                         if let lastIndex = currentHistory.lastIndex(where: {

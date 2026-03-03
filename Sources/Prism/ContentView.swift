@@ -837,36 +837,115 @@ class WebSearchService {
 
     init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForRequest = 15
         self.session = URLSession(configuration: config)
     }
 
-    func search(query: String, apiKey: String, maxResults: Int = 3) async throws
+    func search(query: String, maxResults: Int = 5) async throws
         -> [WebSearchResult]
     {
-        guard let url = URL(string: "https://ollama.com/api/web_search") else {
+        // Use DuckDuckGo Instant Answer API (free, no API key required)
+        guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://api.duckduckgo.com/?q=\(encodedQuery)&format=json&no_html=1&skip_disambig=1")
+        else {
             throw URLError(.badURL)
         }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let (data, _) = try await session.data(for: URLRequest(url: url))
 
-        let body: [String: Any] = [
-            "query": query,
-            "max_results": maxResults,
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw OllamaAPIError(statusCode: statusCode, message: "Web search request failed")
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return []
         }
 
-        let decoded = try JSONDecoder().decode(WebSearchResponse.self, from: data)
-        return decoded.results
+        var results: [WebSearchResult] = []
+
+        // Add abstract if available
+        if let abstract = json["AbstractText"] as? String, !abstract.isEmpty,
+           let source = json["AbstractSource"] as? String,
+           let abstractURL = json["AbstractURL"] as? String {
+            results.append(WebSearchResult(title: source, url: abstractURL, content: abstract))
+        }
+
+        // Add direct answer if available
+        if let answer = json["Answer"] as? String, !answer.isEmpty {
+            results.append(WebSearchResult(title: "Direct Answer", url: "", content: answer))
+        }
+
+        // Add related topics
+        if let topics = json["RelatedTopics"] as? [[String: Any]] {
+            for topic in topics where results.count < maxResults {
+                if let text = topic["Text"] as? String, !text.isEmpty,
+                   let firstURL = topic["FirstURL"] as? String {
+                    let title = String(text.prefix(100))
+                    results.append(WebSearchResult(title: title, url: firstURL, content: text))
+                }
+            }
+        }
+
+        // If instant answers didn't return enough, try HTML search
+        if results.isEmpty || (results.count < 2 && results.first.map({ $0.content.count < 50 }) ?? true) {
+            let htmlResults = try await searchHTML(query: query, maxResults: maxResults)
+            results.append(contentsOf: htmlResults)
+        }
+
+        return Array(results.prefix(maxResults))
+    }
+
+    /// Fallback: fetch search results from DuckDuckGo's HTML endpoint
+    private func searchHTML(query: String, maxResults: Int) async throws -> [WebSearchResult] {
+        guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://html.duckduckgo.com/html/?q=\(encodedQuery)")
+        else { return [] }
+
+        var request = URLRequest(url: url)
+        request.setValue(
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)",
+            forHTTPHeaderField: "User-Agent")
+
+        let (data, _) = try await session.data(for: request)
+        guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .ascii) else { return [] }
+
+        var results: [WebSearchResult] = []
+
+        // Parse result links: <a ... class="result__a" href="URL">Title</a>
+        let linkPattern = try NSRegularExpression(
+            pattern: #"<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>"#,
+            options: [])
+        // Parse snippets: <a ... class="result__snippet" ...>Snippet</a>
+        let snippetPattern = try NSRegularExpression(
+            pattern: #"<a[^>]*class="result__snippet"[^>]*>(.*?)</a>"#,
+            options: [.dotMatchesLineSeparators])
+
+        let range = NSRange(html.startIndex..., in: html)
+        let linkMatches = linkPattern.matches(in: html, range: range)
+        let snippetMatches = snippetPattern.matches(in: html, range: range)
+
+        for (i, match) in linkMatches.prefix(maxResults).enumerated() {
+            guard let urlRange = Range(match.range(at: 1), in: html),
+                  let titleRange = Range(match.range(at: 2), in: html) else { continue }
+
+            let resultUrl = String(html[urlRange])
+            let rawTitle = String(html[titleRange])
+            let title = rawTitle
+                .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            var snippet = title
+            if i < snippetMatches.count,
+               let snippetRange = Range(snippetMatches[i].range(at: 1), in: html) {
+                let rawSnippet = String(html[snippetRange])
+                let cleaned = rawSnippet
+                    .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cleaned.isEmpty { snippet = cleaned }
+            }
+
+            if !title.isEmpty {
+                results.append(WebSearchResult(title: title, url: resultUrl, content: snippet))
+            }
+        }
+
+        return results
     }
 
     func buildSearchContext(results: [WebSearchResult]) -> String {
@@ -884,7 +963,7 @@ class WebSearchService {
             context += entry
         }
         context +=
-            "[End of Web Search Results]\n\nUse the above web search results to inform your answer. If you reference a source, mention it naturally by name or URL in your text. NEVER use bracket citation syntax like 【1†L2-L5】 or [1†source] or any similar notation."
+            "[End of Web Search Results]\n\nUse the above web search results to inform your answer. If you reference a source, mention it naturally by name or URL in your text. NEVER use bracket citation syntax like 【1†L2-L5】 or [1†source] or any similar notation. Do NOT attempt to call any functions or tools — the search results above are all you need."
         return context
     }
 }
@@ -931,7 +1010,9 @@ class OllamaService {
 
     func sendMessageStream(
         history: [Message], endpoint: String, model: String, systemPrompt: String = "",
-        thinkingLevel: String = "medium"
+        thinkingLevel: String = "medium",
+        webSearchEnabled: Bool = false,
+        webSearchService: WebSearchService? = nil
     ) -> AsyncThrowingStream<(String, String?), Error> {
         return AsyncThrowingStream { continuation in
             Task {
@@ -955,8 +1036,6 @@ class OllamaService {
                         "content": systemPrompt,
                     ])
                 } else if lowerModel.contains("deepseek") || lowerModel.contains("r1") {
-                    // DeepSeek models with thinking enabled often default to Chinese.
-                    // If no system prompt is provided, enforce English.
                     messages.append([
                         "role": "system",
                         "content":
@@ -1021,12 +1100,31 @@ class OllamaService {
                     "options": [:],
                 ]
 
+                // Add web search tool definition when enabled
+                if webSearchEnabled && webSearchService != nil {
+                    body["tools"] = [[
+                        "type": "function",
+                        "function": [
+                            "name": "web_search",
+                            "description": "Search the web for current information about any topic",
+                            "parameters": [
+                                "type": "object",
+                                "properties": [
+                                    "query": [
+                                        "type": "string",
+                                        "description": "The search query"
+                                    ]
+                                ],
+                                "required": ["query"]
+                            ]
+                        ] as [String: Any]
+                    ] as [String: Any]]
+                }
+
                 // Apply native thinking parameter
                 if lowerModel.contains("gpt-oss") {
                     body["think"] = thinkingLevel
                 } else if lowerModel.contains("deepseek") || lowerModel.contains("r1") {
-                    // DeepSeek models with thinking enabled often default to Chinese.
-                    // If no system prompt is provided, enforce English.
                     // Note: We removed 'qwen' from here as qwen models (like qwen3-coder) generally don't support top-level 'think' param in Ollama
                     // and sending it causes a 400 Bad Request.
                     if thinkingLevel == "high" {
@@ -1034,63 +1132,142 @@ class OllamaService {
                     }
                 }
 
+                // Tool calling loop — allows up to 3 rounds of tool use
+                var toolRound = 0
+                let maxToolRounds = 3
+
                 do {
-                    request.httpBody = try JSONSerialization.data(withJSONObject: body)
-                    let (result, response) = try await session.bytes(for: request)
+                    while toolRound < maxToolRounds {
+                        toolRound += 1
 
-                    guard let httpResponse = response as? HTTPURLResponse else {
-                        continuation.finish(throwing: URLError(.badServerResponse))
-                        return
-                    }
+                        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+                        let (result, response) = try await self.session.bytes(for: request)
 
-                    if httpResponse.statusCode != 200 {
-                        var errorMsg = ""
+                        guard let httpResponse = response as? HTTPURLResponse else {
+                            continuation.finish(throwing: URLError(.badServerResponse))
+                            return
+                        }
+
+                        if httpResponse.statusCode != 200 {
+                            var errorMsg = ""
+                            for try await line in result.lines {
+                                errorMsg += line
+                            }
+                            if let data = errorMsg.data(using: .utf8),
+                                let json = try? JSONSerialization.jsonObject(with: data)
+                                    as? [String: Any],
+                                let msg = json["error"] as? String
+                            {
+                                errorMsg = msg
+                            }
+                            continuation.finish(
+                                throwing: OllamaAPIError(
+                                    statusCode: httpResponse.statusCode, message: errorMsg))
+                            return
+                        }
+
+                        var pendingToolCalls: [[String: Any]]? = nil
+
                         for try await line in result.lines {
-                            errorMsg += line
-                        }
-                        // Simple cleanup of JSON format if present
-                        if let data = errorMsg.data(using: .utf8),
-                            let json = try? JSONSerialization.jsonObject(with: data)
-                                as? [String: Any],
-                            let msg = json["error"] as? String
-                        {
-                            errorMsg = msg
-                        }
-                        continuation.finish(
-                            throwing: OllamaAPIError(
-                                statusCode: httpResponse.statusCode, message: errorMsg))
-                        return
-                    }
+                            guard let data = line.data(using: .utf8),
+                                let json = try? JSONSerialization.jsonObject(with: data)
+                                    as? [String: Any]
+                            else { continue }
 
-                    for try await line in result.lines {
-                        guard let data = line.data(using: .utf8),
-                            let json = try? JSONSerialization.jsonObject(with: data)
-                                as? [String: Any]
-                        else { continue }
-
-                        if let done = json["done"] as? Bool, done {
-                            if let message = json["message"] as? [String: Any] {
-                                let content = message["content"] as? String
-                                let thinking = message["thinking"] as? String
-                                if let thinking = thinking, !thinking.isEmpty {
-                                    continuation.yield(("", thinking))
+                            if let done = json["done"] as? Bool, done {
+                                if let message = json["message"] as? [String: Any] {
+                                    // Check for tool calls on the final message
+                                    if let calls = message["tool_calls"] as? [[String: Any]], !calls.isEmpty {
+                                        pendingToolCalls = calls
+                                    }
+                                    let content = message["content"] as? String
+                                    let thinking = message["thinking"] as? String
+                                    if let thinking = thinking, !thinking.isEmpty {
+                                        continuation.yield(("", thinking))
+                                    }
+                                    if let content = content, !content.isEmpty {
+                                        continuation.yield((content, nil))
+                                    }
                                 }
-                                if let content = content, !content.isEmpty {
-                                    continuation.yield((content, nil))
+                                break
+                            }
+
+                            guard let message = json["message"] as? [String: Any] else { continue }
+
+                            // Check for tool calls in streaming chunks
+                            if let calls = message["tool_calls"] as? [[String: Any]], !calls.isEmpty {
+                                if pendingToolCalls != nil {
+                                    pendingToolCalls!.append(contentsOf: calls)
+                                } else {
+                                    pendingToolCalls = calls
                                 }
                             }
+
+                            let content = message["content"] as? String
+                            let thinking = message["thinking"] as? String
+
+                            if let thinking = thinking, !thinking.isEmpty {
+                                continuation.yield(("", thinking))
+                            }
+                            if let content = content, !content.isEmpty {
+                                continuation.yield((content, nil))
+                            }
+                        }
+
+                        // If no tool calls or no search service, we're done
+                        guard let toolCalls = pendingToolCalls,
+                              let searchService = webSearchService,
+                              webSearchEnabled
+                        else {
                             break
                         }
 
-                        guard let message = json["message"] as? [String: Any] else { continue }
-                        let content = message["content"] as? String
-                        let thinking = message["thinking"] as? String
+                        // Execute tool calls and build tool response messages
+                        messages.append([
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": toolCalls
+                        ])
 
-                        if let thinking = thinking, !thinking.isEmpty {
-                            continuation.yield(("", thinking))
+                        for call in toolCalls {
+                            guard let function = call["function"] as? [String: Any],
+                                  let name = function["name"] as? String,
+                                  name == "web_search"
+                            else { continue }
+
+                            // Parse arguments (may be dict or JSON string)
+                            let args: [String: Any]
+                            if let a = function["arguments"] as? [String: Any] {
+                                args = a
+                            } else if let argsStr = function["arguments"] as? String,
+                                      let argsData = argsStr.data(using: .utf8),
+                                      let a = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
+                                args = a
+                            } else {
+                                continue
+                            }
+
+                            if let query = args["query"] as? String {
+                                do {
+                                    let results = try await searchService.search(query: query)
+                                    let context = searchService.buildSearchContext(results: results)
+                                    messages.append([
+                                        "role": "tool",
+                                        "content": context.isEmpty ? "No results found for: \(query)" : context
+                                    ])
+                                } catch {
+                                    messages.append([
+                                        "role": "tool",
+                                        "content": "Web search failed: \(error.localizedDescription)"
+                                    ])
+                                }
+                            }
                         }
-                        if let content = content, !content.isEmpty {
-                            continuation.yield((content, nil))
+
+                        // Update body with extended messages; remove tools on last round
+                        body["messages"] = messages
+                        if toolRound >= maxToolRounds - 1 {
+                            body.removeValue(forKey: "tools")
                         }
                     }
 
@@ -2356,19 +2533,18 @@ struct ContentView: View {
         currentTask?.cancel()
 
         currentTask = Task {
-            // Web search augmentation (Ollama only)
+            // Web search augmentation
             var effectiveSystemPrompt = systemPrompt
-            if webSearchEnabled && !ollamaAPIKey.isEmpty && selectedProvider == "Ollama" {
+            if webSearchEnabled && selectedProvider == "Ollama" {
                 do {
-                    let searchResults = try await webSearchService.search(
-                        query: input, apiKey: ollamaAPIKey)
+                    let searchResults = try await webSearchService.search(query: input)
                     let searchContext = webSearchService.buildSearchContext(results: searchResults)
                     if !searchContext.isEmpty {
                         effectiveSystemPrompt = systemPrompt + searchContext
                     }
                 } catch {
                     // Silently continue without search results on failure
-                    print("Web search failed: \\(error.localizedDescription)")
+                    print("Web search failed: \(error.localizedDescription)")
                 }
             }
 
@@ -2542,7 +2718,9 @@ struct ContentView: View {
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
                         history: currentHistory, endpoint: ollamaURL, model: activeModel,
-                        systemPrompt: effectiveSystemPrompt, thinkingLevel: currentThinkingLevel)
+                        systemPrompt: effectiveSystemPrompt, thinkingLevel: currentThinkingLevel,
+                        webSearchEnabled: webSearchEnabled,
+                        webSearchService: webSearchEnabled ? webSearchService : nil)
                     {
                         fullContent += contentChunk
                         if let thinking = thinkingChunk {
@@ -5033,7 +5211,7 @@ struct InputView: View {
                 }
 
                 // Web Search Toggle (Ollama only)
-                if hasOllamaAPIKey && isOllama {
+                if isOllama {
                     Button(action: {
                         webSearchEnabled.toggle()
                     }) {

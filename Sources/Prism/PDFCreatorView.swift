@@ -2118,8 +2118,8 @@ struct PDFCreatorView: View {
                     .help("Thinking: \(pdfThinkingLevel.capitalized)")
                 }
 
-                // Web Search toggle (Ollama with API key)
-                if pdfProvider == "Ollama" && !ollamaAPIKey.isEmpty {
+                // Web Search toggle (Ollama)
+                if pdfProvider == "Ollama" {
                     Button(action: {
                         pdfWebSearchEnabled.toggle()
                     }) {
@@ -2354,10 +2354,10 @@ struct PDFCreatorView: View {
                     let thinking = effectiveThinkingLevel(
                         provider: pdfProvider, model: pdfModel, level: pdfThinkingLevel)
                     var ollamaSystemPrompt = systemPrompt
-                    if pdfWebSearchEnabled && !ollamaAPIKey.isEmpty {
+                    if pdfWebSearchEnabled {
                         do {
                             let searchResults = try await webSearchService.search(
-                                query: trimmed, apiKey: ollamaAPIKey)
+                                query: trimmed)
                             let searchContext = webSearchService.buildSearchContext(
                                 results: searchResults)
                             if !searchContext.isEmpty {

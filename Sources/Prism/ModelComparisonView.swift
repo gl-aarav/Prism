@@ -695,7 +695,7 @@ struct ModelComparisonView: View {
                     }
 
                     // Web search toggle
-                    if !ollamaAPIKey.isEmpty {
+                    if synthesizeProvider == "Ollama" {
                         Button(action: { synthesizeWebSearchEnabled.toggle() }) {
                             HStack(spacing: 5) {
                                 Image(systemName: "globe")
@@ -889,12 +889,10 @@ struct ModelComparisonView: View {
             do {
                 // Web search augmentation for Ollama synthesis
                 var synthSystemPrompt = ""
-                if synthesizeProvider == "Ollama" && synthesizeWebSearchEnabled
-                    && !ollamaAPIKey.isEmpty
-                {
+                if synthesizeProvider == "Ollama" && synthesizeWebSearchEnabled {
                     do {
                         let searchResults = try await webSearchService.search(
-                            query: prompt, apiKey: ollamaAPIKey)
+                            query: prompt)
                         let searchContext = webSearchService.buildSearchContext(
                             results: searchResults)
                         if !searchContext.isEmpty {
@@ -1235,10 +1233,10 @@ struct ModelComparisonView: View {
 
                         // Web search augmentation for Ollama
                         var ollamaSystemPrompt = systemPrompt
-                        if slotWebSearch && !ollamaAPIKey.isEmpty {
+                        if slotWebSearch {
                             do {
                                 let searchResults = try await webSearchService.search(
-                                    query: trimmed, apiKey: ollamaAPIKey)
+                                    query: trimmed)
                                 let searchContext = webSearchService.buildSearchContext(
                                     results: searchResults)
                                 if !searchContext.isEmpty {
@@ -1558,7 +1556,7 @@ struct ComparisonCard: View {
 
     /// Whether this slot can show web search toggle
     private var slotCanWebSearch: Bool {
-        slot.provider == "Ollama" && hasOllamaAPIKey
+        slot.provider == "Ollama"
     }
 
     var body: some View {
