@@ -213,10 +213,10 @@ function findOptionByText(text) {
 function getNativeValueSetter(el) {
     // Get the correct prototype based on element type
     const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype :
-                  el instanceof HTMLSelectElement ? HTMLSelectElement.prototype :
-                  HTMLInputElement.prototype;
+        el instanceof HTMLSelectElement ? HTMLSelectElement.prototype :
+            HTMLInputElement.prototype;
     return Object.getOwnPropertyDescriptor(proto, 'value')?.set ||
-           Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
+        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
 }
 
 function simulateFullClick(el, opts) {
@@ -870,146 +870,146 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === "agentPressKey") {
         (async () => {
-        try {
-            let el = request.selector ? resolveSelector(request.selector) : null;
-            if (!el) el = document.activeElement || document.body;
-            const key = request.key || 'Enter';
+            try {
+                let el = request.selector ? resolveSelector(request.selector) : null;
+                if (!el) el = document.activeElement || document.body;
+                const key = request.key || 'Enter';
 
-            const keyCodeMap = {
-                'Enter': 13, 'Tab': 9, 'Escape': 27, 'Backspace': 8, 'Delete': 46,
-                'ArrowUp': 38, 'ArrowDown': 40, 'ArrowLeft': 37, 'ArrowRight': 39,
-                'Home': 36, 'End': 35, 'PageUp': 33, 'PageDown': 34,
-                ' ': 32, 'Space': 32
-            };
-            const codeMap = {
-                'Enter': 'Enter', 'Tab': 'Tab', 'Escape': 'Escape',
-                'Backspace': 'Backspace', 'Delete': 'Delete',
-                'ArrowUp': 'ArrowUp', 'ArrowDown': 'ArrowDown',
-                'ArrowLeft': 'ArrowLeft', 'ArrowRight': 'ArrowRight',
-                'Home': 'Home', 'End': 'End', 'PageUp': 'PageUp', 'PageDown': 'PageDown',
-                ' ': 'Space', 'Space': 'Space'
-            };
-            const kc = keyCodeMap[key] || (key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0);
-            const code = codeMap[key] || (key.length === 1 ? 'Key' + key.toUpperCase() : key);
+                const keyCodeMap = {
+                    'Enter': 13, 'Tab': 9, 'Escape': 27, 'Backspace': 8, 'Delete': 46,
+                    'ArrowUp': 38, 'ArrowDown': 40, 'ArrowLeft': 37, 'ArrowRight': 39,
+                    'Home': 36, 'End': 35, 'PageUp': 33, 'PageDown': 34,
+                    ' ': 32, 'Space': 32
+                };
+                const codeMap = {
+                    'Enter': 'Enter', 'Tab': 'Tab', 'Escape': 'Escape',
+                    'Backspace': 'Backspace', 'Delete': 'Delete',
+                    'ArrowUp': 'ArrowUp', 'ArrowDown': 'ArrowDown',
+                    'ArrowLeft': 'ArrowLeft', 'ArrowRight': 'ArrowRight',
+                    'Home': 'Home', 'End': 'End', 'PageUp': 'PageUp', 'PageDown': 'PageDown',
+                    ' ': 'Space', 'Space': 'Space'
+                };
+                const kc = keyCodeMap[key] || (key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0);
+                const code = codeMap[key] || (key.length === 1 ? 'Key' + key.toUpperCase() : key);
 
-            const opts = {
-                key, code, keyCode: kc, which: kc, charCode: 0,
-                bubbles: true, cancelable: true, composed: true
-            };
-            if (request.ctrlKey) opts.ctrlKey = true;
-            if (request.shiftKey) opts.shiftKey = true;
-            if (request.altKey) opts.altKey = true;
-            if (request.metaKey) opts.metaKey = true;
+                const opts = {
+                    key, code, keyCode: kc, which: kc, charCode: 0,
+                    bubbles: true, cancelable: true, composed: true
+                };
+                if (request.ctrlKey) opts.ctrlKey = true;
+                if (request.shiftKey) opts.shiftKey = true;
+                if (request.altKey) opts.altKey = true;
+                if (request.metaKey) opts.metaKey = true;
 
-            el.dispatchEvent(new KeyboardEvent('keydown', opts));
-            el.dispatchEvent(new KeyboardEvent('keypress', { ...opts, charCode: kc }));
-            el.dispatchEvent(new KeyboardEvent('keyup', opts));
+                el.dispatchEvent(new KeyboardEvent('keydown', opts));
+                el.dispatchEvent(new KeyboardEvent('keypress', { ...opts, charCode: kc }));
+                el.dispatchEvent(new KeyboardEvent('keyup', opts));
 
-            // Programmatically perform the default action since synthetic events are untrusted
-            let extra = '';
+                // Programmatically perform the default action since synthetic events are untrusted
+                let extra = '';
 
-            if (key === 'Enter' && !request.ctrlKey && !request.metaKey && !request.altKey) {
-                if (el.tagName === 'INPUT' && el.type !== 'textarea') {
-                    const form = el.closest('form');
-                    if (form) {
-                        const submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
-                        if (submitBtn) {
-                            submitBtn.click();
-                            extra = ' (clicked submit)';
-                        } else if (form.requestSubmit) {
-                            form.requestSubmit();
-                            extra = ' (submitted form)';
-                        } else {
-                            form.submit();
-                            extra = ' (submitted form)';
+                if (key === 'Enter' && !request.ctrlKey && !request.metaKey && !request.altKey) {
+                    if (el.tagName === 'INPUT' && el.type !== 'textarea') {
+                        const form = el.closest('form');
+                        if (form) {
+                            const submitBtn = form.querySelector('button[type="submit"], input[type="submit"], button:not([type])');
+                            if (submitBtn) {
+                                submitBtn.click();
+                                extra = ' (clicked submit)';
+                            } else if (form.requestSubmit) {
+                                form.requestSubmit();
+                                extra = ' (submitted form)';
+                            } else {
+                                form.submit();
+                                extra = ' (submitted form)';
+                            }
                         }
+                    } else if (el.tagName === 'TEXTAREA') {
+                        // Insert newline in textarea
+                        const start = el.selectionStart || 0;
+                        const end = el.selectionEnd || 0;
+                        const nativeSet = getNativeValueSetter(el);
+                        const newVal = el.value.substring(0, start) + '\n' + el.value.substring(end);
+                        if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                        el.selectionStart = el.selectionEnd = start + 1;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        extra = ' (inserted newline)';
+                    } else if (isContentEditable(el) || isRichTextEditor(el)) {
+                        document.execCommand('insertLineBreak', false, null);
+                        extra = ' (inserted line break)';
                     }
-                } else if (el.tagName === 'TEXTAREA') {
-                    // Insert newline in textarea
-                    const start = el.selectionStart || 0;
-                    const end = el.selectionEnd || 0;
-                    const nativeSet = getNativeValueSetter(el);
-                    const newVal = el.value.substring(0, start) + '\n' + el.value.substring(end);
-                    if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
-                    el.selectionStart = el.selectionEnd = start + 1;
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    extra = ' (inserted newline)';
-                } else if (isContentEditable(el) || isRichTextEditor(el)) {
-                    document.execCommand('insertLineBreak', false, null);
-                    extra = ' (inserted line break)';
-                }
-            } else if (key === 'Backspace') {
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                    const start = el.selectionStart || 0;
-                    const end = el.selectionEnd || 0;
-                    const nativeSet = getNativeValueSetter(el);
-                    if (start !== end) {
-                        const newVal = el.value.substring(0, start) + el.value.substring(end);
-                        if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
-                        el.selectionStart = el.selectionEnd = start;
-                    } else if (start > 0) {
-                        const newVal = el.value.substring(0, start - 1) + el.value.substring(start);
-                        if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
-                        el.selectionStart = el.selectionEnd = start - 1;
+                } else if (key === 'Backspace') {
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        const start = el.selectionStart || 0;
+                        const end = el.selectionEnd || 0;
+                        const nativeSet = getNativeValueSetter(el);
+                        if (start !== end) {
+                            const newVal = el.value.substring(0, start) + el.value.substring(end);
+                            if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                            el.selectionStart = el.selectionEnd = start;
+                        } else if (start > 0) {
+                            const newVal = el.value.substring(0, start - 1) + el.value.substring(start);
+                            if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                            el.selectionStart = el.selectionEnd = start - 1;
+                        }
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        extra = ' (deleted char)';
+                    } else if (isContentEditable(el) || isRichTextEditor(el)) {
+                        document.execCommand('delete', false, null);
+                        extra = ' (deleted in editor)';
                     }
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    extra = ' (deleted char)';
-                } else if (isContentEditable(el) || isRichTextEditor(el)) {
-                    document.execCommand('delete', false, null);
-                    extra = ' (deleted in editor)';
-                }
-            } else if (key === 'Delete') {
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                    const start = el.selectionStart || 0;
-                    const end = el.selectionEnd || 0;
-                    const nativeSet = getNativeValueSetter(el);
-                    if (start !== end) {
-                        const newVal = el.value.substring(0, start) + el.value.substring(end);
-                        if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
-                        el.selectionStart = el.selectionEnd = start;
-                    } else if (start < el.value.length) {
-                        const newVal = el.value.substring(0, start) + el.value.substring(start + 1);
-                        if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
-                        el.selectionStart = el.selectionEnd = start;
+                } else if (key === 'Delete') {
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        const start = el.selectionStart || 0;
+                        const end = el.selectionEnd || 0;
+                        const nativeSet = getNativeValueSetter(el);
+                        if (start !== end) {
+                            const newVal = el.value.substring(0, start) + el.value.substring(end);
+                            if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                            el.selectionStart = el.selectionEnd = start;
+                        } else if (start < el.value.length) {
+                            const newVal = el.value.substring(0, start) + el.value.substring(start + 1);
+                            if (nativeSet) nativeSet.call(el, newVal); else el.value = newVal;
+                            el.selectionStart = el.selectionEnd = start;
+                        }
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        extra = ' (deleted char)';
+                    } else if (isContentEditable(el) || isRichTextEditor(el)) {
+                        document.execCommand('forwardDelete', false, null);
+                        extra = ' (deleted in editor)';
                     }
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    extra = ' (deleted char)';
-                } else if (isContentEditable(el) || isRichTextEditor(el)) {
-                    document.execCommand('forwardDelete', false, null);
-                    extra = ' (deleted in editor)';
+                } else if (key === 'Tab') {
+                    const focusable = Array.from(document.querySelectorAll(
+                        'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+                    )).filter(e => e.offsetParent !== null);
+                    const idx = focusable.indexOf(el);
+                    if (idx >= 0) {
+                        const next = request.shiftKey ? focusable[idx - 1] : focusable[idx + 1];
+                        if (next) { next.focus(); extra = ` (focused ${getLabel(next).substring(0, 30)})`; }
+                    }
+                } else if (key === 'Escape') {
+                    el.blur();
+                    extra = ' (blurred element)';
+                } else if (key === 'a' && (request.ctrlKey || request.metaKey)) {
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                        el.select();
+                        extra = ' (selected all)';
+                    } else {
+                        document.execCommand('selectAll', false, null);
+                        extra = ' (selected all)';
+                    }
+                } else if (key === ' ' || key === 'Space') {
+                    // Space on buttons/checkboxes should click them
+                    if (el.tagName === 'BUTTON' || el.type === 'checkbox' || el.type === 'radio' || el.getAttribute('role') === 'button') {
+                        el.click();
+                        extra = ' (activated element)';
+                    }
                 }
-            } else if (key === 'Tab') {
-                const focusable = Array.from(document.querySelectorAll(
-                    'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-                )).filter(e => e.offsetParent !== null);
-                const idx = focusable.indexOf(el);
-                if (idx >= 0) {
-                    const next = request.shiftKey ? focusable[idx - 1] : focusable[idx + 1];
-                    if (next) { next.focus(); extra = ` (focused ${getLabel(next).substring(0, 30)})`; }
-                }
-            } else if (key === 'Escape') {
-                el.blur();
-                extra = ' (blurred element)';
-            } else if (key === 'a' && (request.ctrlKey || request.metaKey)) {
-                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                    el.select();
-                    extra = ' (selected all)';
-                } else {
-                    document.execCommand('selectAll', false, null);
-                    extra = ' (selected all)';
-                }
-            } else if (key === ' ' || key === 'Space') {
-                // Space on buttons/checkboxes should click them
-                if (el.tagName === 'BUTTON' || el.type === 'checkbox' || el.type === 'radio' || el.getAttribute('role') === 'button') {
-                    el.click();
-                    extra = ' (activated element)';
-                }
-            }
 
-            const modifiers = (request.metaKey ? 'Cmd+' : '') + (request.ctrlKey ? 'Ctrl+' : '') +
-                (request.shiftKey ? 'Shift+' : '') + (request.altKey ? 'Alt+' : '');
-            sendResponse({ ok: true, summary: `Pressed ${modifiers}${key}${extra}` });
-        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+                const modifiers = (request.metaKey ? 'Cmd+' : '') + (request.ctrlKey ? 'Ctrl+' : '') +
+                    (request.shiftKey ? 'Shift+' : '') + (request.altKey ? 'Alt+' : '');
+                sendResponse({ ok: true, summary: `Pressed ${modifiers}${key}${extra}` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
         })();
         return true;
     }
@@ -1321,7 +1321,9 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
                 el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
                 sendResponse({ ok: true, summary: `Clicked at (${x}, ${y}) on "${getLabel(el)}"` });
-            } else { sendResponse({ ok: false, error: `No element at (${x}, ${y})` }); }
+            } else {
+                sendResponse({ ok: true, summary: `Clicked at (${x}, ${y}) (No specific element found)` });
+            }
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
     }
 

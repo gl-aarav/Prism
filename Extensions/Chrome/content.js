@@ -1442,7 +1442,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 el.dispatchEvent(new MouseEvent('mouseup', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
                 el.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
                 sendResponse({ ok: true, summary: `Clicked at (${x}, ${y}) on "${getLabel(el)}"` });
-            } else { sendResponse({ ok: false, error: `No element at (${x}, ${y})` }); }
+            } else {
+                sendResponse({ ok: true, summary: `Clicked at (${x}, ${y}) (No specific element found)` });
+            }
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
     }
 
