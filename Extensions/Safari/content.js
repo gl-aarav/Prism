@@ -235,6 +235,87 @@ function simulateFullClick(el, opts) {
     if (typeof el.click === 'function') el.click();
 }
 
+// ── DOM TREE HIGHLIGHTING (inspired by nanobrowser) ─────
+const HIGHLIGHT_CONTAINER_ID = 'prism-highlight-container';
+const HIGHLIGHT_COLORS = [
+    '#FF0000', '#00FF00', '#0000FF', '#FFA500', '#800080',
+    '#008080', '#FF69B4', '#4B0082', '#FF4500', '#2E8B57',
+    '#DC143C', '#4682B4'
+];
+
+function buildDomTree(options = {}) {
+    const { showHighlights = true, viewportOnly = true } = options;
+    removeHighlights();
+    const container = document.createElement('div');
+    container.id = HIGHLIGHT_CONTAINER_ID;
+    container.style.cssText = 'position:fixed;pointer-events:none;top:0;left:0;width:100%;height:100%;z-index:2147483647;';
+    if (!showHighlights) container.style.display = 'none';
+    document.body.appendChild(container);
+
+    const elements = [];
+    const allInteractive = document.querySelectorAll(INTERACTIVE_SELECTORS.join(','));
+    let index = 0;
+
+    allInteractive.forEach(el => {
+        if (!(el instanceof HTMLElement)) return;
+        if (!isElementVisible(el)) return;
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        if (viewportOnly && (rect.bottom < 0 || rect.top > window.innerHeight)) return;
+
+        const colorIdx = index % HIGHLIGHT_COLORS.length;
+        const color = HIGHLIGHT_COLORS[colorIdx];
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `position:fixed;border:2px solid ${color};background:${color}1A;pointer-events:none;border-radius:3px;`;
+        overlay.style.left = rect.left + 'px';
+        overlay.style.top = rect.top + 'px';
+        overlay.style.width = rect.width + 'px';
+        overlay.style.height = rect.height + 'px';
+
+        const label = document.createElement('div');
+        label.textContent = String(index);
+        label.style.cssText = `position:fixed;background:${color};color:#fff;font:bold 10px/1 monospace;padding:1px 4px;border-radius:3px;z-index:2147483647;pointer-events:none;`;
+        label.style.left = Math.max(0, rect.left) + 'px';
+        label.style.top = Math.max(0, rect.top - 14) + 'px';
+
+        container.appendChild(overlay);
+        container.appendChild(label);
+
+        const tag = el.tagName.toLowerCase();
+        const text = (el.textContent || '').trim().substring(0, 50);
+        const attrs = {};
+        if (el.id) attrs.id = el.id;
+        if (el.className && typeof el.className === 'string') attrs.class = el.className.substring(0, 60);
+        if (el.getAttribute('href')) attrs.href = el.getAttribute('href').substring(0, 100);
+        if (el.getAttribute('name')) attrs.name = el.getAttribute('name');
+        if (el.getAttribute('type')) attrs.type = el.getAttribute('type');
+        if (el.getAttribute('role')) attrs.role = el.getAttribute('role');
+        if (el.getAttribute('aria-label')) attrs['aria-label'] = el.getAttribute('aria-label');
+        if (el.getAttribute('placeholder')) attrs.placeholder = el.getAttribute('placeholder');
+        if (tag === 'select') {
+            attrs.options = Array.from(el.options).slice(0, 10).map(o => ({ value: o.value, text: o.textContent.trim().substring(0, 40) }));
+        }
+
+        elements.push({
+            index,
+            tag,
+            text: text || undefined,
+            attributes: Object.keys(attrs).length > 0 ? attrs : undefined,
+            rect: { x: Math.round(rect.left), y: Math.round(rect.top), w: Math.round(rect.width), h: Math.round(rect.height) },
+            selector: getCssSelector(el)
+        });
+        index++;
+    });
+
+    return { elements, count: elements.length };
+}
+
+function removeHighlights() {
+    const existing = document.getElementById(HIGHLIGHT_CONTAINER_ID);
+    if (existing) existing.remove();
+}
+
 // ── MAIN MESSAGE HANDLER ────────────────────────────────
 api.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Ping for content script readiness
@@ -246,6 +327,23 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "getPageContext") {
         const mainEl = document.querySelector('main, article, [role="main"], .content, #content') || document.body;
         sendResponse({ content: mainEl.innerText.substring(0, 15000) });
+    }
+
+    // ── DOM TREE HIGHLIGHTING ────────────────────────────────
+    if (request.action === "agentBuildDomTree") {
+        try {
+            const result = buildDomTree(request.options || {});
+            sendResponse({ ok: true, ...result, summary: `Built DOM tree with ${result.count} interactive elements` });
+        } catch (e) {
+            sendResponse({ ok: false, error: e.message });
+        }
+        return true;
+    }
+
+    if (request.action === "agentRemoveHighlights") {
+        removeHighlights();
+        sendResponse({ ok: true, summary: 'Removed highlights' });
+        return true;
     }
 
     // ── AGENTIC BROWSER CONTROL ──────────────────────────────
@@ -1636,28 +1734,67 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === "agentExecuteScript") {
-        // Execute a simple DOM query and return results (read-only, no eval)
         try {
-            const query = request.query || '';
-            if (query.startsWith('count:')) {
-                const sel = query.slice(6).trim();
-                const count = document.querySelectorAll(sel).length;
-                sendResponse({ ok: true, result: count, summary: `Found ${count} elements matching "${sel}"` });
-            } else if (query.startsWith('exists:')) {
-                const sel = query.slice(7).trim();
-                const exists = !!resolveSelector(sel);
-                sendResponse({ ok: true, result: exists, summary: `Element "${sel}" ${exists ? 'exists' : 'not found'}` });
-            } else if (query.startsWith('text:')) {
-                const sel = query.slice(5).trim();
-                const el = resolveSelector(sel);
-                sendResponse({ ok: true, result: el ? el.textContent.trim().substring(0, 2000) : null, summary: el ? `Text: "${el.textContent.trim().substring(0, 100)}"` : 'Element not found' });
-            } else if (query.startsWith('value:')) {
-                const sel = query.slice(6).trim();
-                const el = resolveSelector(sel);
-                sendResponse({ ok: true, result: el ? (el.value || el.textContent?.trim() || '') : null, summary: el ? `Value: "${(el.value || '').substring(0, 100)}"` : 'Element not found' });
+            const code = request.code || '';
+            const fn = new Function(code);
+            const result = fn();
+            const resultStr = typeof result === 'object' ? JSON.stringify(result) : String(result);
+            sendResponse({ ok: true, result: result, summary: `Script result: ${resultStr.substring(0, 200)}` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentGetLocalStorage") {
+        try {
+            if (request.key) {
+                const value = localStorage.getItem(request.key);
+                sendResponse({ ok: true, key: request.key, value: value, summary: `localStorage["${request.key}"] = ${value !== null ? '"' + String(value).substring(0, 100) + '"' : 'null'}` });
             } else {
-                sendResponse({ ok: false, error: 'Query must start with count:, exists:, text:, or value:' });
+                const data = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    data[k] = localStorage.getItem(k);
+                }
+                sendResponse({ ok: true, data: data, summary: `localStorage: ${Object.keys(data).length} keys` });
             }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentSetLocalStorage") {
+        try {
+            localStorage.setItem(request.key, request.value);
+            sendResponse({ ok: true, summary: `Set localStorage["${request.key}"]` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentGetSessionStorage") {
+        try {
+            if (request.key) {
+                const value = sessionStorage.getItem(request.key);
+                sendResponse({ ok: true, key: request.key, value: value, summary: `sessionStorage["${request.key}"] = ${value !== null ? '"' + String(value).substring(0, 100) + '"' : 'null'}` });
+            } else {
+                const data = {};
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const k = sessionStorage.key(i);
+                    data[k] = sessionStorage.getItem(k);
+                }
+                sendResponse({ ok: true, data: data, summary: `sessionStorage: ${Object.keys(data).length} keys` });
+            }
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentSetSessionStorage") {
+        try {
+            sessionStorage.setItem(request.key, request.value);
+            sendResponse({ ok: true, summary: `Set sessionStorage["${request.key}"]` });
+        } catch (e) { sendResponse({ ok: false, error: e.message }); }
+    }
+
+    if (request.action === "agentInjectCSS") {
+        try {
+            const style = document.createElement('style');
+            style.textContent = request.css;
+            document.head.appendChild(style);
+            sendResponse({ ok: true, summary: `Injected CSS (${request.css.length} chars)` });
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
     }
 

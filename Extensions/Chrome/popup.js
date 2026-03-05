@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let includeWebSearch = false;
     let agentBrowserEnabled = false;
     let thinkingLevel = 'medium';
+
     let thinkingDropdownOpen = false;
     let hasInjectedContextThisSession = false;
     let pendingAttachments = []; // { dataUrl, mimeType, name }
@@ -677,15 +678,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ── AGENT BROWSER TOGGLE ────────────────────────────────
-    agentBrowserBtn.addEventListener('click', () => {
+    agentBrowserBtn.addEventListener('click', async () => {
         agentBrowserEnabled = !agentBrowserEnabled;
         agentBrowserBtn.classList.toggle('active', agentBrowserEnabled);
         agentBrowserBtn.title = agentBrowserEnabled ? 'Agent Browser: ON — AI can interact with pages' : 'Agent Browser Control';
         if (agentBrowserEnabled) {
             promptInput.placeholder = 'Tell the agent what to do (e.g. "Fill out the form", "Find the price")...';
             agentStepCount = 0;
+            // Highlight interactive elements on the page (nanobrowser-style)
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (tab && tab.url && !tab.url.startsWith('chrome://')) {
+                    chrome.tabs.sendMessage(tab.id, { action: 'agentBuildDomTree', options: { showHighlights: true, viewportOnly: true } }, () => { });
+                }
+            } catch (e) { /* ignore if content script not ready */ }
         } else {
             promptInput.placeholder = 'Ask about this page...';
+            // Remove highlights
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (tab && tab.url && !tab.url.startsWith('chrome://')) {
+                    chrome.tabs.sendMessage(tab.id, { action: 'agentRemoveHighlights' }, () => { });
+                }
+            } catch (e) { /* ignore */ }
         }
     });
 
@@ -930,7 +945,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             messagesForApi.unshift({
                 role: 'system',
-                content: 'You are a powerful autonomous browser agent. You control the browser by outputting JSON action blocks wrapped in ```agent-action markers. After actions execute, you receive results and can take more actions. You can plan, execute multi-step workflows, recover from errors, and make intelligent decisions.\n\n' +
+                content: 'You are a powerful autonomous browser agent with full control over the browser. You can do ANYTHING a human user can do — navigate websites, fill forms, interact with web apps, extract data, automate workflows, manage tabs, read/write storage, execute JavaScript, and more. You control the browser by outputting JSON action blocks wrapped in ```agent-action markers. After actions execute, you receive results and can take more actions. You can plan, execute multi-step workflows, recover from errors, and make intelligent decisions.\n\n' +
+                    'You are not limited — if the user asks you to do something on a webpage, DO IT. Use getElements, buildDomTree, or scan to understand the page, then take action. If one approach fails, try another. You have up to 25 action loops to complete tasks, so be thorough.\n\n' +
                     activeTabStr +
                     '## PLANNING RULES:\n' +
                     '1. Before acting, briefly plan your approach (2-3 sentences max)\n' +
@@ -940,7 +956,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     '5. Use getElements or scan to discover page layout when unsure what to click\n' +
                     '6. Use getPageState to check for blockers (CAPTCHAs, overlays, login walls) before interacting\n' +
                     '7. Use dismissPopups to remove cookie banners and overlays blocking the page\n' +
-                    '8. When looping through items (e.g. search results), track progress to avoid repeating work\n\n' +
+                    '8. When looping through items (e.g. search results), track progress to avoid repeating work\n' +
+                    '9. For complex tasks, use executeScript to run custom JavaScript when built-in actions are insufficient\n' +
+                    '10. Always verify results after critical actions (e.g. form submission, data entry). Use extractText or getFormValues to confirm.\n' +
+                    '11. If you need to interact with a page that requires authentication, guide the user or wait, but never give up — try all available options.\n\n' +
                     '## Page Interaction:\n' +
                     '- {"type":"click","selector":"CSS or text"} - Click element\n' +
                     '- {"type":"doubleClick","selector":"CSS or text"} - Double-click element\n' +
@@ -965,6 +984,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"removeElement","selector":"CSS"} - Remove an element from the page (e.g. ad, overlay)\n\n' +
                     '## Page Analysis:\n' +
                     '- {"type":"getElements"} - List interactive elements on page. For <select> elements, the response includes an "options" array showing all available values.\n' +
+                    '- {"type":"buildDomTree","showHighlights":true,"viewportOnly":true} - Build an interactive DOM tree of the page. Highlights all clickable/interactive elements with colored overlays and numbered labels. Returns indexed element map with selectors, positions, and attributes. Use this for visual element discovery.\n' +
+                    '- {"type":"removeHighlights"} - Remove DOM tree highlight overlays from the page\n' +
                     '- {"type":"getElementInfo","selector":"CSS or text"} - Detailed info about one element (tag, rect, attributes, visibility)\n' +
                     '- {"type":"extractText","selector":"CSS"} - Get text from elements\n' +
                     '- {"type":"extractLinks"} - Get all page links\n' +
@@ -1024,6 +1045,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"weather","location":"City"} - Current weather\n' +
                     '- {"type":"translate","text":"...","from":"en","to":"es"} - Translate text\n' +
                     '- {"type":"dictionary","word":"..."} - Word definition\n\n' +
+                    '## Advanced / JavaScript:\n' +
+                    '- {"type":"executeScript","code":"return document.title"} - Execute JavaScript on the page and return the result. Use for complex logic, DOM manipulation, or reading page state not covered by other actions.\n' +
+                    '- {"type":"getLocalStorage","key":"optional"} - Read localStorage (all keys if omitted, or a specific key)\n' +
+                    '- {"type":"setLocalStorage","key":"myKey","value":"myValue"} - Write to localStorage\n' +
+                    '- {"type":"getSessionStorage","key":"optional"} - Read sessionStorage\n' +
+                    '- {"type":"setSessionStorage","key":"myKey","value":"myValue"} - Write to sessionStorage\n' +
+                    '- {"type":"injectCSS","css":"body { background: red !important; }"} - Inject custom CSS into the page\n\n' +
                     '## SELF-HEALING SELECTORS:\n' +
                     'The agent automatically tries multiple strategies to find elements:\n' +
                     '1. CSS selector → 2. XPath → 3. aria-label → 4. Text content match\n' +
@@ -1187,10 +1215,11 @@ document.addEventListener('DOMContentLoaded', () => {
             assistant.modelBadge.textContent = 'Model used: ' + displayName;
             assistant.modelBadge.style.display = 'block';
 
+
             // Agentic loop: execute actions, send results back to AI, continue
             if (agentBrowserEnabled && fullContent) {
                 let loopContent = fullContent;
-                const MAX_AGENT_LOOPS = 10;
+                const MAX_AGENT_LOOPS = 25;
                 agentStepCount = 0; // reset step counter for new agent session
 
                 // Show agent progress banner
@@ -1582,6 +1611,8 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'selectText': return { icon: '✂️', label: 'Selected text in ' + sel };
             case 'removeElement': return { icon: '🗑️', label: 'Removed ' + sel };
             case 'getElements': return { icon: '🔍', label: 'Scanned page elements' };
+            case 'buildDomTree': return { icon: '🌳', label: 'Built interactive DOM tree with highlights' };
+            case 'removeHighlights': return { icon: '🧹', label: 'Removed element highlights' };
             case 'getElementInfo': return { icon: '🔍', label: 'Inspected ' + sel };
             case 'extractText': return { icon: '📄', label: 'Extracted text from ' + sel };
             case 'extractLinks': return { icon: '🔗', label: 'Extracted all links' };
@@ -1634,6 +1665,12 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'weather': return { icon: '🌤️', label: 'Checked weather in ' + (action.location || '') };
             case 'translate': return { icon: '🌐', label: 'Translated text' + (action.to ? ' to ' + action.to : '') };
             case 'dictionary': return { icon: '📖', label: 'Looked up "' + (action.word || '') + '"' };
+            case 'executeScript': return { icon: '⚙️', label: 'Executed JavaScript' };
+            case 'getLocalStorage': return { icon: '💾', label: 'Read localStorage' + (action.key ? '["' + action.key + '"]' : '') };
+            case 'setLocalStorage': return { icon: '💾', label: 'Set localStorage["' + (action.key || '') + '"]' };
+            case 'getSessionStorage': return { icon: '💾', label: 'Read sessionStorage' + (action.key ? '["' + action.key + '"]' : '') };
+            case 'setSessionStorage': return { icon: '💾', label: 'Set sessionStorage["' + (action.key || '') + '"]' };
+            case 'injectCSS': return { icon: '🎨', label: 'Injected custom CSS' };
             default: return { icon: '⚡', label: action.type };
         }
     }
@@ -1745,6 +1782,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'getElements':
                     result = await chrome.tabs.sendMessage(tab.id, { action: 'agentGetElements' });
+                    break;
+                case 'buildDomTree':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentBuildDomTree', options: { showHighlights: action.showHighlights !== false, viewportOnly: action.viewportOnly !== false } });
+                    break;
+                case 'removeHighlights':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentRemoveHighlights' });
                     break;
                 case 'getElementInfo':
                     result = await chrome.tabs.sendMessage(tab.id, { action: 'agentGetElementInfo', selector: action.selector });
@@ -1976,6 +2019,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     result = await new Promise(resolve => {
                         chrome.runtime.sendMessage({ action: 'agentDictionary', word: action.word }, resolve);
                     });
+                    break;
+
+                case 'executeScript':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentExecuteScript', code: action.code });
+                    break;
+                case 'getLocalStorage':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentGetLocalStorage', key: action.key });
+                    break;
+                case 'setLocalStorage':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentSetLocalStorage', key: action.key, value: action.value });
+                    break;
+                case 'getSessionStorage':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentGetSessionStorage', key: action.key });
+                    break;
+                case 'setSessionStorage':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentSetSessionStorage', key: action.key, value: action.value });
+                    break;
+                case 'injectCSS':
+                    result = await chrome.tabs.sendMessage(tab.id, { action: 'agentInjectCSS', css: action.css });
                     break;
 
                 default:
