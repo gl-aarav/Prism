@@ -1589,11 +1589,13 @@ struct PDFCreatorView: View {
                         Text(item.formatLabel)
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary.opacity(0.6))
-                        Text("·")
-                            .foregroundStyle(.secondary.opacity(0.4))
-                        Text(item.pageSize)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary.opacity(0.6))
+                        if ["pdf", "docx"].contains(item.format ?? "pdf") {
+                            Text("·")
+                                .foregroundStyle(.secondary.opacity(0.4))
+                            Text(item.pageSize)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary.opacity(0.6))
+                        }
                         Text("·")
                             .foregroundStyle(.secondary.opacity(0.4))
                         Text(item.timestamp, style: .date)
@@ -1785,6 +1787,13 @@ struct PDFCreatorView: View {
                 )
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering {
+                NSCursor.arrow.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
         .glassEffect(.regular, in: .circle)
         .shadow(
             color: colorScheme == .dark
