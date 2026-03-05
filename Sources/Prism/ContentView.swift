@@ -1355,8 +1355,13 @@ class GeminiService {
                 let contents: [[String: Any]] = messagesToSend.map { msg in
                     var parts: [[String: Any]] = []
 
-                    if !msg.content.isEmpty {
-                        parts.append(["text": msg.content])
+                    var finalContent = msg.content
+                    if isImageModel && !systemPrompt.isEmpty {
+                        finalContent = systemPrompt + "\n\n" + msg.content
+                    }
+
+                    if !finalContent.isEmpty {
+                        parts.append(["text": finalContent])
                     }
 
                     // Add all attachments (images and PDFs)
@@ -1414,7 +1419,7 @@ class GeminiService {
 
                 var body: [String: Any] = ["contents": contents]
 
-                if !systemPrompt.isEmpty {
+                if !systemPrompt.isEmpty && !isImageModel {
                     body["system_instruction"] = [
                         "parts": [
                             ["text": systemPrompt]
@@ -1435,7 +1440,7 @@ class GeminiService {
                     if let res = resolutionMap[imageResolution] {
                         imageConfig["imageSize"] = res
                     }
-                    if !imageAspectRatio.isEmpty && imageAspectRatio != "Default" {
+                    if !imageAspectRatio.isEmpty && imageAspectRatio != "Default" && modelName != "gemini-2.0-flash-exp-image-generation" {
                         imageConfig["aspectRatio"] = imageAspectRatio
                     }
                     if !imageConfig.isEmpty {
