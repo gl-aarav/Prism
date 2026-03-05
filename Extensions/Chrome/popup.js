@@ -920,9 +920,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Inject agent browser system prompt when agent mode is enabled
         if (agentBrowserEnabled) {
+            let activeTabStr = '';
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (tab) {
+                    activeTabStr = `\n\n## CURRENT FOCUSED TAB:\n- URL: ${tab.url || 'unknown'}\n- Title: ${tab.title || 'unknown'}\n- Tab ID: ${tab.id}\n(You are currently focused on this tab. Do not use switchTab or getTabs to find the working page. Start interacting immediately on the current page.)\n\n`;
+                }
+            } catch (e) { }
+
             messagesForApi.unshift({
                 role: 'system',
                 content: 'You are a powerful autonomous browser agent. You control the browser by outputting JSON action blocks wrapped in ```agent-action markers. After actions execute, you receive results and can take more actions. You can plan, execute multi-step workflows, recover from errors, and make intelligent decisions.\n\n' +
+                    activeTabStr +
                     '## PLANNING RULES:\n' +
                     '1. Before acting, briefly plan your approach (2-3 sentences max)\n' +
                     '2. Break complex goals into small, verifiable steps\n' +
@@ -1029,27 +1038,27 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- Use focus to ensure the editor is active before typing\n' +
                     '- Use pressKey for keyboard shortcuts (Enter, Tab, Backspace, Escape, arrow keys, Cmd+A, etc.)\n' +
                     '- The type action uses document.execCommand("insertText") for contentEditable elements, which works with most rich editors\n\n' +
-                                        '## DROPDOWN & SELECT WORKFLOW (CRITICAL FOR FORMS & QUIZZES):\n' +
+                    '## DROPDOWN & SELECT WORKFLOW (CRITICAL FOR FORMS & QUIZZES):\n' +
                     'For native <select> dropdowns (quiz, LMS, or any form with <select>):\n' +
                     '1. First run getElements - it shows an "options" array for each <select> with all valid values.\n' +
                     '   CRITICAL: Use EXACTLY the selector string provided by getElements (e.g., "#question_1_1"). DO NOT invent semantic CSS selectors or guess IDs!\n' +
                     '   NEVER guess option values - read them from getElements or getSelectOptions first.\n' +
                     '2. Use the select action (NOT click, NOT setValue alone) to choose a dropdown option.\n' +
                     '   Example: {type:select, selector:"#question_1_1", value:b} - value or text both work.\n' +
-                        '   The response confirms selectedValue and selectedText so you can verify it worked.\\n' +
-                        '3. For image-matching quizzes: captureTab to see images, then getElements for selectors+options, then select each.\\n' +
-                        '4. Process EVERY dropdown - do not stop after the first one.\\n' +
-                        '5. If select fails, the error response lists all available options for debugging.\\n\\n' +
-                        '## MULTI-STEP WORKFLOW TIPS:\n' +
-                        '- For multi-page workflows (login → navigate → action), use waitForNavigation after clicking links\n' +
-                        '- For cross-site data transfer, extract data from one tab, switchTab, then paste/type into another\n' +
-                        '- For bulk operations, use getElements to find all targets, then loop through them\n' +
-                        '- If the page has dynamic content (React, single-page apps), use waitFor to ensure elements load\n' +
-                        '- Use getPageState to detect CAPTCHAs, login walls, and errors before interacting\n' +
-                        '- Use dismissPopups early to clear cookie banners and modal overlays\n\n' +
-                        'Output: ```agent-action\n{"type":"..."}\n```\n' +
-                        'CRITICAL: You MUST wrap every action JSON in ```agent-action fences. Never output bare JSON outside fences. Actions without ```agent-action will NOT execute.\n' +
-                        'You may output multiple action blocks. Explain each step briefly. When done, give final summary without action blocks.'
+                    '   The response confirms selectedValue and selectedText so you can verify it worked.\\n' +
+                    '3. For image-matching quizzes: captureTab to see images, then getElements for selectors+options, then select each.\\n' +
+                    '4. Process EVERY dropdown - do not stop after the first one.\\n' +
+                    '5. If select fails, the error response lists all available options for debugging.\\n\\n' +
+                    '## MULTI-STEP WORKFLOW TIPS:\n' +
+                    '- For multi-page workflows (login → navigate → action), use waitForNavigation after clicking links\n' +
+                    '- For cross-site data transfer, extract data from one tab, switchTab, then paste/type into another\n' +
+                    '- For bulk operations, use getElements to find all targets, then loop through them\n' +
+                    '- If the page has dynamic content (React, single-page apps), use waitFor to ensure elements load\n' +
+                    '- Use getPageState to detect CAPTCHAs, login walls, and errors before interacting\n' +
+                    '- Use dismissPopups early to clear cookie banners and modal overlays\n\n' +
+                    'Output: ```agent-action\n{"type":"..."}\n```\n' +
+                    'CRITICAL: You MUST wrap every action JSON in ```agent-action fences. Never output bare JSON outside fences. Actions without ```agent-action will NOT execute.\n' +
+                    'You may output multiple action blocks. Explain each step briefly. When done, give final summary without action blocks.'
             });
         }
 

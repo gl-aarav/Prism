@@ -284,10 +284,6 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
                             // Try scrolling into better view
                             el.scrollIntoView({ behavior: 'instant', block: 'center' });
                             await sleep(200);
-                            if (isElementCovered(el)) {
-                                lastError = `Element covered by overlay: ${request.selector}`;
-                                continue;
-                            }
                         }
                     }
 

@@ -903,9 +903,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Inject agent browser system prompt
         if (agentBrowserEnabled) {
+            let activeTabStr = '';
+            try {
+                const tabs = await api.tabs.query({ active: true, currentWindow: true });
+                const tab = tabs[0];
+                if (tab) {
+                    activeTabStr = `\n\n## CURRENT FOCUSED TAB:\n- URL: ${tab.url || 'unknown'}\n- Title: ${tab.title || 'unknown'}\n- Tab ID: ${tab.id}\n(You are currently focused on this tab. Do not use switchTab or getTabs to find the working page. Start interacting immediately on the current page.)\n\n`;
+                }
+            } catch (e) { }
+
             messagesForApi.unshift({
                 role: 'system',
                 content: 'You are a powerful autonomous browser agent. You control the browser by outputting JSON action blocks wrapped in ```agent-action markers. After actions execute, you receive results and can take more actions. You can plan, execute multi-step workflows, recover from errors, and make intelligent decisions.\n\n' +
+                    activeTabStr +
                     '## PLANNING RULES:\n' +
                     '1. Before acting, briefly plan your approach (2-3 sentences max)\n' +
                     '2. Break complex goals into small, verifiable steps\n' +
