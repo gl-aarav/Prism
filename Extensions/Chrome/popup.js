@@ -941,9 +941,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"pressKey","key":"Enter","selector":"optional","ctrlKey":false,"shiftKey":false,"altKey":false,"metaKey":false} - Press keyboard key with optional modifiers. Use metaKey for Cmd on Mac.\n' +
                     '- {"type":"clearInput","selector":"CSS or text"} - Clear an input field or rich editor\n' +
                     '- {"type":"paste","selector":"CSS or text","text":"..."} - Paste text (triggers paste event for framework compatibility)\n' +
-                    '- {"type":"setValue","selector":"CSS","value":"..."} - Set input value directly (React-compatible native setter)\n' +
-                    '- {"type":"select","selector":"CSS","value":"..."} - Choose dropdown option\n' +
-                    '- {"type":"getSelectOptions","selector":"CSS"} - List all options in a dropdown\n' +
+                    '- {"type":"setValue","selector":"CSS","value":"..."} - Set input/textarea value directly (React-compatible native setter). Also works on <select> by value or text match.\n' +
+                    '- {"type":"select","selector":"CSS","value":"..."} - BEST for <select>/<option> dropdowns. Matches by exact value, exact text, or partial text. Returns selectedValue, selectedText, options list. ALWAYS use this (not click) for native selects.\n' +
+                    '- {"type":"getSelectOptions","selector":"CSS"} - List all options in a dropdown with value+text+selected state\n' +
                     '- {"type":"scroll","direction":"up|down","amount":300} - Scroll page\n' +
                     '- {"type":"scrollTo","selector":"CSS or text"} - Scroll element into view\n' +
                     '- {"type":"scrollToPosition","position":"top|bottom|50"} - Scroll to top, bottom, or percentage\n' +
@@ -955,7 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"selectText","selector":"CSS"} - Select all text inside an element\n' +
                     '- {"type":"removeElement","selector":"CSS"} - Remove an element from the page (e.g. ad, overlay)\n\n' +
                     '## Page Analysis:\n' +
-                    '- {"type":"getElements"} - List interactive elements on page\n' +
+                    '- {"type":"getElements"} - List interactive elements on page. For <select> elements, the response includes an "options" array showing all available values.\n' +
                     '- {"type":"getElementInfo","selector":"CSS or text"} - Detailed info about one element (tag, rect, attributes, visibility)\n' +
                     '- {"type":"extractText","selector":"CSS"} - Get text from elements\n' +
                     '- {"type":"extractLinks"} - Get all page links\n' +
@@ -1029,6 +1029,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- Use focus to ensure the editor is active before typing\n' +
                     '- Use pressKey for keyboard shortcuts (Enter, Tab, Backspace, Escape, arrow keys, Cmd+A, etc.)\n' +
                     '- The type action uses document.execCommand("insertText") for contentEditable elements, which works with most rich editors\n\n' +
+                    '## DROPDOWN & SELECT WORKFLOW (CRITICAL FOR FORMS & QUIZZES):\\n' +
+                    'For native <select> dropdowns (quiz, LMS, or any form with <select>):\\n' +
+                    '1. First run getElements - it shows an "options" array for each <select> with all valid values.\\n' +
+                    '   NEVER guess option values - read them from getElements or getSelectOptions first.\\n' +
+                    '2. Use the select action (NOT click, NOT setValue alone) to choose a dropdown option.\\n' +
+                    '   Example: {type:select, selector:select[name=q1], value:b} - value or text both work.\\n' +
+                    '   The response confirms selectedValue and selectedText so you can verify it worked.\\n' +
+                    '3. For image-matching quizzes: captureTab to see images, then getElements for selectors+options, then select each.\\n' +
+                    '4. Process EVERY dropdown - do not stop after the first one.\\n' +
+                    '5. If select fails, the error response lists all available options for debugging.\\n\\n' +
                     '## MULTI-STEP WORKFLOW TIPS:\n' +
                     '- For multi-page workflows (login → navigate → action), use waitForNavigation after clicking links\n' +
                     '- For cross-site data transfer, extract data from one tab, switchTab, then paste/type into another\n' +
@@ -1210,12 +1220,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Execute all actions and collect results
                     let results = [];
                     for (const action of actions) {
-                        appendAgentAction(null, action);
+                        const actionEl = appendAgentAction(null, action);
                         const result = await executeAgentAction(action);
                         results.push({ type: action.type, result: result || {} });
 
+                        // Update the step icon with actual success/failure
+                        if (actionEl) {
+                            const statusEl = actionEl.querySelector('.agent-action-status');
+                            if (statusEl) {
+                                if (result && result.ok === false) {
+                                    statusEl.textContent = '\u2717';
+                                    statusEl.style.color = '#ff6b6b';
+                                    actionEl.style.opacity = '0.75';
+                                } else {
+                                    statusEl.textContent = '\u2713';
+                                }
+                            }
+                            // If it was a select action, show what was actually selected
+                            if ((action.type === 'select' || action.type === 'setValue') && result && result.selectedText) {
+                                const textEl = actionEl.querySelector('.agent-action-text');
+                                if (textEl) textEl.textContent += ' \u2192 "' + result.selectedText + '"';
+                            }
+                        }
+
                         // Show screenshot inline if the action captured one
-                        if ((action.type === 'captureTab' || action.type === 'scan') && result?.ok && result?.image) {
+                        if ((action.type === 'captureTab' || action.type === 'scan') && result && result.ok && result.image) {
                             appendAgentScreenshot(result.image);
                         }
                     }
@@ -1947,9 +1976,10 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapper.innerHTML = '<span class="agent-step-num">' + agentStepCount + '</span>' +
             '<span class="agent-action-icon">' + desc.icon + '</span>' +
             '<span class="agent-action-text">' + escapeHtml(desc.label) + '</span>' +
-            '<span class="agent-action-status">✓</span>';
+            '<span class="agent-action-status" style="opacity:0.4">\u23f3</span>';
         chatContainer.appendChild(wrapper);
         scrollToBottom();
+        return wrapper; // Return element so caller can update status after result arrives
     }
 
     function appendAgentScreenshot(dataUrl) {

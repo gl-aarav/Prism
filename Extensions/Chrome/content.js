@@ -498,6 +498,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 const rect = el.getBoundingClientRect();
                 if (rect.width < 5 || rect.height < 5) return;
 
+                const isSelect = el.tagName === 'SELECT';
                 const info = {
                     tag: el.tagName.toLowerCase(),
                     type: el.type || el.getAttribute('role') || '',
@@ -509,10 +510,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     ariaLabel: el.getAttribute('aria-label') || '',
                     disabled: el.disabled || el.getAttribute('aria-disabled') === 'true',
                     checked: el.checked || el.getAttribute('aria-checked') === 'true',
-                    value: (el.tagName === 'SELECT' && el.options && el.selectedIndex >= 0)
-                        ? el.options[el.selectedIndex]?.text || '' : '',
+                    value: (isSelect && el.options && el.selectedIndex >= 0)
+                        ? el.options[el.selectedIndex]?.text || '' : (el.value || ''),
                     selector: getCssSelector(el),
-                    rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) }
+                    rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+                    // For SELECT elements, include all available options so AI knows valid values
+                    options: isSelect && el.options ? Array.from(el.options).map(o => ({ value: o.value, text: o.textContent.trim() })) : undefined
                 };
 
                 if (rect.top >= -50 && rect.bottom <= window.innerHeight + 50) {
@@ -552,51 +555,104 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
                 if (el && el.tagName === 'SELECT') {
                     const value = request.value || '';
-                    // Try exact value match first
-                    let matched = false;
+                    const allOptions = Array.from(el.options).map(o => ({ value: o.value, text: o.textContent.trim() }));
+
+                    // Get the native value setter for framework compat (React, Vue, etc.)
+                    const nativeSet = getNativeValueSetter(el);
+
+                    // Scroll into view and focus the element first
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    await sleep(100);
+                    el.focus();
+                    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    await sleep(50);
+
+                    let matchedOption = null;
+
+                    // 1) Exact value match
                     for (const opt of el.options) {
-                        if (opt.value === value) {
-                            const nativeSet = getNativeValueSetter(el);
-                            if (nativeSet) nativeSet.call(el, value);
-                            else el.value = value;
-                            matched = true;
-                            break;
-                        }
+                        if (opt.value === value) { matchedOption = opt; break; }
                     }
-                    // Try text match
-                    if (!matched) {
+                    // 2) Exact text match (case-insensitive)
+                    if (!matchedOption) {
                         const lower = value.toLowerCase();
                         for (const opt of el.options) {
-                            if (opt.textContent.trim().toLowerCase().includes(lower)) {
-                                const nativeSet = getNativeValueSetter(el);
-                                if (nativeSet) nativeSet.call(el, opt.value);
-                                else el.value = opt.value;
-                                matched = true;
-                                break;
-                            }
+                            if (opt.textContent.trim().toLowerCase() === lower) { matchedOption = opt; break; }
                         }
                     }
-                    if (matched) {
+                    // 3) Partial text match (case-insensitive)
+                    if (!matchedOption) {
+                        const lower = value.toLowerCase();
+                        for (const opt of el.options) {
+                            if (opt.textContent.trim().toLowerCase().includes(lower)) { matchedOption = opt; break; }
+                        }
+                    }
+
+                    if (matchedOption) {
+                        // Use native setter for React/Vue/Angular framework compat
+                        if (nativeSet) nativeSet.call(el, matchedOption.value);
+                        else el.value = matchedOption.value;
+
+                        // Fire the full event sequence that frameworks listen to
                         el.dispatchEvent(new Event('input', { bubbles: true }));
                         el.dispatchEvent(new Event('change', { bubbles: true }));
-                        sendResponse({ ok: true, summary: `Selected "${value}" in "${getLabel(el)}"` });
+                        el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+                        el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+
+                        // Verify the value actually changed
+                        const finalValue = el.value;
+                        const finalText = el.options[el.selectedIndex]?.textContent.trim() || finalValue;
+                        sendResponse({
+                            ok: true,
+                            summary: `Selected "${finalText}" (value="${finalValue}") in "${getLabel(el)}"`,
+                            selectedValue: finalValue,
+                            selectedText: finalText,
+                            options: allOptions
+                        });
                     } else {
-                        sendResponse({ ok: false, error: `Option "${value}" not found in dropdown` });
+                        sendResponse({
+                            ok: false,
+                            error: `Option "${value}" not found in dropdown. Available options: ${allOptions.map(o => `"${o.text}" (value="${o.value}")`).join(', ')}`,
+                            options: allOptions
+                        });
                     }
                 } else if (el) {
-                    // Custom dropdown — click the option
+                    // Custom dropdown (not a native <select>) — click trigger first
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    await sleep(100);
                     simulateFullClick(el);
-                    await sleep(300);
-                    // Look for the value in opened dropdown
-                    const option = findOptionByText(request.value);
+                    await sleep(400); // Wait for dropdown to open/animate
+
+                    // Search for the option in opened dropdown
+                    const optionText = (request.value || '').toLowerCase();
+                    const optionSelectors = [
+                        '[role="option"]', '[role="menuitem"]', '[role="listitem"]',
+                        'li[data-value]', '.dropdown-item', '.dropdown-menu li',
+                        '.select-option', '.option', '[class*="option"]',
+                        '[class*="menu-item"]', 'ul[role="listbox"] li', 'div[role="listbox"] > div'
+                    ];
+
+                    let option = null;
+                    for (const optSel of optionSelectors) {
+                        const opts = document.querySelectorAll(optSel);
+                        for (const opt of opts) {
+                            if (!isElementVisible(opt)) continue;
+                            const text = (opt.textContent || '').trim().toLowerCase();
+                            if (text === optionText || text.includes(optionText)) { option = opt; break; }
+                        }
+                        if (option) break;
+                    }
+
                     if (option) {
+                        option.scrollIntoView({ block: 'nearest' });
+                        await sleep(100);
                         simulateFullClick(option);
                         sendResponse({ ok: true, summary: `Selected "${request.value}" from custom dropdown` });
                     } else {
-                        sendResponse({ ok: false, error: `Option "${request.value}" not found in custom dropdown` });
+                        sendResponse({ ok: false, error: `Option "${request.value}" not found in custom dropdown after opening it` });
                     }
                 } else {
-                    sendResponse({ ok: false, error: "Select/dropdown element not found" });
+                    sendResponse({ ok: false, error: `Select/dropdown element not found: ${request.selector}` });
                 }
             } catch (e) { sendResponse({ ok: false, error: e.message }); }
         })();
@@ -1407,6 +1463,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 if (el) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     await sleep(100);
+
+                    // If target is a <select>, route through the same robust selection logic
+                    if (el.tagName === 'SELECT') {
+                        const value = request.value || '';
+                        const nativeSet = getNativeValueSetter(el);
+                        el.focus();
+                        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                        await sleep(50);
+
+                        let matchedOption = null;
+                        for (const opt of el.options) {
+                            if (opt.value === value) { matchedOption = opt; break; }
+                        }
+                        if (!matchedOption) {
+                            const lower = value.toLowerCase();
+                            for (const opt of el.options) {
+                                if (opt.textContent.trim().toLowerCase().includes(lower)) { matchedOption = opt; break; }
+                            }
+                        }
+                        if (matchedOption) {
+                            if (nativeSet) nativeSet.call(el, matchedOption.value);
+                            else el.value = matchedOption.value;
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                            el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+                            el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+                            const finalText = el.options[el.selectedIndex]?.textContent.trim() || el.value;
+                            sendResponse({ ok: true, summary: `Set select "${getLabel(el)}" to "${finalText}"`, selectedText: finalText, selectedValue: el.value });
+                        } else {
+                            const allOptions = Array.from(el.options).map(o => `"${o.textContent.trim()}" (value="${o.value}")`).join(', ');
+                            sendResponse({ ok: false, error: `Option "${value}" not found. Available: ${allOptions}` });
+                        }
+                        return;
+                    }
+
+                    // Non-select elements: set value directly
                     simulateFullClick(el);
                     el.focus();
                     const nativeSet = getNativeValueSetter(el);
