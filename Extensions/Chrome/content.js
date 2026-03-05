@@ -114,8 +114,72 @@ function resolveSelector(selector) {
         return findOptionByText(selector.slice(7).trim());
     }
 
+    // ── GLOBAL nth-of-type / nth-child fallback ─────────────────────────────
+    // CSS :nth-of-type() and :nth-child() are PARENT-SCOPED, so a selector like
+    // "select:nth-of-type(2)" returns null when each <select> lives in its own
+    // container div (common on quiz/LMS pages). We resolve these as a global
+    // page-level index using querySelectorAll instead.
+    //
+    // Patterns handled (with optional attribute filters before the pseudo-class):
+    //   select:nth-of-type(2)                → querySelectorAll('select')[1]
+    //   input[type="text"]:nth-of-type(3)   → querySelectorAll('input[type="text"]')[2]
+    //   .my-class:nth-child(4)              → querySelectorAll('.my-class')[3]
+    const nthPattern = /^(.+?)(?::nth-of-type\((\d+)\)|:nth-child\((\d+)\))\s*$/;
+    const nthMatch = selector.match(nthPattern);
+    if (nthMatch) {
+        const baseSelector = nthMatch[1].trim();
+        const n = parseInt(nthMatch[2] || nthMatch[3], 10);
+        try {
+            const all = document.querySelectorAll(baseSelector);
+            if (all.length >= n && n >= 1) {
+                const el = all[n - 1];
+                if (el instanceof HTMLElement) return el;
+            }
+        } catch (e) { }
+    }
+
     // CSS selector
     try { const el = document.querySelector(selector); if (el) return el; } catch (e) { }
+
+    // ── FUZZY FALLBACK FOR AI HALLUCINATED SELECTORS ────────────────────
+    // The AI sometimes invents invalid selectors based on patterns it sees.
+    // e.g. "#question_123_text select:nth-of-type(2)" when selects are outside the text div
+    // e.g. "select[name='question_123_1']" when the exact name differs slightly.
+    if (selector.includes('select')) {
+        const allSelects = document.querySelectorAll('select');
+        // 1. Handle hallucinated nth-of-type inside a overly-specific question container
+        if (nthMatch) {
+            const n = parseInt(nthMatch[2] || nthMatch[3], 10);
+            const qMatch = selector.match(/(#question_\d+)/);
+            if (qMatch) {
+                try {
+                    const container = document.querySelector(qMatch[1]);
+                    if (container) {
+                        const localSelects = container.querySelectorAll('select');
+                        if (localSelects.length >= n && n >= 1) return localSelects[n - 1];
+                    }
+                } catch (e) { }
+            }
+        }
+        // 2. Handle hallucinated name/id attributes like "select[name='...']"
+        const nameMatch = selector.match(/name=['"]?([^'\"]+)['"]?/);
+        if (nameMatch) {
+            const targetName = nameMatch[1];
+            for (const s of allSelects) {
+                if ((s.name && s.name.includes(targetName)) || (s.id && s.id.includes(targetName))) {
+                    return s;
+                }
+            }
+            // If that fails, try to extract numbers and match them
+            const nums = targetName.match(/\d+/g);
+            if (nums && nums.length > 0) {
+                for (const s of allSelects) {
+                    const sNums = (s.id || s.name || '').match(/\d+/g);
+                    if (sNums && nums.every(n => sNums.includes(n))) return s;
+                }
+            }
+        }
+    }
 
     // XPath
     if (selector.startsWith('/') || selector.startsWith('(')) {
@@ -554,7 +618,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 if (!el) el = await waitForElement(request.selector, 2000);
 
                 if (el && el.tagName === 'SELECT') {
-                    const value = request.value || '';
+                    const value = (request.value !== null && request.value !== undefined) ? request.value.toString() : '';
                     const allOptions = Array.from(el.options).map(o => ({ value: o.value, text: o.textContent.trim() }));
 
                     // Get the native value setter for framework compat (React, Vue, etc.)
@@ -564,7 +628,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     await sleep(100);
                     el.focus();
-                    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                    el.dispatchEvent(new FocusEvent('focus', { bubbles: true, composed: true }));
+                    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true, cancelable: true }));
                     await sleep(50);
 
                     let matchedOption = null;
@@ -589,15 +654,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     }
 
                     if (matchedOption) {
+                        // Update selectedIndex first as some frameworks rely on the index property directly
+                        el.selectedIndex = matchedOption.index;
+
                         // Use native setter for React/Vue/Angular framework compat
                         if (nativeSet) nativeSet.call(el, matchedOption.value);
                         else el.value = matchedOption.value;
 
                         // Fire the full event sequence that frameworks listen to
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                        el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
-                        el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+                        el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+                        await sleep(50);
+                        el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true }));
+                        el.dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }));
 
                         // Verify the value actually changed
                         const finalValue = el.value;
@@ -1466,10 +1535,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
                     // If target is a <select>, route through the same robust selection logic
                     if (el.tagName === 'SELECT') {
-                        const value = request.value || '';
+                        const value = (request.value !== null && request.value !== undefined) ? request.value.toString() : '';
                         const nativeSet = getNativeValueSetter(el);
                         el.focus();
-                        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                        el.dispatchEvent(new FocusEvent('focus', { bubbles: true, composed: true }));
+                        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true, cancelable: true }));
                         await sleep(50);
 
                         let matchedOption = null;
@@ -1483,12 +1553,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                             }
                         }
                         if (matchedOption) {
+                            el.selectedIndex = matchedOption.index;
                             if (nativeSet) nativeSet.call(el, matchedOption.value);
                             else el.value = matchedOption.value;
-                            el.dispatchEvent(new Event('input', { bubbles: true }));
-                            el.dispatchEvent(new Event('change', { bubbles: true }));
-                            el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
-                            el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+                            el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+                            await sleep(50);
+                            el.dispatchEvent(new FocusEvent('blur', { bubbles: true, composed: true }));
+                            el.dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }));
                             const finalText = el.options[el.selectedIndex]?.textContent.trim() || el.value;
                             sendResponse({ ok: true, summary: `Set select "${getLabel(el)}" to "${finalText}"`, selectedText: finalText, selectedValue: el.value });
                         } else {
