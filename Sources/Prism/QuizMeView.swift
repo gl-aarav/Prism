@@ -460,125 +460,123 @@ struct QuizMeView: View {
     }
 
     private func sessionCard(_ session: QuizSession) -> some View {
-        Button(action: {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.topic)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        Text(session.difficulty.capitalized)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(difficultyColor(session.difficulty))
+                        Text("·")
+                            .foregroundStyle(.secondary.opacity(0.4))
+                        let mcqs = session.questions.filter { $0.questionType == .mcq }.count
+                        let tfs = session.questions.filter { $0.questionType == .trueFalse }
+                            .count
+                        let frqs = session.questions.filter { $0.questionType == .frq }.count
+                        if mcqs > 0 {
+                            Text("\(mcqs) MCQ")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary.opacity(0.6))
+                        }
+                        if tfs > 0 {
+                            Text("\(tfs) T/F")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary.opacity(0.6))
+                        }
+                        if frqs > 0 {
+                            Text("\(frqs) FRQ")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary.opacity(0.6))
+                        }
+                        Text("·")
+                            .foregroundStyle(.secondary.opacity(0.4))
+                        Text(session.timestamp, style: .date)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary.opacity(0.6))
+                    }
+                }
+                Spacer()
+
+                VStack(spacing: 2) {
+                    Text("\(session.score)")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: appTheme.colors,
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Text("/ \(session.questions.count)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.1))
+                        .frame(height: 4)
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: appTheme.colors,
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(
+                            width: geo.size.width
+                                * CGFloat(
+                                    session.finished
+                                        ? session.questions.count : session.currentIndex)
+                                / CGFloat(max(session.questions.count, 1)),
+                            height: 4
+                        )
+                }
+            }
+            .frame(height: 4)
+
+            HStack(spacing: 8) {
+                Text(session.finished ? "Completed" : "In Progress")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(session.finished ? .green : .orange)
+
+                Spacer()
+
+                Button(action: {
+                    store.deleteSession(session)
+                    if activeSessionId == session.id {
+                        activeSessionId = nil
+                    }
+                }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .contentShape(Rectangle())
+        .onTapGesture {
             withAnimation {
                 isInputExpanded = false
                 activeSessionId = session.id
-                // Restore state for current question
                 let answered =
                     session.selectedAnswers[session.currentIndex] != nil
                     || session.frqGrades[session.currentIndex] != nil
                 showExplanation = answered
                 frqUserAnswer = session.frqAnswers[session.currentIndex] ?? ""
             }
-        }) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(session.topic)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        HStack(spacing: 6) {
-                            Text(session.difficulty.capitalized)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(difficultyColor(session.difficulty))
-                            Text("·")
-                                .foregroundStyle(.secondary.opacity(0.4))
-                            let mcqs = session.questions.filter { $0.questionType == .mcq }.count
-                            let tfs = session.questions.filter { $0.questionType == .trueFalse }
-                                .count
-                            let frqs = session.questions.filter { $0.questionType == .frq }.count
-                            if mcqs > 0 {
-                                Text("\(mcqs) MCQ")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.secondary.opacity(0.6))
-                            }
-                            if tfs > 0 {
-                                Text("\(tfs) T/F")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.secondary.opacity(0.6))
-                            }
-                            if frqs > 0 {
-                                Text("\(frqs) FRQ")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.secondary.opacity(0.6))
-                            }
-                            Text("·")
-                                .foregroundStyle(.secondary.opacity(0.4))
-                            Text(session.timestamp, style: .date)
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary.opacity(0.6))
-                        }
-                    }
-                    Spacer()
-
-                    VStack(spacing: 2) {
-                        Text("\(session.score)")
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: appTheme.colors,
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        Text("/ \(session.questions.count)")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                // Progress bar
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.1))
-                            .frame(height: 4)
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: appTheme.colors,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(
-                                width: geo.size.width
-                                    * CGFloat(
-                                        session.finished
-                                            ? session.questions.count : session.currentIndex)
-                                    / CGFloat(max(session.questions.count, 1)),
-                                height: 4
-                            )
-                    }
-                }
-                .frame(height: 4)
-
-                HStack(spacing: 8) {
-                    Text(session.finished ? "Completed" : "In Progress")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(session.finished ? .green : .orange)
-
-                    Spacer()
-
-                    Button(action: {
-                        store.deleteSession(session)
-                        if activeSessionId == session.id {
-                            activeSessionId = nil
-                        }
-                    }) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.red.opacity(0.6))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(14)
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Generating View
