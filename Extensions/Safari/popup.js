@@ -930,7 +930,7 @@ document.addEventListener('DOMContentLoaded', () => {
             messagesForApi.unshift({
                 role: 'system',
                 content: 'You are a powerful autonomous browser agent with full control over the browser. You can do ANYTHING a human user can do — navigate websites, fill forms, interact with web apps, extract data, automate workflows, manage tabs, read/write storage, execute JavaScript, and more. You control the browser by outputting JSON action blocks wrapped in ```agent-action markers. After actions execute, you receive results and can take more actions. You can plan, execute multi-step workflows, recover from errors, and make intelligent decisions.\n\n' +
-                    'You are not limited — if the user asks you to do something on a webpage, DO IT. Use getElements, buildDomTree, or scan to understand the page, then take action. If one approach fails, try another. You have up to 25 action loops to complete tasks, so be thorough.\n\n' +
+                    'You are not limited — if the user asks you to do something on a webpage, DO IT. Use getElements, buildDomTree, or scan to understand the page, then take action. If one approach fails, try another. You have infinite action loops to complete tasks, so be thorough.\n\n' +
                     activeTabStr +
                     '## PLANNING RULES:\n' +
                     '1. Before acting, briefly plan your approach (2-3 sentences max)\n' +
@@ -1142,7 +1142,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Agentic loop
             if (agentBrowserEnabled && fullContent) {
                 let loopContent = fullContent;
-                const MAX_AGENT_LOOPS = 25;
+                const MAX_AGENT_LOOPS = Infinity;
                 agentStepCount = 0;
 
                 const agentBanner = document.createElement('div');
@@ -1154,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let loop = 0; loop < MAX_AGENT_LOOPS; loop++) {
                     if (!abortController || abortController.signal.aborted) break;
 
-                    agentBanner.querySelector('span').textContent = 'Agent is working\u2026 (loop ' + (loop + 1) + '/' + MAX_AGENT_LOOPS + ')';
+                    agentBanner.querySelector('span').textContent = 'Agent is working\u2026 (loop ' + (loop + 1) + ')';
 
                     let actions = [];
                     const actionRegex = /```agent-action\s*\n([\s\S]*?)```/g;
