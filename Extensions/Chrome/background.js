@@ -10,11 +10,53 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 // ── AGENTIC BROWSER CONTROL - Background handlers ──────────
+
+// Wait for content script to be ready in a tab
+async function waitForContentScript(tabId, timeout) {
+    timeout = timeout || 5000;
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+        try {
+            const response = await chrome.tabs.sendMessage(tabId, { action: 'PING' });
+            if (response && response.ok) return true;
+        } catch (e) { /* content script not ready yet */ }
+        await new Promise(r => setTimeout(r, 200));
+    }
+    return false;
+}
+
+// Wait for tab to finish loading
+function waitForTabLoad(tabId, timeout) {
+    timeout = timeout || 15000;
+    return new Promise((resolve) => {
+        const start = Date.now();
+        const check = () => {
+            chrome.tabs.get(tabId, (tab) => {
+                if (chrome.runtime.lastError) { resolve(false); return; }
+                if (tab.status === 'complete') { resolve(true); return; }
+                if (Date.now() - start > timeout) { resolve(false); return; }
+                setTimeout(check, 300);
+            });
+        };
+        check();
+    });
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "agentOpenTab") {
-        chrome.tabs.create({ url: request.url, active: request.active !== false }, (tab) => {
-            sendResponse({ ok: true, tabId: tab.id, summary: `Opened tab: ${request.url}` });
-        });
+        (async () => {
+            try {
+                const tab = await new Promise(resolve =>
+                    chrome.tabs.create({ url: request.url, active: request.active !== false }, resolve)
+                );
+                // Wait for the tab to load if active
+                if (request.active !== false && request.waitForLoad !== false) {
+                    await waitForTabLoad(tab.id, 10000);
+                    await waitForContentScript(tab.id, 3000);
+                }
+                sendResponse({ ok: true, tabId: tab.id, summary: `Opened tab: ${request.url}` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
         return true;
     }
 
@@ -27,27 +69,68 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === "agentGetTabs") {
         chrome.tabs.query({}, (tabs) => {
-            const tabList = tabs.map(t => ({ id: t.id, title: t.title, url: t.url, active: t.active }));
+            const tabList = tabs.map(t => ({
+                id: t.id, title: t.title, url: t.url, active: t.active,
+                windowId: t.windowId, index: t.index, pinned: t.pinned,
+                muted: t.mutedInfo?.muted || false, audible: t.audible || false,
+                status: t.status, favIconUrl: t.favIconUrl || ''
+            }));
             sendResponse({ ok: true, tabs: tabList, summary: `Found ${tabs.length} tabs` });
         });
         return true;
     }
 
     if (request.action === "agentSwitchTab") {
-        chrome.tabs.update(request.tabId, { active: true }, () => {
-            sendResponse({ ok: true, summary: `Switched to tab ${request.tabId}` });
-        });
+        (async () => {
+            try {
+                // Support switching by tabId or by index or by title/url search
+                let tabId = request.tabId;
+                if (!tabId && request.query) {
+                    const tabs = await new Promise(resolve => chrome.tabs.query({}, resolve));
+                    const lower = request.query.toLowerCase();
+                    const match = tabs.find(t =>
+                        (t.title || '').toLowerCase().includes(lower) ||
+                        (t.url || '').toLowerCase().includes(lower)
+                    );
+                    if (match) tabId = match.id;
+                }
+                if (!tabId && typeof request.index === 'number') {
+                    const tabs = await new Promise(resolve => chrome.tabs.query({ currentWindow: true }, resolve));
+                    if (request.index >= 0 && request.index < tabs.length) tabId = tabs[request.index].id;
+                }
+                if (!tabId) {
+                    sendResponse({ ok: false, error: "Tab not found" });
+                    return;
+                }
+                // Also focus the window containing this tab
+                const tab = await new Promise(resolve => chrome.tabs.get(tabId, resolve));
+                await new Promise(resolve => chrome.windows.update(tab.windowId, { focused: true }, resolve));
+                await new Promise(resolve => chrome.tabs.update(tabId, { active: true }, resolve));
+                // Wait for content script to be ready
+                await waitForContentScript(tabId, 3000);
+                sendResponse({ ok: true, tabId, title: tab.title, summary: `Switched to tab: ${tab.title}` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
         return true;
     }
 
     if (request.action === "agentNavigate") {
-        chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-            if (tab) {
-                chrome.tabs.update(tab.id, { url: request.url }, () => {
-                    sendResponse({ ok: true, summary: `Navigated to ${request.url}` });
-                });
-            }
-        });
+        (async () => {
+            try {
+                const [tab] = await new Promise(resolve => chrome.tabs.query({ active: true, currentWindow: true }, resolve));
+                if (tab) {
+                    await new Promise(resolve => chrome.tabs.update(tab.id, { url: request.url }, resolve));
+                    // Wait for navigation to complete
+                    if (request.waitForLoad !== false) {
+                        await waitForTabLoad(tab.id, 15000);
+                        await waitForContentScript(tab.id, 3000);
+                    }
+                    sendResponse({ ok: true, tabId: tab.id, summary: `Navigated to ${request.url}` });
+                } else {
+                    sendResponse({ ok: false, error: "No active tab" });
+                }
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
         return true;
     }
 
@@ -70,10 +153,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === "agentReloadTab") {
-        chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-            if (tab) chrome.tabs.reload(tab.id, () => sendResponse({ ok: true, summary: "Reloaded tab" }));
-            else sendResponse({ ok: false, error: "No active tab" });
-        });
+        (async () => {
+            try {
+                const [tab] = await new Promise(resolve => chrome.tabs.query({ active: true, currentWindow: true }, resolve));
+                if (tab) {
+                    await new Promise(resolve => chrome.tabs.reload(tab.id, { bypassCache: request.bypassCache || false }, resolve));
+                    if (request.waitForLoad !== false) {
+                        await waitForTabLoad(tab.id, 15000);
+                        await waitForContentScript(tab.id, 3000);
+                    }
+                    sendResponse({ ok: true, summary: "Reloaded tab" });
+                } else sendResponse({ ok: false, error: "No active tab" });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
         return true;
     }
 
@@ -112,7 +204,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === "agentCaptureTab") {
-        chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+        chrome.tabs.captureVisibleTab(null, { format: request.format || 'jpeg', quality: request.quality || 70 }, (dataUrl) => {
             if (chrome.runtime.lastError) {
                 sendResponse({ ok: false, error: chrome.runtime.lastError.message });
             } else {
@@ -445,6 +537,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     await chrome.tabs.update(tab.id, { muted: !tab.mutedInfo?.muted });
                     sendResponse({ ok: true, summary: `Tab ${tab.mutedInfo?.muted ? 'unmuted' : 'muted'}` });
                 }
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    // Forward a content-script action to a specific tab
+    if (request.action === "agentSendToTab") {
+        (async () => {
+            try {
+                const tabId = request.tabId;
+                if (!tabId) { sendResponse({ ok: false, error: "tabId required" }); return; }
+                const ready = await waitForContentScript(tabId, 3000);
+                if (!ready) { sendResponse({ ok: false, error: "Content script not ready in target tab" }); return; }
+                const innerRequest = request.innerAction || {};
+                const result = await new Promise(resolve =>
+                    chrome.tabs.sendMessage(tabId, innerRequest, resolve)
+                );
+                sendResponse(result || { ok: false, error: "No response from tab" });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    // Find a tab by title or URL
+    if (request.action === "agentFindTab") {
+        (async () => {
+            try {
+                const tabs = await new Promise(resolve => chrome.tabs.query({}, resolve));
+                const query = (request.query || '').toLowerCase();
+                const matches = tabs.filter(t =>
+                    (t.title || '').toLowerCase().includes(query) ||
+                    (t.url || '').toLowerCase().includes(query)
+                ).slice(0, 10).map(t => ({
+                    id: t.id, title: t.title, url: t.url, active: t.active, windowId: t.windowId
+                }));
+                sendResponse({ ok: true, tabs: matches, summary: `Found ${matches.length} tabs matching "${request.query}"` });
             } catch (e) { sendResponse({ ok: false, error: e.message }); }
         })();
         return true;

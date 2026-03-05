@@ -3,12 +3,53 @@
 
 const api = typeof browser !== 'undefined' ? browser : chrome;
 
-// ── AGENTIC BROWSER CONTROL - Background handlers ──────────
+
+// Wait for content script to be ready in a tab
+async function waitForContentScript(tabId, timeout) {
+    timeout = timeout || 5000;
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+        try {
+            const response = await api.tabs.sendMessage(tabId, { action: 'PING' });
+            if (response && response.ok) return true;
+        } catch (e) { /* content script not ready yet */ }
+        await new Promise(r => setTimeout(r, 200));
+    }
+    return false;
+}
+
+// Wait for tab to finish loading
+function waitForTabLoad(tabId, timeout) {
+    timeout = timeout || 15000;
+    return new Promise((resolve) => {
+        const start = Date.now();
+        const check = () => {
+            api.tabs.get(tabId, (tab) => {
+                if (api.runtime.lastError) { resolve(false); return; }
+                if (tab.status === 'complete') { resolve(true); return; }
+                if (Date.now() - start > timeout) { resolve(false); return; }
+                setTimeout(check, 300);
+            });
+        };
+        check();
+    });
+}
+
 api.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "agentOpenTab") {
-        api.tabs.create({ url: request.url, active: request.active !== false }, (tab) => {
-            sendResponse({ ok: true, tabId: tab.id, summary: `Opened tab: ${request.url}` });
-        });
+        (async () => {
+            try {
+                const tab = await new Promise(resolve =>
+                    api.tabs.create({ url: request.url, active: request.active !== false }, resolve)
+                );
+                // Wait for the tab to load if active
+                if (request.active !== false && request.waitForLoad !== false) {
+                    await waitForTabLoad(tab.id, 10000);
+                    await waitForContentScript(tab.id, 3000);
+                }
+                sendResponse({ ok: true, tabId: tab.id, summary: `Opened tab: ${request.url}` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
         return true;
     }
 
@@ -21,27 +62,68 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === "agentGetTabs") {
         api.tabs.query({}, (tabs) => {
-            const tabList = tabs.map(t => ({ id: t.id, title: t.title, url: t.url, active: t.active }));
+            const tabList = tabs.map(t => ({
+                id: t.id, title: t.title, url: t.url, active: t.active,
+                windowId: t.windowId, index: t.index, pinned: t.pinned,
+                muted: t.mutedInfo?.muted || false, audible: t.audible || false,
+                status: t.status, favIconUrl: t.favIconUrl || ''
+            }));
             sendResponse({ ok: true, tabs: tabList, summary: `Found ${tabs.length} tabs` });
         });
         return true;
     }
 
     if (request.action === "agentSwitchTab") {
-        api.tabs.update(request.tabId, { active: true }, () => {
-            sendResponse({ ok: true, summary: `Switched to tab ${request.tabId}` });
-        });
+        (async () => {
+            try {
+                // Support switching by tabId or by index or by title/url search
+                let tabId = request.tabId;
+                if (!tabId && request.query) {
+                    const tabs = await new Promise(resolve => api.tabs.query({}, resolve));
+                    const lower = request.query.toLowerCase();
+                    const match = tabs.find(t =>
+                        (t.title || '').toLowerCase().includes(lower) ||
+                        (t.url || '').toLowerCase().includes(lower)
+                    );
+                    if (match) tabId = match.id;
+                }
+                if (!tabId && typeof request.index === 'number') {
+                    const tabs = await new Promise(resolve => api.tabs.query({ currentWindow: true }, resolve));
+                    if (request.index >= 0 && request.index < tabs.length) tabId = tabs[request.index].id;
+                }
+                if (!tabId) {
+                    sendResponse({ ok: false, error: "Tab not found" });
+                    return;
+                }
+                // Also focus the window containing this tab
+                const tab = await new Promise(resolve => api.tabs.get(tabId, resolve));
+                await new Promise(resolve => api.windows.update(tab.windowId, { focused: true }, resolve));
+                await new Promise(resolve => api.tabs.update(tabId, { active: true }, resolve));
+                // Wait for content script to be ready
+                await waitForContentScript(tabId, 3000);
+                sendResponse({ ok: true, tabId, title: tab.title, summary: `Switched to tab: ${tab.title}` });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
         return true;
     }
 
     if (request.action === "agentNavigate") {
-        api.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-            if (tab) {
-                api.tabs.update(tab.id, { url: request.url }, () => {
-                    sendResponse({ ok: true, summary: `Navigated to ${request.url}` });
-                });
-            }
-        });
+        (async () => {
+            try {
+                const [tab] = await new Promise(resolve => api.tabs.query({ active: true, currentWindow: true }, resolve));
+                if (tab) {
+                    await new Promise(resolve => api.tabs.update(tab.id, { url: request.url }, resolve));
+                    // Wait for navigation to complete
+                    if (request.waitForLoad !== false) {
+                        await waitForTabLoad(tab.id, 15000);
+                        await waitForContentScript(tab.id, 3000);
+                    }
+                    sendResponse({ ok: true, tabId: tab.id, summary: `Navigated to ${request.url}` });
+                } else {
+                    sendResponse({ ok: false, error: "No active tab" });
+                }
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
         return true;
     }
 
@@ -64,10 +146,19 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === "agentReloadTab") {
-        api.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-            if (tab) api.tabs.reload(tab.id, () => sendResponse({ ok: true, summary: "Reloaded tab" }));
-            else sendResponse({ ok: false, error: "No active tab" });
-        });
+        (async () => {
+            try {
+                const [tab] = await new Promise(resolve => api.tabs.query({ active: true, currentWindow: true }, resolve));
+                if (tab) {
+                    await new Promise(resolve => api.tabs.reload(tab.id, { bypassCache: request.bypassCache || false }, resolve));
+                    if (request.waitForLoad !== false) {
+                        await waitForTabLoad(tab.id, 15000);
+                        await waitForContentScript(tab.id, 3000);
+                    }
+                    sendResponse({ ok: true, summary: "Reloaded tab" });
+                } else sendResponse({ ok: false, error: "No active tab" });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
         return true;
     }
 
@@ -95,8 +186,23 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    if (request.action === "agentGroupTabs") {
+        // tabGroups API not available in Safari
+        if (api.tabs.group) {
+            api.tabs.group({ tabIds: request.tabIds }, (groupId) => {
+                if (request.title && api.tabGroups) {
+                    api.tabGroups.update(groupId, { title: request.title, color: request.color || 'blue' });
+                }
+                sendResponse({ ok: true, groupId, summary: `Grouped ${request.tabIds.length} tabs` });
+            });
+        } else {
+            sendResponse({ ok: false, error: "Tab grouping is not supported in this browser" });
+        }
+        return true;
+    }
+
     if (request.action === "agentCaptureTab") {
-        api.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+        api.tabs.captureVisibleTab(null, { format: request.format || 'jpeg', quality: request.quality || 70 }, (dataUrl) => {
             if (api.runtime.lastError) {
                 sendResponse({ ok: false, error: api.runtime.lastError.message });
             } else {
@@ -149,7 +255,7 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         (async () => {
             try {
                 const url = request.url;
-                if (/^(safari-web-extension|file|about):/.test(url)) {
+                if (/^(chrome|file|chrome-extension|about):/.test(url)) {
                     sendResponse({ ok: false, error: "Cannot fetch internal URLs" });
                     return;
                 }
@@ -271,7 +377,7 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         (async () => {
             try {
                 const url = request.url;
-                if (!url || /^(safari-extension|file|about|javascript):/.test(url)) {
+                if (!url || /^(chrome|file|chrome-extension|about|javascript):/.test(url)) {
                     sendResponse({ ok: false, error: "Invalid download URL" });
                     return;
                 }
@@ -292,7 +398,7 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === "agentGetDownloads") {
         api.downloads.search({ limit: request.limit || 20, orderBy: ['-startTime'] }, (items) => {
-            const downloads = (items || []).map(d => ({
+            const downloads = items.map(d => ({
                 id: d.id, filename: d.filename, url: d.url?.substring(0, 100),
                 state: d.state, fileSize: d.fileSize, bytesReceived: d.bytesReceived
             }));
@@ -305,9 +411,9 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
         api.history.search({
             text: request.query || '',
             maxResults: Math.min(request.maxResults || 20, 100),
-            startTime: request.startTime || (Date.now() - 7 * 24 * 60 * 60 * 1000)
+            startTime: request.startTime || (Date.now() - 7 * 24 * 60 * 60 * 1000) // last 7 days
         }, (results) => {
-            const history = (results || []).map(h => ({ title: h.title, url: h.url, lastVisitTime: h.lastVisitTime, visitCount: h.visitCount }));
+            const history = results.map(h => ({ title: h.title, url: h.url, lastVisitTime: h.lastVisitTime, visitCount: h.visitCount }));
             sendResponse({ ok: true, history, summary: `Found ${history.length} history items` });
         });
         return true;
@@ -333,7 +439,7 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "agentSetCookie") {
         (async () => {
             try {
-                await api.cookies.set({
+                const cookie = await api.cookies.set({
                     url: request.url,
                     name: request.name,
                     value: request.value,
@@ -376,7 +482,7 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === "agentGetWindows") {
         api.windows.getAll({ populate: true }, (windows) => {
-            const wins = (windows || []).map(w => ({
+            const wins = windows.map(w => ({
                 id: w.id, type: w.type, focused: w.focused, incognito: w.incognito,
                 tabCount: w.tabs?.length || 0, state: w.state
             }));
@@ -429,6 +535,42 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     await api.tabs.update(tab.id, { muted: !tab.mutedInfo?.muted });
                     sendResponse({ ok: true, summary: `Tab ${tab.mutedInfo?.muted ? 'unmuted' : 'muted'}` });
                 }
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    // Forward a content-script action to a specific tab
+    if (request.action === "agentSendToTab") {
+        (async () => {
+            try {
+                const tabId = request.tabId;
+                if (!tabId) { sendResponse({ ok: false, error: "tabId required" }); return; }
+                const ready = await waitForContentScript(tabId, 3000);
+                if (!ready) { sendResponse({ ok: false, error: "Content script not ready in target tab" }); return; }
+                const innerRequest = request.innerAction || {};
+                const result = await new Promise(resolve =>
+                    api.tabs.sendMessage(tabId, innerRequest, resolve)
+                );
+                sendResponse(result || { ok: false, error: "No response from tab" });
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    // Find a tab by title or URL
+    if (request.action === "agentFindTab") {
+        (async () => {
+            try {
+                const tabs = await new Promise(resolve => api.tabs.query({}, resolve));
+                const query = (request.query || '').toLowerCase();
+                const matches = tabs.filter(t =>
+                    (t.title || '').toLowerCase().includes(query) ||
+                    (t.url || '').toLowerCase().includes(query)
+                ).slice(0, 10).map(t => ({
+                    id: t.id, title: t.title, url: t.url, active: t.active, windowId: t.windowId
+                }));
+                sendResponse({ ok: true, tabs: matches, summary: `Found ${matches.length} tabs matching "${request.query}"` });
             } catch (e) { sendResponse({ ok: false, error: e.message }); }
         })();
         return true;
