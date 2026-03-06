@@ -1440,7 +1440,9 @@ class GeminiService {
                     if let res = resolutionMap[imageResolution] {
                         imageConfig["imageSize"] = res
                     }
-                    if !imageAspectRatio.isEmpty && imageAspectRatio != "Default" && modelName != "gemini-2.0-flash-exp-image-generation" {
+                    if !imageAspectRatio.isEmpty && imageAspectRatio != "Default"
+                        && modelName != "gemini-2.0-flash-exp-image-generation"
+                    {
                         imageConfig["aspectRatio"] = imageAspectRatio
                     }
                     if !imageConfig.isEmpty {
@@ -2260,7 +2262,8 @@ struct ContentView: View {
     }
 
     func isWebViewProvider(_ provider: String) -> Bool {
-        return ["Gemini Web", "ChatGPT Web", "Perplexity Web", "Grok Web"].contains(provider)
+        return ["Gemini Web", "ChatGPT Web", "Perplexity Web", "Grok Web", "Claude Web"].contains(
+            provider)
     }
 
     private func updateActiveToolName() {
@@ -2285,6 +2288,7 @@ struct ContentView: View {
         case "ChatGPT Web": return URL(string: "https://chatgpt.com")
         case "Perplexity Web": return URL(string: "https://www.perplexity.ai")
         case "Grok Web": return URL(string: "https://grok.com")
+        case "Claude Web": return URL(string: "https://claude.ai")
         default: return nil
         }
     }
@@ -4046,6 +4050,16 @@ struct HeaderView: View {
                     }
                 }
 
+                Section("Web Views") {
+                    ForEach(WebOverlayService.allCases) { service in
+                        if WebOverlayManager.shared.isServiceEnabled(service) {
+                            Button(action: { selectedProvider = "\(service.rawValue) Web" }) {
+                                Label(service.rawValue, systemImage: service.icon)
+                            }
+                        }
+                    }
+                }
+
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: getProviderIcon(selectedProvider))
@@ -4129,6 +4143,11 @@ struct HeaderView: View {
         case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
         case "Gemini CLI": return "terminal"
         case "NVIDIA API": return "bolt.fill"
+        case "Gemini Web": return "sparkles"
+        case "ChatGPT Web": return "bubble.left.and.bubble.right"
+        case "Perplexity Web": return "magnifyingglass"
+        case "Grok Web": return "bolt.horizontal"
+        case "Claude Web": return "brain.head.profile"
         default: return "cpu"
         }
     }
@@ -6961,6 +6980,10 @@ struct SettingsView: View {
     @AppStorage("AIAutocompleteCompletionLength") private var autocompleteCompletionLength: String =
         "Medium (~ 2 - 4 words)"
     @AppStorage("EnablePreReleaseUpdates") private var enablePreRelease: Bool = false
+    @AppStorage("EnableWebOverlay") private var enableWebOverlay: Bool = true
+    @AppStorage("WebOverlayBackgroundOpacity") private var webOverlayBackgroundOpacity: Double =
+        0.25
+    @AppStorage("WebOverlayTintIntensity") private var webOverlayTintIntensity: Double = 0.5
 
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
@@ -6969,6 +6992,7 @@ struct SettingsView: View {
     @ObservedObject var accountManager = AccountManager.shared
     @ObservedObject var copilotService = GitHubCopilotService.shared
     @ObservedObject var updateManager = UpdateManager.shared
+    @ObservedObject var webOverlayManager = WebOverlayManager.shared
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
     @State private var showAddCustomGeminiModel = false
@@ -7191,6 +7215,90 @@ struct SettingsView: View {
                     KeyboardShortcuts.Recorder(for: .toggleQuickAI)
                 } label: {
                     Label("Global Shortcut", systemImage: "command")
+                }
+            }
+        }
+    }
+
+    // MARK: - Web Overlay Section
+
+    @ViewBuilder
+    private var webOverlaySection: some View {
+        Section(header: Label("Web Overlay", systemImage: "macwindow.on.rectangle")) {
+            Toggle(isOn: $enableWebOverlay) {
+                Label("Enable Web Overlay Hotkey", systemImage: "globe")
+            }
+            .toggleStyle(.switch)
+
+            if enableWebOverlay {
+                LabeledContent {
+                    KeyboardShortcuts.Recorder(for: .toggleWebOverlay)
+                } label: {
+                    Label("Open Web Overlay", systemImage: "command")
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Enabled Services", systemImage: "checklist")
+                        .font(.headline)
+
+                    ForEach(WebOverlayService.allCases) { service in
+                        Toggle(
+                            isOn: Binding(
+                                get: { webOverlayManager.isServiceEnabled(service) },
+                                set: { webOverlayManager.setServiceEnabled(service, enabled: $0) }
+                            )
+                        ) {
+                            Label(service.rawValue, systemImage: service.icon)
+                        }
+                        .toggleStyle(.switch)
+                    }
+                }
+                .padding(.vertical, 4)
+
+                Text(
+                    "Toggle a floating web panel for AI chat services. The overlay stays on top and remembers your sessions."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+
+        if enableWebOverlay {
+            Section(header: Label("Web Overlay Appearance", systemImage: "paintbrush")) {
+                LabeledContent {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { webOverlayBackgroundOpacity },
+                                set: { webOverlayBackgroundOpacity = min(max($0, 0.05), 1.0) }
+                            ),
+                            in: 0.05...1.0
+                        )
+                        Text("\(Int(min(max(webOverlayBackgroundOpacity, 0.05), 1.0) * 100))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                } label: {
+                    Label("Glass Opacity", systemImage: "circle.dotted")
+                }
+
+                LabeledContent {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { webOverlayTintIntensity },
+                                set: { webOverlayTintIntensity = min(max($0, 0.0), 1.0) }
+                            ),
+                            in: 0.0...1.0
+                        )
+                        Text("\(Int(min(max(webOverlayTintIntensity, 0.0), 1.0) * 100))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                } label: {
+                    Label("Theme Tint", systemImage: "paintbrush.pointed")
                 }
             }
         }
@@ -8043,6 +8151,7 @@ struct SettingsView: View {
 
             appearanceSection
             generalSection
+            webOverlaySection
             quickAISection
 
             // AI Providers

@@ -61,6 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.register(defaults: [
             "ShowMenuBar": true,
             "EnableQuickAI": true,
+            "EnableWebOverlay": true,
             "EnableAIAutocomplete": false,
             "AIAutocompleteBackend": "Ollama",
             "AIAutocompleteDebounceMs": 500,
@@ -77,8 +78,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Force main window to appear if needed
         DispatchQueue.main.async {
-            // Find the main window (not the Quick AI panel)
-            if let window = NSApp.windows.first(where: { !($0 is QuickAIPanel) }) {
+            // Find the main window (not the Quick AI panel or Web Overlay)
+            if let window = NSApp.windows.first(where: {
+                !($0 is QuickAIPanel) && !($0 is WebOverlayPanel)
+            }) {
                 window.titlebarAppearsTransparent = true
                 window.styleMask.insert(.fullSizeContentView)
                 window.isReleasedWhenClosed = false
@@ -88,6 +91,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         QuickAIManager.shared.setup()
+        WebOverlayManager.shared.setup()
 
         // Setup menu bar status item
         setupStatusItem()
@@ -98,6 +102,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         HotKeyManager.shared.register()
+
+        // Web Overlay shortcut
+        KeyboardShortcuts.onKeyUp(for: .toggleWebOverlay) {
+            if UserDefaults.standard.bool(forKey: "EnableWebOverlay") {
+                WebOverlayManager.shared.toggle()
+            }
+        }
 
         // AI Autocomplete: register toggle shortcut and auto-start if enabled
         KeyboardShortcuts.onKeyUp(for: .toggleAIAutocomplete) {
@@ -195,17 +206,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        // If Quick AI is open, we don't want to force the main window to open
+        // If Quick AI or Web Overlay is open, we don't want to force the main window to open
         if let panel = QuickAIManager.shared.panel, panel.isVisible {
             return
         }
+        if let panel = WebOverlayManager.shared.panel, panel.isVisible {
+            return
+        }
 
-        // If no windows are visible (excluding Quick AI), show the main window
-        // This handles Cmd+Tab or other activation methods where applicationShouldHandleReopen might not be called
-        let visibleWindows = NSApp.windows.filter { $0.isVisible && !($0 is QuickAIPanel) }
+        // If no windows are visible (excluding Quick AI / Web Overlay), show the main window
+        let visibleWindows = NSApp.windows.filter {
+            $0.isVisible && !($0 is QuickAIPanel) && !($0 is WebOverlayPanel)
+        }
         if visibleWindows.isEmpty {
             for window in NSApp.windows {
-                if !(window is QuickAIPanel) {
+                if !(window is QuickAIPanel) && !(window is WebOverlayPanel) {
                     window.makeKeyAndOrderFront(nil)
                     return
                 }
@@ -216,15 +231,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool)
         -> Bool
     {
-        // If Quick AI is open, we don't want to force the main window to open
+        // If Quick AI or Web Overlay is open, we don't want to force the main window to open
         if let panel = QuickAIManager.shared.panel, panel.isVisible {
+            return true
+        }
+        if let panel = WebOverlayManager.shared.panel, panel.isVisible {
             return true
         }
 
         if !flag {
-            // If no windows are visible (excluding Quick AI which might be hidden), show the main window
+            // If no windows are visible (excluding panels), show the main window
             for window in NSApp.windows {
-                if !(window is QuickAIPanel) {
+                if !(window is QuickAIPanel) && !(window is WebOverlayPanel) {
                     window.makeKeyAndOrderFront(nil)
                     return false
                 }
