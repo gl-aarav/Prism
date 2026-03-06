@@ -74,12 +74,21 @@ Prism adapts to how you work with three distinct modes, all **synchronized** in 
 
 ## 📥 Installation
 
+### Option 1: Download Release
 1.  Go to the **[Releases](../../releases)** page.
 2.  Download the latest `Prism_Installer.dmg`.
 3.  Open the disk image and drag **Prism** to your **Applications** folder.
 4.  Launch Prism!
 
 > **Note**: On first launch, you may need to right-click the app and select "Open" if Gatekeeper prompts you. You will also need to grant Accessibility permissions for the system-wide AI Writing Layer features to function.
+
+### Option 2: Clone & Build from Source
+If you prefer to build the project yourself or contribute to development, you can clone the repository:
+* **HTTPS**: `git clone https://github.com/gl-aarav/PrismApp.git`
+* **SSH**: `git clone git@github.com:gl-aarav/PrismApp.git`
+* **GitHub CLI**: `gh repo clone gl-aarav/PrismApp`
+
+Once cloned, open `Package.swift` or the project directory in Xcode, wait for Swift Package dependencies to resolve, and build (`Cmd + R`).
 
 ---
 
@@ -132,6 +141,12 @@ Prism supports extensive LaTeX formatting:
 ## 📄 License
 
 Prism is open-source software!
+
+---
+
+## ℹ️ Disclaimer
+
+**Prism is an independent, personal project. It is not affiliated with, endorsed by, or belonging to any company or organization.**
 
 ---
 
