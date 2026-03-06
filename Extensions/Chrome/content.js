@@ -1895,15 +1895,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         } catch (e) { sendResponse({ ok: false, error: e.message }); }
     }
 
-    if (request.action === "agentExecuteScript") {
-        try {
-            const code = request.code || '';
-            const fn = new Function(code);
-            const result = fn();
-            const resultStr = typeof result === 'object' ? JSON.stringify(result) : String(result);
-            sendResponse({ ok: true, result: result, summary: `Script result: ${resultStr.substring(0, 200)}` });
-        } catch (e) { sendResponse({ ok: false, error: e.message }); }
-    }
+
 
     if (request.action === "agentGetLocalStorage") {
         try {

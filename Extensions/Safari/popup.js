@@ -36,6 +36,22 @@ document.addEventListener('DOMContentLoaded', () => {
     let hasInjectedContextThisSession = false;
     let pendingAttachments = [];
 
+    let currentTabId = null;
+    api.tabs.query({ active: true, currentWindow: true }).then(tabs => {
+        if (tabs && tabs[0]) currentTabId = tabs[0].id;
+    }).catch(e => {
+        // Fallback for Safari if Promise is not returned
+        api.tabs.query({ active: true, currentWindow: true }, tabs => {
+            if (tabs && tabs[0]) currentTabId = tabs[0].id;
+        });
+    });
+
+    window.addEventListener('pagehide', () => {
+        if (agentBrowserEnabled && currentTabId) {
+            api.tabs.sendMessage(currentTabId, { action: 'agentRemoveHighlights' }, () => { });
+        }
+    });
+
     // ── SLASH COMMANDS ──────────────────────────────────────
     let slashCommands = [
         { trigger: '/summarize', expansion: 'Summarize the following:' },
@@ -941,7 +957,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '6. Use getPageState to check for blockers (CAPTCHAs, overlays, login walls) before interacting\n' +
                     '7. Use dismissPopups to remove cookie banners and overlays blocking the page\n' +
                     '8. When looping through items (e.g. search results), track progress to avoid repeating work\n' +
-                    '9. For complex tasks, use executeScript to run custom JavaScript when built-in actions are insufficient\n' +
+
                     '10. Always verify results after critical actions (e.g. form submission, data entry). Use extractText or getFormValues to confirm.\n' +
                     '11. If you need to interact with a page that requires authentication, guide the user or wait, but never give up — try all available options.\n\n' +
                     '## Page Interaction:\n' +
@@ -967,6 +983,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"selectText","selector":"CSS"} - Select all text inside an element\n' +
                     '- {"type":"removeElement","selector":"CSS"} - Remove an element from the page (e.g. ad, overlay)\n\n' +
                     '## Page Analysis:\n' +
+                    '(Note: The latest DOM tree containing interactive elements is automatically sent to you after every action. You rarely need to manually request page elements, DOM trees, or take screenshots unless you specifically want extra visual analysis.)\n' +
                     '- {"type":"getElements"} - List interactive elements on page. For <select> elements, the response includes an "options" array showing all available values.\n' +
                     '- {"type":"buildDomTree","showHighlights":true,"viewportOnly":true} - Build an interactive DOM tree of the page. Highlights all clickable/interactive elements with colored overlays and numbered labels. Returns indexed element map with selectors, positions, and attributes. Use this for visual element discovery.\n' +
                     '- {"type":"removeHighlights"} - Remove DOM tree highlight overlays from the page\n' +
@@ -1029,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"translate","text":"...","from":"en","to":"es"} - Translate text\n' +
                     '- {"type":"dictionary","word":"..."} - Word definition\n\n' +
                     '## Advanced / JavaScript:\n' +
-                    '- {"type":"executeScript","code":"return document.title"} - Execute JavaScript on the page and return the result. Use for complex logic, DOM manipulation, or reading page state not covered by other actions.\n' +
+
                     '- {"type":"getLocalStorage","key":"optional"} - Read localStorage (all keys if omitted, or a specific key)\n' +
                     '- {"type":"setLocalStorage","key":"myKey","value":"myValue"} - Write to localStorage\n' +
                     '- {"type":"getSessionStorage","key":"optional"} - Read sessionStorage\n' +
@@ -1202,9 +1219,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     }).join('\n\n');
 
                     messagesForApi.push({ role: 'assistant', content: loopContent });
+
+                    // Automatically fetch and include the latest DOM tree
+                    let automaticContext = '';
+                    try {
+                        const tabs = await api.tabs.query({ active: true, currentWindow: true });
+                        const tab = tabs[0];
+                        if (tab) {
+                            const domResult = await api.tabs.sendMessage(tab.id, { action: 'agentBuildDomTree', showHighlights: true, viewportOnly: false });
+                            if (domResult && domResult.ok && domResult.elements) {
+                                automaticContext = '\n\n[Automatic Page State Update (DOM Tree)]:\n' + JSON.stringify(domResult.elements).substring(0, 30000);
+                            }
+                        }
+                    } catch (e) { }
+
                     const resultMsg = {
                         role: 'user',
-                        content: '[Agent Action Results]:\n' + resultText + '\n\nContinue with the task. If done, provide a final summary without any agent-action blocks.'
+                        content: '[Agent Action Results]:\n' + resultText + automaticContext + '\n\nContinue with the task. If done, provide a final summary without any agent-action blocks.'
                     };
                     if (screenshotImages.length > 0) {
                         resultMsg.images = screenshotImages;
@@ -1534,7 +1565,6 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'getHistory': return { icon: '\uD83D\uDCDC', label: 'Searched history' + (action.query ? ' for "' + action.query.substring(0, 20) + '"' : '') };
             case 'buildDomTree': return { icon: '\uD83C\uDF33', label: 'Built interactive DOM tree with highlights' };
             case 'removeHighlights': return { icon: '\uD83E\uDDF9', label: 'Removed element highlights' };
-            case 'executeScript': return { icon: '\u2699\uFE0F', label: 'Executed JavaScript' };
             case 'getLocalStorage': return { icon: '\uD83D\uDCBE', label: 'Read localStorage' + (action.key ? '["' + action.key + '"]' : '') };
             case 'setLocalStorage': return { icon: '\uD83D\uDCBE', label: 'Set localStorage["' + (action.key || '') + '"]' };
             case 'getSessionStorage': return { icon: '\uD83D\uDCBE', label: 'Read sessionStorage' + (action.key ? '["' + action.key + '"]' : '') };
@@ -1889,9 +1919,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     break;
 
-                case 'executeScript':
-                    result = await api.tabs.sendMessage(tab.id, { action: 'agentExecuteScript', code: action.code });
-                    break;
+
                 case 'getLocalStorage':
                     result = await api.tabs.sendMessage(tab.id, { action: 'agentGetLocalStorage', key: action.key });
                     break;
