@@ -583,6 +583,7 @@ class GitHubCopilotModelManager: ObservableObject {
         "claude-sonnet-4",
         "claude-haiku-4.5",
         // GPT-5 Series
+        "gpt-5.4",
         "gpt-5.2",
         "gpt-5.1",
         "gpt-5-mini",
@@ -626,6 +627,7 @@ class GitHubCopilotModelManager: ObservableObject {
         "claude-sonnet-4.5": "Claude Sonnet 4.5",
         "claude-sonnet-4": "Claude Sonnet 4",
         "claude-haiku-4.5": "Claude Haiku 4.5",
+        "gpt-5.4": "GPT-5.4",
         "gpt-5.2": "GPT-5.2",
         "gpt-5.1": "GPT-5.1",
         "gpt-5-mini": "GPT-5 Mini",
