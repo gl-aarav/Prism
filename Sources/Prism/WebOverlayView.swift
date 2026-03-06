@@ -32,7 +32,8 @@ struct WebOverlayView: View {
                 ForEach(manager.enabledServices) { service in
                     OverlayWebViewWrapper(
                         webView: manager.getWebView(for: service),
-                        coordinator: manager.coordinator(for: service)
+                        coordinator: manager.coordinator(for: service),
+                        isActive: manager.currentService == service
                     )
                     .opacity(manager.currentService == service ? 1 : 0)
                     .allowsHitTesting(manager.currentService == service)
@@ -188,6 +189,7 @@ struct WebOverlayView: View {
 struct OverlayWebViewWrapper: NSViewRepresentable {
     let webView: WKWebView
     let coordinator: WebOverlayCoordinator?
+    let isActive: Bool
 
     func makeNSView(context: Context) -> NSView {
         let container = NSView()
@@ -209,5 +211,7 @@ struct OverlayWebViewWrapper: NSViewRepresentable {
             webView.autoresizingMask = [.width, .height]
             nsView.addSubview(webView)
         }
+        // Natively hide the NSView to prevent cursor flickering from inactive webviews
+        webView.isHidden = !isActive
     }
 }
