@@ -46,15 +46,6 @@ class WebOverlayPanel: NSPanel {
         orderOut(nil)
         WebOverlayManager.shared.returnFocusToPreviousApp()
     }
-
-    override func resignKey() {
-        super.resignKey()
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, self.isVisible, !self.isKeyWindow else { return }
-            self.orderOut(nil)
-            WebOverlayManager.shared.returnFocusToPreviousApp()
-        }
-    }
 }
 
 // MARK: - Web Overlay Manager
@@ -65,6 +56,8 @@ class WebOverlayManager: ObservableObject {
     var panel: WebOverlayPanel?
     var previousApp: NSRunningApplication?
     @Published var currentService: WebOverlayService = .gemini
+    @Published var canGoBack: Bool = false
+    @Published var canGoForward: Bool = false
 
     // Persistent WKWebViews per service to preserve sessions
     private var webViews: [WebOverlayService: WKWebView] = [:]
@@ -74,6 +67,9 @@ class WebOverlayManager: ObservableObject {
     private let panelWidth: CGFloat = 420
     private let panelMinHeight: CGFloat = 500
     private let panelMaxHeight: CGFloat = 800
+    private var navigationObservers: [WebOverlayService: NSKeyValueObservation] = [:]
+    private var backObservers: [WebOverlayService: NSKeyValueObservation] = [:]
+    private var forwardObservers: [WebOverlayService: NSKeyValueObservation] = [:]
 
     private init() {
         // Load last used service
@@ -85,9 +81,14 @@ class WebOverlayManager: ObservableObject {
     }
 
     func setup() {
-        let height: CGFloat = 600
+        // Restore persisted size or use defaults
+        let savedWidth = UserDefaults.standard.double(forKey: "WebOverlayWidth")
+        let savedHeight = UserDefaults.standard.double(forKey: "WebOverlayHeight")
+        let width = savedWidth > 0 ? CGFloat(savedWidth) : panelWidth
+        let height = savedHeight > 0 ? CGFloat(savedHeight) : 600
+
         let panel = WebOverlayPanel(
-            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: height),
+            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
             styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
@@ -106,7 +107,7 @@ class WebOverlayManager: ObservableObject {
         let rootView = WebOverlayView(manager: self)
             .edgesIgnoringSafeArea(.all)
 
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: height))
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: width, height: height))
         containerView.autoresizingMask = [.width, .height]
         containerView.wantsLayer = true
         containerView.layer?.cornerRadius = 16
@@ -119,6 +120,15 @@ class WebOverlayManager: ObservableObject {
 
         panel.contentView = containerView
         self.panel = panel
+
+        // Observe panel resize to persist size
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification, object: panel, queue: .main
+        ) { [weak panel] _ in
+            guard let panel = panel else { return }
+            UserDefaults.standard.set(Double(panel.frame.width), forKey: "WebOverlayWidth")
+            UserDefaults.standard.set(Double(panel.frame.height), forKey: "WebOverlayHeight")
+        }
 
         // Preload all enabled services' webviews
         preloadEnabledServices()
@@ -148,6 +158,29 @@ class WebOverlayManager: ObservableObject {
     func switchService(_ service: WebOverlayService) {
         currentService = service
         UserDefaults.standard.set(service.rawValue, forKey: "WebOverlayLastService")
+        updateNavigationState()
+    }
+
+    private func updateNavigationState() {
+        if let webView = webViews[currentService] {
+            canGoBack = webView.canGoBack
+            canGoForward = webView.canGoForward
+        } else {
+            canGoBack = false
+            canGoForward = false
+        }
+    }
+
+    func goBack() {
+        webViews[currentService]?.goBack()
+    }
+
+    func goForward() {
+        webViews[currentService]?.goForward()
+    }
+
+    func navigateToHome() {
+        webViews[currentService]?.load(URLRequest(url: currentService.url))
     }
 
     func getWebView(for service: WebOverlayService) -> WKWebView {
@@ -173,6 +206,20 @@ class WebOverlayManager: ObservableObject {
 
         webView.load(URLRequest(url: service.url))
         webViews[service] = webView
+
+        // Observe back/forward state for the current service
+        backObservers[service] = webView.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.updateNavigationState()
+            }
+        }
+        forwardObservers[service] = webView.observe(\.canGoForward, options: [.new]) {
+            [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.updateNavigationState()
+            }
+        }
+
         return webView
     }
 

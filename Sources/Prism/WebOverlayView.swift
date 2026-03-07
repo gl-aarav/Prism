@@ -111,6 +111,56 @@ struct WebOverlayView: View {
 
             Spacer()
 
+            // Back button
+            Button {
+                manager.goBack()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(manager.canGoBack ? .secondary : .quaternary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                    )
+                    .glassEffect(.regular, in: .circle)
+            }
+            .buttonStyle(.plain)
+            .disabled(!manager.canGoBack)
+
+            // Forward button
+            Button {
+                manager.goForward()
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(manager.canGoForward ? .secondary : .quaternary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                    )
+                    .glassEffect(.regular, in: .circle)
+            }
+            .buttonStyle(.plain)
+            .disabled(!manager.canGoForward)
+
+            // New chat (home) button
+            Button {
+                manager.navigateToHome()
+            } label: {
+                Image(systemName: "plus.message")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                    )
+                    .glassEffect(.regular, in: .circle)
+            }
+            .buttonStyle(.plain)
+
             // Close button
             Button {
                 manager.panel?.orderOut(nil)
