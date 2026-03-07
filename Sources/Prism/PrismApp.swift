@@ -207,6 +207,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         QuickAIManager.shared.toggle()
     }
 
+    func applicationShouldTerminate(_ application: NSApplication) -> NSApplication.TerminateReply {
+        // Intercept quit action: instead of quitting, switch to accessory mode
+        // This removes the app from the Dock but keeps it running for Quick AI hotkeys
+        
+        // Hide all windows
+        for window in NSApp.windows {
+            window.orderOut(nil)
+        }
+        
+        // Switch to accessory mode (removes from Dock)
+        NSApp.setActivationPolicy(.accessory)
+        
+        // Cancel the termination
+        return .terminateCancel
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         // Clean up resources to prevent crashes during shutdown
         ExtensionServer.shared.stop()
@@ -239,6 +255,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showOrCreateMainWindow() {
+        // Restore regular activation policy so the app appears in the Dock
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
         // Find any main window and show it
