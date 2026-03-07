@@ -66,6 +66,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "AIAutocompleteBackend": "Ollama",
             "AIAutocompleteDebounceMs": 500,
             "AIAutocompleteMemoryEnabled": true,
+            "QuickAIClickOutsideCloses": false,
+            "WebOverlayClickOutsideCloses": false,
         ])
     }
 

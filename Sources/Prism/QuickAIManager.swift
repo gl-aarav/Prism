@@ -272,4 +272,20 @@ extension QuickAIManager {
 class QuickAIPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    override func resignKey() {
+        super.resignKey()
+        if UserDefaults.standard.bool(forKey: "QuickAIClickOutsideCloses") {
+            orderOut(nil)
+            let otherWindowsVisible = NSApp.windows.contains { $0 != self && $0.isVisible }
+            if !otherWindowsVisible {
+                if let previousApp = QuickAIManager.shared.previousApp {
+                    previousApp.activate(options: [])
+                    QuickAIManager.shared.previousApp = nil
+                } else {
+                    NSApp.hide(nil)
+                }
+            }
+        }
+    }
 }

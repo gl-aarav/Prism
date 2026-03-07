@@ -46,6 +46,14 @@ class WebOverlayPanel: NSPanel {
         orderOut(nil)
         WebOverlayManager.shared.returnFocusToPreviousApp()
     }
+
+    override func resignKey() {
+        super.resignKey()
+        if UserDefaults.standard.bool(forKey: "WebOverlayClickOutsideCloses") {
+            orderOut(nil)
+            WebOverlayManager.shared.returnFocusToPreviousApp()
+        }
+    }
 }
 
 // MARK: - Web Overlay Manager

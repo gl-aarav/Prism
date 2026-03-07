@@ -7137,6 +7137,8 @@ struct SettingsView: View {
         "Medium (~ 2 - 4 words)"
     @AppStorage("EnablePreReleaseUpdates") private var enablePreRelease: Bool = false
     @AppStorage("EnableWebOverlay") private var enableWebOverlay: Bool = true
+    @AppStorage("QuickAIClickOutsideCloses") private var quickAIClickOutsideCloses: Bool = false
+    @AppStorage("WebOverlayClickOutsideCloses") private var webOverlayClickOutsideCloses: Bool = false
     @AppStorage("WebOverlayBackgroundOpacity") private var webOverlayBackgroundOpacity: Double =
         0.25
     @AppStorage("WebOverlayTintIntensity") private var webOverlayTintIntensity: Double = 0.5
@@ -7378,6 +7380,11 @@ struct SettingsView: View {
                 } label: {
                     Label("Global Shortcut", systemImage: "command")
                 }
+
+                Toggle(isOn: $quickAIClickOutsideCloses) {
+                    Label("Click Outside Closes Quick AI", systemImage: "cursorarrow.click")
+                }
+                .toggleStyle(.switch)
             }
         }
     }
@@ -7389,6 +7396,11 @@ struct SettingsView: View {
         Section(header: Label("Web Overlay", systemImage: "macwindow.on.rectangle")) {
             Toggle(isOn: $enableWebOverlay) {
                 Label("Enable Web Overlay Hotkey", systemImage: "globe")
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: $webOverlayClickOutsideCloses) {
+                Label("Click Outside Closes Web Overlay", systemImage: "cursorarrow.click")
             }
             .toggleStyle(.switch)
 
