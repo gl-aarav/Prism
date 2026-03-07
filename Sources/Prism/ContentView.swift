@@ -1841,6 +1841,35 @@ struct WebView: NSViewRepresentable {
         func webViewDidClose(_ webView: WKWebView) {
             webView.window?.close()
         }
+
+        func webView(
+            _ webView: WKWebView,
+            runOpenPanelWith parameters: WKOpenPanelParameters,
+            initiatedByFrame frame: WKFrameInfo,
+            completionHandler: @escaping ([URL]?) -> Void
+        ) {
+            let openPanel = NSOpenPanel()
+            openPanel.canChooseFiles = true
+            openPanel.canChooseDirectories = false
+            openPanel.allowsMultipleSelection = parameters.allowsMultipleSelection
+
+            if let window = webView.window {
+                openPanel.beginSheetModal(for: window) { response in
+                    if response == .OK {
+                        completionHandler(openPanel.urls)
+                    } else {
+                        completionHandler(nil)
+                    }
+                }
+            } else {
+                let response = openPanel.runModal()
+                if response == .OK {
+                    completionHandler(openPanel.urls)
+                } else {
+                    completionHandler(nil)
+                }
+            }
+        }
     }
 }
 

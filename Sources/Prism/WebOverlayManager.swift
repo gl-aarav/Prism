@@ -285,4 +285,36 @@ class WebOverlayCoordinator: NSObject, WKUIDelegate, WKNavigationDelegate {
     ) {
         decisionHandler(.allow)
     }
+
+    func webView(
+        _ webView: WKWebView,
+        runOpenPanelWith parameters: WKOpenPanelParameters,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping ([URL]?) -> Void
+    ) {
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = false
+        openPanel.allowsMultipleSelection = parameters.allowsMultipleSelection
+
+        // Present as a sheet on the overlay panel window so the picker
+        // appears on the overlay, not the main app window.
+        if let window = webView.window {
+            openPanel.beginSheetModal(for: window) { response in
+                if response == .OK {
+                    completionHandler(openPanel.urls)
+                } else {
+                    completionHandler(nil)
+                }
+            }
+        } else {
+            // Fallback: present as a standalone modal window
+            let response = openPanel.runModal()
+            if response == .OK {
+                completionHandler(openPanel.urls)
+            } else {
+                completionHandler(nil)
+            }
+        }
+    }
 }
