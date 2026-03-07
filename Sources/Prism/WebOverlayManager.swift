@@ -200,6 +200,7 @@ class WebOverlayManager: ObservableObject {
         config.websiteDataStore = .default()
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.preferences.javaScriptCanOpenWindowsAutomatically = true
+        config.mediaTypesRequiringUserActionForPlayback = []
 
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.allowsBackForwardNavigationGestures = true
@@ -292,6 +293,16 @@ class WebOverlayCoordinator: NSObject, WKUIDelegate, WKNavigationDelegate {
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
         decisionHandler(.allow)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+        initiatedByFrame frame: WKFrameInfo,
+        type: WKMediaCaptureType,
+        decisionHandler: @escaping (WKPermissionDecision) -> Void
+    ) {
+        decisionHandler(.grant)
     }
 
     func webView(
