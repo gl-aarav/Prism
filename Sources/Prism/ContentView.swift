@@ -31,12 +31,6 @@ enum MarkdownBlockType: Equatable {
     case math(String)
 }
 
-struct CustomWebView: Identifiable, Codable, Equatable {
-    var id = UUID()
-    var name: String
-    var url: String
-}
-
 struct ChatSession: Identifiable, Codable, Equatable {
     var id = UUID()
     var title: String
@@ -1896,10 +1890,7 @@ struct ContentView: View {
     @State private var showQuizMe: Bool = false
     @State private var showImageGen: Bool = false
     @State private var showPDFCreator: Bool = false
-    @State private var showWebView: Bool = false
     @AppStorage("ActiveToolName") private var activeToolName: String = ""
-    @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
-    @AppStorage("SelectedCustomWebViewURL") private var selectedCustomWebViewURL: String = ""
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
     @State private var streamingMessageId: UUID? = nil  // currently streaming message for scroll tracking
@@ -1978,8 +1969,7 @@ struct ContentView: View {
                     showCommands: $showCommands,
                     showQuizMe: $showQuizMe,
                     showImageGen: $showImageGen,
-                    showPDFCreator: $showPDFCreator,
-                    showWebView: $showWebView)
+                    showPDFCreator: $showPDFCreator)
             } detail: {
                 ZStack {
                     // Background Layer
@@ -2025,66 +2015,14 @@ struct ContentView: View {
 
                     // Content Layer — Chat always rendered; tools overlay on top
                     ZStack {
-                        // Chat view (always in tree to prevent rebuild flash)
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                LazyVStack(spacing: 24) {
-                                    let messages = chatManager.getCurrentMessages()
-                                    if messages.isEmpty {
-                                        EmptyStateView(appTheme: appTheme)
-                                    } else {
-                                        let lastMessageId = messages.last?.id
-                                        let lastUserMessageId = messages.last(where: {
-                                            $0.isUser
-                                        })?.id
-                                        ForEach(messages) { message in
-                                            MessageView(
-                                                message: message,
-                                                liveContent: streamBuffer[message.id]
-                                                    ?? nil,
-                                                liveThinking: streamThinkingBuffer[
-                                                    message.id]
-                                                    ?? nil,
-                                                onRegenerate: (!message.isUser
-                                                    && !isLoading
-                                                    && message.id == lastMessageId)
-                                                    ? {
-                                                        regenerateResponse(
-                                                            for: message.id)
-                                                    }
-                                                    : nil,
-                                                onEdit: (message.id == lastUserMessageId
-                                                    && !isLoading)
-                                                    ? { newContent in
-                                                        editAndResend(
-                                                            message: message,
-                                                            newContent: newContent)
-                                                    }
-                                                    : nil,
-                                                canEdit: message.id == lastUserMessageId
-                                                    && !isLoading,
-                                                onImageTap: { img, rect in
-                                                    chatPreviewImage = img
-                                                    chatPreviewSourceRect = rect
-                                                    chatPreviewVisible = true
-                                                },
-                                                onSwitchVersion: (!message.isUser
-                                                    && message.versions != nil
-                                                    && (message.versions?.count ?? 0) > 1)
-                                                    ? { versionIndex in
-                                                        chatManager.switchVersion(
-                                                            messageId: message.id,
-                                                            to: versionIndex)
-                                                    }
-                                                    : nil
-                                            )
-                                            .equatable()
-                                        }
-                                    }
+                        // Chat or Web view (always in tree to prevent rebuild flash)
+                        if isWebViewProvider(selectedProvider) {
+                            ZStack(alignment: .top) {
+                                if let url = getWebURL(for: selectedProvider) {
+                                    WebView(url: url)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 }
-                                .padding()
-                            }
-                            .safeAreaInset(edge: .top) {
+
                                 HeaderView(
                                     selectedProvider: $selectedProvider,
                                     onNewChat: chatManager.createNewSession,
@@ -2092,82 +2030,150 @@ struct ContentView: View {
                                     columnVisibility: columnVisibility
                                 )
                             }
-                            .safeAreaInset(edge: .bottom) {
-                                InputView(
-                                    inputText: $inputText,
-                                    selectedAttachments: $selectedAttachments,
-                                    thinkingLevel: activeThinkingLevel,
-                                    isLoading: isLoading,
-                                    onSend: sendMessage,
-                                    onStop: stopGeneration,
-                                    onSelectAttachment: selectAttachment,
-                                    thinkingMode: thinkingMode,
-                                    isOllama: selectedProvider.contains("Ollama"),
-                                    isGemini: selectedProvider == "Gemini API"
-                                        || selectedProvider.hasPrefix("Gemini API|"),
-                                    isCopilot: selectedProvider == "GitHub Copilot"
-                                        || selectedProvider.hasPrefix("GitHub Copilot|"),
-                                    isNvidia: selectedProvider == "NVIDIA API"
-                                        || selectedProvider.hasPrefix("NVIDIA API|"),
-                                    isGeminiCLI: selectedProvider == "Gemini CLI",
-                                    webSearchEnabled: $webSearchEnabled,
-                                    hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
-                                    onSlashAction: handleSlashAction
-                                )
-                            }
-                            .onChange(of: chatManager.getCurrentMessages().count) {
-                                _, count in
-                                handleScroll(proxy: proxy, newCount: count)
-                            }
-                            .onChange(of: chatManager.currentSessionId) { _, _ in
-                                handleScroll(proxy: proxy)
-                            }
-                            .onChange(of: streamingMessageId) { _, newId in
-                                // Initial scroll when a new streaming message appears
-                                guard let msgId = newId, isLoading else { return }
-                                scrollWorkItem?.cancel()
-                                let work = DispatchWorkItem {
-                                    proxy.scrollTo(msgId, anchor: .bottom)
+                        } else {
+                            ScrollViewReader { proxy in
+                                ScrollView {
+                                    LazyVStack(spacing: 24) {
+                                        let messages = chatManager.getCurrentMessages()
+                                        if messages.isEmpty {
+                                            EmptyStateView(appTheme: appTheme)
+                                        } else {
+                                            let lastMessageId = messages.last?.id
+                                            let lastUserMessageId = messages.last(where: {
+                                                $0.isUser
+                                            })?.id
+                                            ForEach(messages) { message in
+                                                MessageView(
+                                                    message: message,
+                                                    liveContent: streamBuffer[message.id]
+                                                        ?? nil,
+                                                    liveThinking: streamThinkingBuffer[
+                                                        message.id]
+                                                        ?? nil,
+                                                    onRegenerate: (!message.isUser
+                                                        && !isLoading
+                                                        && message.id == lastMessageId)
+                                                        ? {
+                                                            regenerateResponse(
+                                                                for: message.id)
+                                                        }
+                                                        : nil,
+                                                    onEdit: (message.id == lastUserMessageId
+                                                        && !isLoading)
+                                                        ? { newContent in
+                                                            editAndResend(
+                                                                message: message,
+                                                                newContent: newContent)
+                                                        }
+                                                        : nil,
+                                                    canEdit: message.id == lastUserMessageId
+                                                        && !isLoading,
+                                                    onImageTap: { img, rect in
+                                                        chatPreviewImage = img
+                                                        chatPreviewSourceRect = rect
+                                                        chatPreviewVisible = true
+                                                    },
+                                                    onSwitchVersion: (!message.isUser
+                                                        && message.versions != nil
+                                                        && (message.versions?.count ?? 0) > 1)
+                                                        ? { versionIndex in
+                                                            chatManager.switchVersion(
+                                                                messageId: message.id,
+                                                                to: versionIndex)
+                                                        }
+                                                        : nil
+                                                )
+                                                .equatable()
+                                            }
+                                        }
+                                    }
+                                    .padding()
                                 }
-                                scrollWorkItem = work
-                                DispatchQueue.main.asyncAfter(
-                                    deadline: .now() + 0.05, execute: work)
-                            }
-                            .onChange(of: streamBuffer) { _, _ in
-                                // Throttled scroll during streaming — no animation to avoid layout loops
-                                guard isLoading, let msgId = streamingMessageId else { return }
-                                scrollWorkItem?.cancel()
-                                let work = DispatchWorkItem {
-                                    proxy.scrollTo(msgId, anchor: .bottom)
+                                .safeAreaInset(edge: .top) {
+                                    HeaderView(
+                                        selectedProvider: $selectedProvider,
+                                        onNewChat: chatManager.createNewSession,
+                                        chatManager: chatManager,
+                                        columnVisibility: columnVisibility
+                                    )
                                 }
-                                scrollWorkItem = work
-                                DispatchQueue.main.asyncAfter(
-                                    deadline: .now() + 0.3, execute: work)
-                            }
-                            .onChange(of: isLoading) { _, loading in
-                                scrollWorkItem?.cancel()
-                                if !loading {
-                                    // Generation finished — final scroll with animation
-                                    let messages = chatManager.getCurrentMessages()
-                                    if let lastId = messages.last?.id {
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                            withAnimation(.easeOut(duration: 0.2)) {
-                                                proxy.scrollTo(lastId, anchor: .bottom)
+                                .safeAreaInset(edge: .bottom) {
+                                    InputView(
+                                        inputText: $inputText,
+                                        selectedAttachments: $selectedAttachments,
+                                        thinkingLevel: activeThinkingLevel,
+                                        isLoading: isLoading,
+                                        onSend: sendMessage,
+                                        onStop: stopGeneration,
+                                        onSelectAttachment: selectAttachment,
+                                        thinkingMode: thinkingMode,
+                                        isOllama: selectedProvider.contains("Ollama"),
+                                        isGemini: selectedProvider == "Gemini API"
+                                            || selectedProvider.hasPrefix("Gemini API|"),
+                                        isCopilot: selectedProvider == "GitHub Copilot"
+                                            || selectedProvider.hasPrefix("GitHub Copilot|"),
+                                        isNvidia: selectedProvider == "NVIDIA API"
+                                            || selectedProvider.hasPrefix("NVIDIA API|"),
+                                        isGeminiCLI: selectedProvider == "Gemini CLI",
+                                        webSearchEnabled: $webSearchEnabled,
+                                        hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
+                                        onSlashAction: handleSlashAction
+                                    )
+                                }
+                                .onChange(of: chatManager.getCurrentMessages().count) {
+                                    _, count in
+                                    handleScroll(proxy: proxy, newCount: count)
+                                }
+                                .onChange(of: chatManager.currentSessionId) { _, _ in
+                                    handleScroll(proxy: proxy)
+                                }
+                                .onChange(of: streamingMessageId) { _, newId in
+                                    // Initial scroll when a new streaming message appears
+                                    guard let msgId = newId, isLoading else { return }
+                                    scrollWorkItem?.cancel()
+                                    let work = DispatchWorkItem {
+                                        proxy.scrollTo(msgId, anchor: .bottom)
+                                    }
+                                    scrollWorkItem = work
+                                    DispatchQueue.main.asyncAfter(
+                                        deadline: .now() + 0.05, execute: work)
+                                }
+                                .onChange(of: streamBuffer) { _, _ in
+                                    // Throttled scroll during streaming — no animation to avoid layout loops
+                                    guard isLoading, let msgId = streamingMessageId else { return }
+                                    scrollWorkItem?.cancel()
+                                    let work = DispatchWorkItem {
+                                        proxy.scrollTo(msgId, anchor: .bottom)
+                                    }
+                                    scrollWorkItem = work
+                                    DispatchQueue.main.asyncAfter(
+                                        deadline: .now() + 0.3, execute: work)
+                                }
+                                .onChange(of: isLoading) { _, loading in
+                                    scrollWorkItem?.cancel()
+                                    if !loading {
+                                        // Generation finished — final scroll with animation
+                                        let messages = chatManager.getCurrentMessages()
+                                        if let lastId = messages.last?.id {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                withAnimation(.easeOut(duration: 0.2)) {
+                                                    proxy.scrollTo(lastId, anchor: .bottom)
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
+                            .opacity(
+                                showCommands || showModelComparison || showQuizMe || showImageGen
+                                    || showPDFCreator || showImageGallery ? 0 : 1
+                            )
+                            .allowsHitTesting(
+                                !(showCommands || showModelComparison || showQuizMe || showImageGen
+                                    || showPDFCreator || showImageGallery)
+                            )
+                            .transaction { t in t.animation = nil }
                         }
-                        .opacity(
-                            showCommands || showModelComparison || showQuizMe || showImageGen
-                                || showPDFCreator || showImageGallery || showWebView ? 0 : 1
-                        )
-                        .allowsHitTesting(
-                            !(showCommands || showModelComparison || showQuizMe || showImageGen
-                                || showPDFCreator || showImageGallery || showWebView)
-                        )
-                        .transaction { t in t.animation = nil }
 
                         // Tool overlays — rendered on top when active
                         if showCommands {
@@ -2194,32 +2200,6 @@ struct ContentView: View {
                             ImageGalleryView(
                                 chatManager: chatManager, showImageGallery: $showImageGallery
                             )
-                            .transition(.opacity)
-                        }
-                        if showWebView {
-                            ZStack(alignment: .top) {
-                                if isWebViewProvider(selectedProvider),
-                                    let url = getWebURL(for: selectedProvider)
-                                {
-                                    WebView(url: url)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                } else if let url = resolvedCustomWebViewURL() {
-                                    WebView(url: url)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                } else {
-                                    VStack(spacing: 16) {
-                                        Image(systemName: "globe")
-                                            .font(.system(size: 48))
-                                            .foregroundStyle(.secondary.opacity(0.3))
-                                        Text(
-                                            "Add a custom Web View in Settings"
-                                        )
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(.secondary)
-                                    }
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                }
-                            }
                             .transition(.opacity)
                         }
                     }
@@ -2253,26 +2233,8 @@ struct ContentView: View {
             .onChange(of: showPDFCreator) { _, val in
                 updateActiveToolName()
             }
-            .onChange(of: showWebView) { _, val in
-                updateActiveToolName()
-            }
             .onChange(of: showImageGallery) { _, val in
                 updateActiveToolName()
-            }
-
-            // Auto-activate web view tool when Custom or Web provider is selected
-            .onChange(of: selectedProvider) { _, newProvider in
-                if isWebViewProvider(newProvider) {
-                    withAnimation {
-                        showWebView = true
-                        showPDFCreator = false
-                        showImageGen = false
-                        showQuizMe = false
-                        showCommands = false
-                        showModelComparison = false
-                        showImageGallery = false
-                    }
-                }
             }
 
             if !hasSeenWelcome {
@@ -2300,8 +2262,8 @@ struct ContentView: View {
     }
 
     func isWebViewProvider(_ provider: String) -> Bool {
-        return ["Gemini Web", "ChatGPT Web", "Perplexity Web", "Grok Web", "Claude Web"]
-            .contains(provider) || provider.hasPrefix("CustomWebView:")
+        return ["Gemini Web", "ChatGPT Web", "Perplexity Web", "Grok Web", "Claude Web"].contains(
+            provider)
     }
 
     private func updateActiveToolName() {
@@ -2315,8 +2277,6 @@ struct ContentView: View {
             activeToolName = "Image Generation"
         } else if showPDFCreator {
             activeToolName = "File Creator"
-        } else if showWebView {
-            activeToolName = "Web View"
         } else {
             activeToolName = ""
         }
@@ -2329,32 +2289,8 @@ struct ContentView: View {
         case "Perplexity Web": return URL(string: "https://www.perplexity.ai")
         case "Grok Web": return URL(string: "https://grok.com")
         case "Claude Web": return URL(string: "https://claude.ai")
-        default:
-            if provider.hasPrefix("CustomWebView:") {
-                let urlStr = String(provider.dropFirst("CustomWebView:".count))
-                return URL(string: urlStr)
-            }
-            return nil
+        default: return nil
         }
-    }
-
-    private func customWebViews() -> [CustomWebView] {
-        guard let data = customWebViewsJSON.data(using: .utf8),
-            let views = try? JSONDecoder().decode([CustomWebView].self, from: data)
-        else { return [] }
-        return views
-    }
-
-    private func resolvedCustomWebViewURL() -> URL? {
-        let views = customWebViews()
-        guard !views.isEmpty else { return nil }
-        // Use the selected one, or fall back to the first
-        if !selectedCustomWebViewURL.isEmpty,
-            let url = URL(string: selectedCustomWebViewURL)
-        {
-            return url
-        }
-        return URL(string: views[0].url)
     }
 
     func handleScroll(proxy: ScrollViewProxy, newCount: Int? = nil) {
@@ -2439,11 +2375,6 @@ struct ContentView: View {
 
     func sendMessage() {
         guard !isLoading else { return }
-        // Don't send to AI when a tool is active
-        guard
-            !showCommands && !showModelComparison && !showQuizMe && !showImageGen
-                && !showPDFCreator && !showWebView && !showImageGallery
-        else { return }
         guard
             !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !selectedAttachments.isEmpty
@@ -3172,7 +3103,6 @@ struct SidebarView: View {
     @Binding var showQuizMe: Bool
     @Binding var showImageGen: Bool
     @Binding var showPDFCreator: Bool
-    @Binding var showWebView: Bool
     @Namespace private var animation
 
     @AppStorage("ShowCompare") private var showCompareTool: Bool = true
@@ -3180,9 +3110,8 @@ struct SidebarView: View {
     @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
     @AppStorage("ShowImageGen") private var showImageGenTool: Bool = true
     @AppStorage("ShowPDFCreator") private var showPDFCreatorTool: Bool = true
-    @AppStorage("ShowWebView") private var showWebViewTool: Bool = true
     @AppStorage("ToolOrder") private var toolOrderRaw: String =
-        "compare,commands,quizme,imagegen,pdfcreator,webview"
+        "compare,commands,quizme,imagegen,pdfcreator"
     @State private var showCustomizeTools: Bool = false
     @State private var draggedTool: String? = nil
 
@@ -3216,7 +3145,6 @@ struct SidebarView: View {
                 showQuizMe = false
                 showImageGen = false
                 showPDFCreator = false
-                showWebView = false
                 chatManager.createNewSession()
             }
 
@@ -3309,7 +3237,6 @@ struct SidebarView: View {
                                         showQuizMe = false
                                         showImageGen = false
                                         showPDFCreator = false
-                                        showWebView = false
                                         chatManager.currentSessionId = session.id
                                         isSearchVisible = false
                                     }) {
@@ -3374,7 +3301,6 @@ struct SidebarView: View {
                     showQuizMe = false
                     showImageGen = false
                     showPDFCreator = false
-                    showWebView = false
                     chatManager.currentSessionId = nil
                 }
             }
@@ -3410,7 +3336,6 @@ struct SidebarView: View {
                             showQuizMe = false
                             showImageGen = false
                             showPDFCreator = false
-                            showWebView = false
                             chatManager.currentSessionId = nil
                         }
                     }
@@ -3423,7 +3348,6 @@ struct SidebarView: View {
                             showQuizMe = false
                             showImageGen = false
                             showPDFCreator = false
-                            showWebView = false
                             chatManager.currentSessionId = nil
                         }
                     }
@@ -3438,7 +3362,6 @@ struct SidebarView: View {
                             showImageGallery = false
                             showImageGen = false
                             showPDFCreator = false
-                            showWebView = false
                             chatManager.currentSessionId = nil
                         }
                     }
@@ -3453,7 +3376,6 @@ struct SidebarView: View {
                             showModelComparison = false
                             showImageGallery = false
                             showPDFCreator = false
-                            showWebView = false
                             chatManager.currentSessionId = nil
                         }
                     }
@@ -3463,22 +3385,6 @@ struct SidebarView: View {
                     ) {
                         withAnimation {
                             showPDFCreator = true
-                            showImageGen = false
-                            showQuizMe = false
-                            showCommands = false
-                            showModelComparison = false
-                            showImageGallery = false
-                            showWebView = false
-                            chatManager.currentSessionId = nil
-                        }
-                    }
-                } else if toolId == "webview" && showWebViewTool {
-                    SidebarItem(
-                        icon: "globe", title: "Web View", isSelected: showWebView
-                    ) {
-                        withAnimation {
-                            showWebView = true
-                            showPDFCreator = false
                             showImageGen = false
                             showQuizMe = false
                             showCommands = false
@@ -3534,12 +3440,6 @@ struct SidebarView: View {
                     .controlSize(.small)
                     Toggle(isOn: $showPDFCreatorTool) {
                         Label("File Creator", systemImage: "doc.richtext")
-                            .font(.system(size: 12))
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    Toggle(isOn: $showWebViewTool) {
-                        Label("Web View", systemImage: "globe")
                             .font(.system(size: 12))
                     }
                     .toggleStyle(.switch)
@@ -3612,7 +3512,7 @@ struct SidebarView: View {
 
     private var toolOrder: [String] {
         let raw = toolOrderRaw.split(separator: ",").map(String.init)
-        let allTools = ["compare", "commands", "quizme", "imagegen", "pdfcreator", "webview"]
+        let allTools = ["compare", "commands", "quizme", "imagegen", "pdfcreator"]
         // Ensure all tools are present (handle new tools added after first save)
         var order = raw.filter { allTools.contains($0) }
         for tool in allTools where !order.contains(tool) {
@@ -3628,7 +3528,6 @@ struct SidebarView: View {
         case "quizme": return "questionmark.bubble"
         case "imagegen": return "paintbrush"
         case "pdfcreator": return "doc.richtext"
-        case "webview": return "globe"
         default: return "questionmark"
         }
     }
@@ -3640,7 +3539,6 @@ struct SidebarView: View {
         case "quizme": return "Quiz Me"
         case "imagegen": return "Image Generation"
         case "pdfcreator": return "File Creator"
-        case "webview": return "Web View"
         default: return id
         }
     }
@@ -3718,7 +3616,7 @@ struct SidebarView: View {
         SidebarRow(
             session: session,
             isSelected: !showImageGallery && !showModelComparison && !showCommands
-                && !showQuizMe && !showWebView
+                && !showQuizMe
                 && chatManager.currentSessionId == session.id,
             isRenaming: renamingSessionId == session.id,
             renameText: $renameText,
@@ -3729,7 +3627,6 @@ struct SidebarView: View {
                 showCommands = false
                 showQuizMe = false
                 showImageGen = false
-                showWebView = false
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                     chatManager.currentSessionId = session.id
                 }
@@ -4021,14 +3918,6 @@ struct HeaderView: View {
     @ObservedObject private var accountManager = AccountManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var geminiCLIService = GeminiCLIService.shared
-    @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
-
-    private var customWebViews: [CustomWebView] {
-        guard let data = customWebViewsJSON.data(using: .utf8),
-            let views = try? JSONDecoder().decode([CustomWebView].self, from: data)
-        else { return [] }
-        return views
-    }
 
     var body: some View {
         HStack {
@@ -4169,13 +4058,6 @@ struct HeaderView: View {
                             }
                         }
                     }
-                    ForEach(customWebViews) { webView in
-                        Button(action: { selectedProvider = "CustomWebView:\(webView.url)" }) {
-                            Label(
-                                webView.name.isEmpty ? webView.url : webView.name,
-                                systemImage: "globe")
-                        }
-                    }
                 }
 
             } label: {
@@ -4246,13 +4128,6 @@ struct HeaderView: View {
                 }
             }
         }
-        if provider.hasPrefix("CustomWebView:") {
-            let urlStr = String(provider.dropFirst("CustomWebView:".count))
-            if let wv = customWebViews.first(where: { $0.url == urlStr }), !wv.name.isEmpty {
-                return wv.name
-            }
-            return urlStr
-        }
         return provider
     }
 
@@ -4273,9 +4148,7 @@ struct HeaderView: View {
         case "Perplexity Web": return "magnifyingglass"
         case "Grok Web": return "bolt.horizontal"
         case "Claude Web": return "brain.head.profile"
-        default:
-            if base.hasPrefix("CustomWebView:") { return "globe" }
-            return "cpu"
+        default: return "cpu"
         }
     }
 
@@ -7128,12 +7001,6 @@ struct SettingsView: View {
     @State private var editingAccountId: UUID? = nil
     @State private var editingAccountName: String = ""
 
-    // Custom web views
-    @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
-    @State private var showAddCustomWebView = false
-    @State private var newWebViewName = ""
-    @State private var newWebViewURL = ""
-
     // MARK: - Updates Section
 
     @ViewBuilder
@@ -7939,96 +7806,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Custom Web Views Section
-
-    @ViewBuilder
-    private var customProviderSection: some View {
-        Section(header: Label("Custom Web Views", systemImage: "macwindow")) {
-            HStack {
-                Text("Add web-based AI chats to the Web View tool.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(action: { showAddCustomWebView = true }) {
-                    Label("Add Web View", systemImage: "plus")
-                }
-                .buttonStyle(.borderless)
-            }
-
-            let webViews = customWebViewsList()
-            if webViews.isEmpty {
-                Text("No custom web views added yet.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(webViews) { webView in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(webView.name.isEmpty ? "Untitled" : webView.name)
-                                .font(.body)
-                            Text(webView.url)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                        Spacer()
-                        Button(action: { removeCustomWebView(id: webView.id) }) {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                }
-            }
-        }
-        .alert("Add Custom Web View", isPresented: $showAddCustomWebView) {
-            TextField("Name (e.g. My AI Chat)", text: $newWebViewName)
-            TextField("URL (e.g. https://example.com)", text: $newWebViewURL)
-            Button("Add") {
-                addCustomWebView(name: newWebViewName, url: newWebViewURL)
-                newWebViewName = ""
-                newWebViewURL = ""
-            }
-            Button("Cancel", role: .cancel) {
-                newWebViewName = ""
-                newWebViewURL = ""
-            }
-        } message: {
-            Text("Enter a name and URL for the web view.")
-        }
-    }
-
-    private func customWebViewsList() -> [CustomWebView] {
-        guard let data = customWebViewsJSON.data(using: .utf8),
-            let views = try? JSONDecoder().decode([CustomWebView].self, from: data)
-        else { return [] }
-        return views
-    }
-
-    private func addCustomWebView(name: String, url: String) {
-        var views = customWebViewsList()
-        let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedURL.isEmpty else { return }
-        views.append(
-            CustomWebView(
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines), url: trimmedURL))
-        if let data = try? JSONEncoder().encode(views),
-            let json = String(data: data, encoding: .utf8)
-        {
-            customWebViewsJSON = json
-        }
-    }
-
-    private func removeCustomWebView(id: UUID) {
-        var views = customWebViewsList()
-        views.removeAll { $0.id == id }
-        if let data = try? JSONEncoder().encode(views),
-            let json = String(data: data, encoding: .utf8)
-        {
-            customWebViewsJSON = json
-        }
-    }
-
     // MARK: - System Prompt Section
 
     @ViewBuilder
@@ -8382,7 +8159,6 @@ struct SettingsView: View {
             ollamaSection
             nvidiaSection
             copilotSection
-            customProviderSection
 
             systemPromptSection
             autocompleteSections
