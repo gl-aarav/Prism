@@ -210,15 +210,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ application: NSApplication) -> NSApplication.TerminateReply {
         // Intercept quit action: instead of quitting, switch to accessory mode
         // This removes the app from the Dock but keeps it running for Quick AI hotkeys
-        
+
         // Hide all windows
         for window in NSApp.windows {
             window.orderOut(nil)
         }
-        
+
         // Switch to accessory mode (removes from Dock)
         NSApp.setActivationPolicy(.accessory)
-        
+
         // Cancel the termination
         return .terminateCancel
     }
