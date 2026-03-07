@@ -11,6 +11,7 @@ struct PrismApp: App {
                 .environmentObject(AppState.shared)  // If needed or just environmentObject(ChatManager.shared)
                 .navigationTitle("Prism")
         }
+        .defaultSize(width: 1200, height: 800)
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .appInfo) {
@@ -79,6 +80,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         // Force main window to appear if needed
+        // Observe new windows becoming main to auto-zoom them
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main
+        ) { notification in
+            guard let window = notification.object as? NSWindow,
+                !(window is QuickAIPanel),
+                !(window is WebOverlayPanel),
+                !(window is NSPanel)
+            else { return }
+            // Zoom the window to fill the screen if it isn't already zoomed
+            if !window.isZoomed {
+                window.zoom(nil)
+            }
+        }
+
         DispatchQueue.main.async {
             // Find the main window (not the Quick AI panel or Web Overlay)
             if let window = NSApp.windows.first(where: {
@@ -88,7 +104,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window.styleMask.insert(.fullSizeContentView)
                 window.isReleasedWhenClosed = false
                 window.makeKeyAndOrderFront(nil)
-                window.center()
+                // Zoom to fill the screen instead of centering at default size
+                window.zoom(nil)
             }
         }
 
