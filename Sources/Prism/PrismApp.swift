@@ -90,6 +90,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // When the main window closes via Cmd+W, just hide it instead of closing
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: nil, queue: .main
+        ) { notification in
+            guard let window = notification.object as? NSWindow,
+                !(window is QuickAIPanel),
+                !(window is WebOverlayPanel),
+                !(window is NSPanel)
+            else { return }
+            // Keep the window around so it can be re-shown
+            window.isReleasedWhenClosed = false
+        }
+
         QuickAIManager.shared.setup()
         WebOverlayManager.shared.setup()
 
@@ -201,7 +214,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Keep the app running when the user closes the window with Cmd+W
         return false
     }
 
@@ -214,40 +226,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // If no windows are visible (excluding Quick AI / Web Overlay), show the main window
-        let visibleWindows = NSApp.windows.filter {
-            $0.isVisible && !($0 is QuickAIPanel) && !($0 is WebOverlayPanel)
-        }
-        if visibleWindows.isEmpty {
-            for window in NSApp.windows {
-                if !(window is QuickAIPanel) && !(window is WebOverlayPanel) {
-                    window.makeKeyAndOrderFront(nil)
-                    return
-                }
-            }
-        }
+        showOrCreateMainWindow()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool)
         -> Bool
     {
-        // If Quick AI or Web Overlay is open, we don't want to force the main window to open
-        if let panel = QuickAIManager.shared.panel, panel.isVisible {
-            return true
-        }
-        if let panel = WebOverlayManager.shared.panel, panel.isVisible {
-            return true
-        }
+        showOrCreateMainWindow()
+        return false
+    }
 
-        if !flag {
-            // If no windows are visible (excluding panels), show the main window
-            for window in NSApp.windows {
-                if !(window is QuickAIPanel) && !(window is WebOverlayPanel) {
-                    window.makeKeyAndOrderFront(nil)
-                    return false
-                }
+    private func showOrCreateMainWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+
+        // Find any main window and show it
+        for window in NSApp.windows {
+            if !(window is QuickAIPanel) && !(window is WebOverlayPanel) && !(window is NSPanel) {
+                window.makeKeyAndOrderFront(nil)
+                return
             }
         }
-        return true
     }
 }

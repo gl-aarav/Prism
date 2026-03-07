@@ -86,49 +86,49 @@ struct QuickAIView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
+                // Tool access banner — always visible when a tool is active
+                if !activeToolName.isEmpty {
+                    HStack(spacing: 8) {
+                        Image(systemName: "wrench.and.screwdriver")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.orange)
+                        Text("Using **\(activeToolName)**")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button(action: {
+                            activeToolName = ""
+                            chatManager.createNewSession()
+                            withAnimation(collapseAnimation) {
+                                isExpanded = false
+                            }
+                        }) {
+                            Text("New Chat")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.primary.opacity(0.8))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.secondary.opacity(0.12))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.orange.opacity(0.06))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .stroke(Color.orange.opacity(0.15), lineWidth: 0.5)
+                            )
+                    )
+                }
+
                 if isExpanded {
                     VStack(spacing: 12) {
-                        // Tool access banner
-                        if !activeToolName.isEmpty {
-                            HStack(spacing: 8) {
-                                Image(systemName: "wrench.and.screwdriver")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(.orange)
-                                Text("Currently viewing **\(activeToolName)** tool")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Button(action: {
-                                    activeToolName = ""
-                                    chatManager.createNewSession()
-                                    withAnimation(collapseAnimation) {
-                                        isExpanded = false
-                                    }
-                                }) {
-                                    Text("New Chat")
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(.primary.opacity(0.8))
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 4)
-                                        .background(
-                                            Capsule()
-                                                .fill(Color.secondary.opacity(0.12))
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .fill(Color.orange.opacity(0.06))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .stroke(Color.orange.opacity(0.15), lineWidth: 0.5)
-                                    )
-                            )
-                        }
-
                         messagesSection
                             .safeAreaInset(edge: .top) {
                                 headerSection
@@ -296,6 +296,11 @@ struct QuickAIView: View {
             targetHeight += autocompleteHeight
         }
 
+        // Add extra height for the tool banner
+        if !activeToolName.isEmpty {
+            targetHeight += 40
+        }
+
         onResize?(CGSize(width: baseWidth, height: targetHeight))
     }
 
@@ -387,6 +392,9 @@ struct QuickAIView: View {
     }
 
     func sendMessage() {
+        // Don't send messages while a tool is active
+        guard activeToolName.isEmpty else { return }
+
         guard
             !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !selectedAttachments.isEmpty
