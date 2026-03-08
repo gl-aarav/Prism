@@ -4653,8 +4653,8 @@ class PasteMonitor: ObservableObject {
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
             if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "v" {
-                // Skip if the event targets the QuickAI panel
-                if event.window is QuickAIPanel { return event }
+                // Skip if the event targets the QuickAI panel or Web Overlay panel
+                if event.window is QuickAIPanel || event.window is WebOverlayPanel { return event }
                 let pb = NSPasteboard.general
                 var newAttachments: [Attachment] = []
 
