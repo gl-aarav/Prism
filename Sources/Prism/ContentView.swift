@@ -7036,7 +7036,8 @@ struct SettingsView: View {
     @AppStorage("EnablePreReleaseUpdates") private var enablePreRelease: Bool = false
     @AppStorage("EnableWebOverlay") private var enableWebOverlay: Bool = true
     @AppStorage("QuickAIClickOutsideCloses") private var quickAIClickOutsideCloses: Bool = false
-    @AppStorage("WebOverlayClickOutsideCloses") private var webOverlayClickOutsideCloses: Bool = false
+    @AppStorage("WebOverlayClickOutsideCloses") private var webOverlayClickOutsideCloses: Bool =
+        false
     @AppStorage("WebOverlayBackgroundOpacity") private var webOverlayBackgroundOpacity: Double =
         0.25
     @AppStorage("WebOverlayTintIntensity") private var webOverlayTintIntensity: Double = 0.5
