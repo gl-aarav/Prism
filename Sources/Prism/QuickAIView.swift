@@ -43,6 +43,8 @@ struct QuickAIView: View {
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
+    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
+        "gemini-2.5-flash"
     @AppStorage("NvidiaKey") private var nvidiaKey: String = ""
     @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
         "llama-3.1-70b-instruct"
@@ -50,6 +52,7 @@ struct QuickAIView: View {
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
     @ObservedObject var copilotService = GitHubCopilotService.shared
+    @ObservedObject var geminiCLIService = GeminiCLIService.shared
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
     private var clampedBackgroundOpacity: Double {
@@ -311,6 +314,7 @@ struct QuickAIView: View {
         case "Ollama": return "laptopcomputer"
         case "ChatGPT": return "message"
         case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
+        case "Gemini CLI": return "terminal"
         case "NVIDIA API": return "bolt.fill"
         default: return "cpu"
         }
@@ -746,6 +750,59 @@ struct QuickAIView: View {
                             accountId: copilotAccountId
                         )
                     {
+                        fullContent += contentChunk
+
+                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                            let contentToUpdate = fullContent
+                            DispatchQueue.main.async {
+                                self.chatManager.updateMessage(
+                                    id: aiMsgId, content: contentToUpdate, isStreaming: true)
+                            }
+                            lastUpdateTime = Date()
+                        }
+                    }
+
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: fullContent, isStreaming: false)
+                        if let versions = existingVersions {
+                            self.chatManager.attachVersions(versions, to: aiMsgId)
+                        }
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                            isStreaming: false)
+                        self.chatManager.finalizeMessageUpdate()
+                        self.isLoading = false
+                    }
+                }
+            } else if selectedProvider == "Gemini CLI" {
+                let aiMsgId = UUID()
+                var aiMsg = Message(
+                    content: "",
+                    model:
+                        "Gemini CLI: \(GeminiCLIService.shared.displayName(for: selectedGeminiCLIModel))",
+                    isUser: false)
+                aiMsg.id = aiMsgId
+                aiMsg.isStreaming = true
+
+                DispatchQueue.main.async {
+                    self.chatManager.addMessage(aiMsg)
+                }
+
+                do {
+                    var fullContent = ""
+                    var lastUpdateTime = Date()
+
+                    for try await contentChunk in GeminiCLIService.shared.sendMessageStream(
+                        history: chatManager.getCurrentMessages(),
+                        model: selectedGeminiCLIModel,
+                        systemPrompt: systemPrompt
+                    ) {
                         fullContent += contentChunk
 
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
@@ -1844,6 +1901,11 @@ extension QuickAIView {
                             }
                         }
                     }
+                    if geminiCLIService.isAvailable {
+                        Button(action: { selectedProvider = "Gemini CLI" }) {
+                            Label("Gemini CLI", systemImage: getProviderIcon("Gemini CLI"))
+                        }
+                    }
                 }
                 Section("Shortcuts") {
                     Button(action: { selectedProvider = "Private Cloud" }) {
@@ -2480,6 +2542,34 @@ extension QuickAIView {
                     .menuStyle(.borderlessButton)
                     .tint(colorScheme == .dark ? .white : .black)
                     .help("Select Copilot Model")
+                }
+
+                // Gemini CLI model picker
+                if selectedProvider == "Gemini CLI" {
+                    Menu {
+                        ForEach(GeminiCLIService.availableModels, id: \.id) { model in
+                            Button(action: { selectedGeminiCLIModel = model.id }) {
+                                if selectedGeminiCLIModel == model.id {
+                                    Label(model.name, systemImage: "checkmark")
+                                        .foregroundStyle(
+                                            colorScheme == .dark
+                                                ? Color.white : Color.primary)
+                                } else {
+                                    Text(model.name)
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "terminal")
+                            .font(.system(size: 16))
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .padding(6)
+                            .background(Circle().fill(Color.primary.opacity(0.06)))
+                            .glassEffect(.regular, in: .circle)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .tint(colorScheme == .dark ? .white : .black)
+                    .help("Select Gemini CLI Model")
                 }
 
                 // NVIDIA model picker
