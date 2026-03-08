@@ -1161,8 +1161,6 @@ struct PDFCreatorView: View {
     @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
         "llama-3.1-70b-instruct"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
-    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
-        "gemini-2.5-flash"
     @AppStorage("PDFProvider") private var pdfProvider: String = "Gemini API"
     @AppStorage("PDFModel") private var pdfModel: String = "gemini-2.5-flash"
     @Environment(\.colorScheme) private var colorScheme
@@ -1173,7 +1171,6 @@ struct PDFCreatorView: View {
     @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
-    @ObservedObject private var geminiCLIService = GeminiCLIService.shared
 
     @State private var prompt: String = ""
     @State private var selectedPageSize: String = "Letter"
@@ -1211,7 +1208,6 @@ struct PDFCreatorView: View {
         case "Ollama": return "laptopcomputer"
         case "NVIDIA API": return "bolt.fill"
         case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
-        case "Gemini CLI": return "terminal"
         default: return "cpu"
         }
     }
@@ -1858,18 +1854,6 @@ struct PDFCreatorView: View {
                             }
                         }
                     }
-                    if geminiCLIService.isAvailable {
-                        Menu("Gemini CLI") {
-                            ForEach(GeminiCLIService.availableModels, id: \.id) { model in
-                                Button(action: {
-                                    pdfProvider = "Gemini CLI"
-                                    pdfModel = model.id
-                                }) {
-                                    Text(model.name)
-                                }
-                            }
-                        }
-                    }
                 } label: {
                     Image(systemName: providerIcon)
                         .font(.system(size: 14, weight: .medium))
@@ -2414,20 +2398,6 @@ struct PDFCreatorView: View {
                         return
                     }
                     for try await (chunk, _) in copilotService.sendMessageStream(
-                        history: history, model: pdfModel, systemPrompt: systemPrompt
-                    ) {
-                        fullContent += chunk
-                    }
-
-                case "Gemini CLI":
-                    guard geminiCLIService.isAvailable else {
-                        await MainActor.run {
-                            generationError = "Gemini CLI not available. Please install it first."
-                            isGenerating = false
-                        }
-                        return
-                    }
-                    for try await chunk in geminiCLIService.sendMessageStream(
                         history: history, model: pdfModel, systemPrompt: systemPrompt
                     ) {
                         fullContent += chunk

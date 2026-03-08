@@ -75,7 +75,6 @@ struct ModelComparisonView: View {
     @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
-    @ObservedObject private var geminiCLIService = GeminiCLIService.shared
     @ObservedObject private var state = ComparisonStateManager.shared
 
     @AppStorage("ComparePrompt") private var prompt: String = ""
@@ -154,7 +153,6 @@ struct ModelComparisonView: View {
                         geminiManager: geminiManager,
                         nvidiaManager: nvidiaManager,
                         copilotModelManager: copilotModelManager,
-                        geminiCLIService: geminiCLIService,
                         hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
                         hasNvidiaKey: !nvidiaKey.isEmpty,
                         hasCopilotAuth: copilotService.isAuthenticated,
@@ -519,24 +517,6 @@ struct ModelComparisonView: View {
                             }
                         }
                     }
-                    if geminiCLIService.isAvailable {
-                        Menu("Gemini CLI") {
-                            ForEach(GeminiCLIService.availableModels, id: \.id) { model in
-                                Button(action: {
-                                    synthesizeProvider = "Gemini CLI"
-                                    synthesizeModel = model.id
-                                }) {
-                                    if synthesizeProvider == "Gemini CLI"
-                                        && synthesizeModel == model.id
-                                    {
-                                        Label(model.name, systemImage: "checkmark")
-                                    } else {
-                                        Text(model.name)
-                                    }
-                                }
-                            }
-                        }
-                    }
                     Divider()
                     Section("Shortcuts") {
                         Button(action: {
@@ -800,7 +780,6 @@ struct ModelComparisonView: View {
         case "Ollama": return "laptopcomputer"
         case "NVIDIA API": return "bolt.fill"
         case "GitHub Copilot": return "person.crop.circle"
-        case "Gemini CLI": return "terminal"
         case "ChatGPT": return "message"
         case "Private Cloud": return "lock.icloud"
         default: return "cpu"
@@ -1031,23 +1010,6 @@ struct ModelComparisonView: View {
                     let finalCopilotContent = full
                     await MainActor.run { state.synthesizedResponse = finalCopilotContent }
 
-                case "Gemini CLI":
-                    guard GeminiCLIService.shared.isAvailable else {
-                        await MainActor.run {
-                            state.synthesizedResponse = "Error: Gemini CLI not available."
-                            isSynthesizing = false
-                        }
-                        return
-                    }
-                    var full = ""
-                    for try await chunk in GeminiCLIService.shared.sendMessageStream(
-                        history: history, model: synthesizeModel, systemPrompt: ""
-                    ) {
-                        full += chunk
-                        let content = full
-                        await MainActor.run { state.synthesizedResponse = content }
-                    }
-
                 case "ChatGPT":
                     let result = try await shortcutService.runShortcut(
                         name: shortcutChatGPT, input: synthesisPrompt, image: nil)
@@ -1090,7 +1052,6 @@ struct ModelComparisonView: View {
             ("Gemini API", "gemini-2.5-pro"),
             ("NVIDIA API", "meta/llama-3.3-70b-instruct"),
             ("GitHub Copilot", "gpt-4o"),
-            ("Gemini CLI", "gemini-2.5-flash"),
             ("Gemini API", "gemini-2.5-flash-lite"),
             ("Ollama", "deepseek-r1"),
             ("ChatGPT", "ChatGPT"),
@@ -1393,38 +1354,6 @@ struct ModelComparisonView: View {
                             }
                         }
 
-                    case "Gemini CLI":
-                        guard GeminiCLIService.shared.isAvailable else {
-                            await MainActor.run {
-                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    state.slots[idx].error = "Gemini CLI not available"
-                                    state.slots[idx].isLoading = false
-                                }
-                            }
-                            return
-                        }
-                        var fullContent = ""
-                        for try await chunk in GeminiCLIService.shared.sendMessageStream(
-                            history: history, model: model, systemPrompt: systemPrompt
-                        ) {
-                            fullContent += chunk
-                            let content = fullContent
-                            await MainActor.run {
-                                if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                    state.slots[idx].response = content
-                                }
-                            }
-                        }
-                        let cliElapsed = Date().timeIntervalSince(startTime)
-                        let finalCLIContent = fullContent
-                        await MainActor.run {
-                            if let idx = slots.firstIndex(where: { $0.id == slotId }) {
-                                state.slots[idx].response = finalCLIContent
-                                state.slots[idx].isLoading = false
-                                state.slots[idx].elapsedTime = cliElapsed
-                            }
-                        }
-
                     case "ChatGPT":
                         let shortcutName = self.shortcutChatGPT
                         let result = try await shortcutService.runShortcut(
@@ -1501,7 +1430,6 @@ struct ComparisonCard: View {
     @ObservedObject var geminiManager: GeminiModelManager
     @ObservedObject var nvidiaManager: NvidiaModelManager
     @ObservedObject var copilotModelManager: GitHubCopilotModelManager
-    @ObservedObject var geminiCLIService: GeminiCLIService
     var hasOllamaAPIKey: Bool = false
     var hasNvidiaKey: Bool = false
     var hasCopilotAuth: Bool = false
@@ -1524,7 +1452,6 @@ struct ComparisonCard: View {
         case "Ollama": return "laptopcomputer"
         case "NVIDIA API": return "bolt.fill"
         case "GitHub Copilot": return "person.crop.circle"
-        case "Gemini CLI": return "terminal"
         case "ChatGPT": return "message"
         case "Private Cloud": return "lock.icloud"
         default: return "cpu"
@@ -1856,19 +1783,6 @@ struct ComparisonCard: View {
                                     systemImage: "checkmark")
                             } else {
                                 Text(copilotModelManager.displayName(for: model))
-                            }
-                        }
-                    }
-                }
-            }
-            if geminiCLIService.isAvailable {
-                Menu("Gemini CLI") {
-                    ForEach(GeminiCLIService.availableModels, id: \.id) { model in
-                        Button(action: { onChangeProvider("Gemini CLI", model.id) }) {
-                            if slot.provider == "Gemini CLI" && slot.model == model.id {
-                                Label(model.name, systemImage: "checkmark")
-                            } else {
-                                Text(model.name)
                             }
                         }
                     }

@@ -134,8 +134,6 @@ struct QuizMeView: View {
     @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
         "llama-3.1-70b-instruct"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
-    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
-        "gemini-2.5-flash"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("QuizProvider") private var quizProvider: String = "Gemini API"
@@ -146,7 +144,6 @@ struct QuizMeView: View {
     @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
-    @ObservedObject private var geminiCLIService = GeminiCLIService.shared
     @StateObject private var store = QuizStore.shared
 
     @State private var activeSessionId: UUID? = nil
@@ -1325,18 +1322,6 @@ struct QuizMeView: View {
                             }
                         }
                     }
-                    if geminiCLIService.isAvailable {
-                        Menu("Gemini CLI") {
-                            ForEach(GeminiCLIService.availableModels, id: \.id) { model in
-                                Button(action: {
-                                    quizProvider = "Gemini CLI"
-                                    quizModel = model.id
-                                }) {
-                                    Text(model.name)
-                                }
-                            }
-                        }
-                    }
                 } label: {
                     Image(systemName: providerIcon)
                         .font(.system(size: 14, weight: .medium))
@@ -1585,7 +1570,6 @@ struct QuizMeView: View {
         case "Ollama": return "laptopcomputer"
         case "NVIDIA API": return "bolt.fill"
         case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
-        case "Gemini CLI": return "terminal"
         default: return "cpu"
         }
     }
@@ -1752,12 +1736,6 @@ struct QuizMeView: View {
                     }
                 case "GitHub Copilot":
                     for try await (chunk, _) in copilotService.sendMessageStream(
-                        history: history, model: quizModel, systemPrompt: ""
-                    ) {
-                        fullContent += chunk
-                    }
-                case "Gemini CLI":
-                    for try await chunk in geminiCLIService.sendMessageStream(
                         history: history, model: quizModel, systemPrompt: ""
                     ) {
                         fullContent += chunk
@@ -1984,20 +1962,6 @@ struct QuizMeView: View {
                         return
                     }
                     for try await (chunk, _) in copilotService.sendMessageStream(
-                        history: history, model: quizModel, systemPrompt: ""
-                    ) {
-                        fullContent += chunk
-                    }
-
-                case "Gemini CLI":
-                    guard geminiCLIService.isAvailable else {
-                        await MainActor.run {
-                            generationError = "Gemini CLI not available. Please install it first."
-                            isGenerating = false
-                        }
-                        return
-                    }
-                    for try await chunk in geminiCLIService.sendMessageStream(
                         history: history, model: quizModel, systemPrompt: ""
                     ) {
                         fullContent += chunk

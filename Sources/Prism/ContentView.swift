@@ -2138,7 +2138,6 @@ struct ContentView: View {
                                         || selectedProvider.hasPrefix("GitHub Copilot|"),
                                     isNvidia: selectedProvider == "NVIDIA API"
                                         || selectedProvider.hasPrefix("NVIDIA API|"),
-                                    isGeminiCLI: selectedProvider == "Gemini CLI",
                                     webSearchEnabled: $webSearchEnabled,
                                     hasOllamaAPIKey: !ollamaAPIKey.isEmpty,
                                     onSlashAction: handleSlashAction
@@ -2937,65 +2936,6 @@ struct ContentView: View {
                             accountId: copilotAccountId
                         )
                     {
-                        fullContent += contentChunk
-
-                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
-                            let contentSnapshot = fullContent
-                            DispatchQueue.main.async {
-                                self.streamBuffer[aiMsgId] = contentSnapshot
-                            }
-                            lastUpdateTime = Date()
-                        }
-                    }
-                    DispatchQueue.main.async {
-                        self.streamBuffer.removeValue(forKey: aiMsgId)
-                        self.streamingMessageId = nil
-                        self.chatManager.updateMessage(
-                            id: aiMsgId, content: fullContent, isStreaming: false)
-                        if let versions = existingVersions {
-                            self.chatManager.attachVersions(versions, to: aiMsgId)
-                        }
-                        self.chatManager.finalizeMessageUpdate()
-                        self.isLoading = false
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        self.streamBuffer.removeValue(forKey: aiMsgId)
-                        self.streamingMessageId = nil
-                        self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
-                            isStreaming: false)
-                        self.chatManager.finalizeMessageUpdate()
-                        self.isLoading = false
-                    }
-                }
-            } else if selectedProvider == "Gemini CLI" {
-                // Gemini CLI
-                let geminiCLIModel =
-                    UserDefaults.standard.string(forKey: "SelectedGeminiCLIModel")
-                    ?? "gemini-2.5-flash"
-                let aiMsgId = UUID()
-                var aiMsg = Message(
-                    content: "",
-                    model:
-                        "Gemini CLI: \(GeminiCLIService.shared.displayName(for: geminiCLIModel))",
-                    isUser: false)
-                aiMsg.id = aiMsgId
-                aiMsg.isStreaming = true
-
-                DispatchQueue.main.async {
-                    self.chatManager.addMessage(aiMsg)
-                    self.streamBuffer[aiMsgId] = ""
-                    self.streamingMessageId = aiMsgId
-                }
-
-                do {
-                    var fullContent = ""
-                    var lastUpdateTime = Date()
-
-                    for try await contentChunk in GeminiCLIService.shared.sendMessageStream(
-                        history: currentHistory, model: geminiCLIModel, systemPrompt: systemPrompt
-                    ) {
                         fullContent += contentChunk
 
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
@@ -4049,7 +3989,6 @@ struct HeaderView: View {
     var columnVisibility: NavigationSplitViewVisibility = .automatic
     @ObservedObject private var accountManager = AccountManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
-    @ObservedObject private var geminiCLIService = GeminiCLIService.shared
     @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
 
     private var customWebViews: [CustomWebView] {
@@ -4166,14 +4105,6 @@ struct HeaderView: View {
                                         systemImage: getProviderIcon("GitHub Copilot"))
                                 }
                             }
-                        }
-                    }
-                }
-
-                if geminiCLIService.isAvailable {
-                    Section("Gemini CLI") {
-                        Button(action: { selectedProvider = "Gemini CLI" }) {
-                            Label("Gemini CLI", systemImage: getProviderIcon("Gemini CLI"))
                         }
                     }
                 }
@@ -4295,7 +4226,6 @@ struct HeaderView: View {
         case "Ollama", "Ollama 1", "Ollama 2": return "laptopcomputer"
         case "ChatGPT": return "message"
         case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
-        case "Gemini CLI": return "terminal"
         case "NVIDIA API": return "bolt.fill"
         case "Gemini Web": return "sparkles"
         case "ChatGPT Web": return "bubble.left.and.bubble.right"
@@ -4743,7 +4673,6 @@ struct InputView: View {
     var isGemini: Bool = false
     var isCopilot: Bool = false
     var isNvidia: Bool = false
-    var isGeminiCLI: Bool = false
     @Binding var webSearchEnabled: Bool
     var hasOllamaAPIKey: Bool = false
     var onSlashAction: ((String) -> Void)? = nil  // callback for action commands (/clear, /quit, /new)
@@ -4752,14 +4681,11 @@ struct InputView: View {
     @AppStorage("GeminiImageResolution") private var geminiImageResolution: String = "1K"
     @AppStorage("GeminiImageAspectRatio") private var geminiImageAspectRatio: String = "Default"
     @AppStorage("SelectedCopilotModel") private var selectedCopilotModel: String = "gpt-4o"
-    @AppStorage("SelectedGeminiCLIModel") private var selectedGeminiCLIModel: String =
-        "gemini-2.5-flash"
     @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
         "llama-3.1-70b-instruct"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
-    @ObservedObject var geminiCLIService = GeminiCLIService.shared
     @ObservedObject var nvidiaManager = NvidiaModelManager.shared
     @ObservedObject private var slashCommandManager = SlashCommandManager.shared
 
@@ -5166,34 +5092,6 @@ struct InputView: View {
                     } message: {
                         Text("Enter the model name as it appears in the NVIDIA API.")
                     }
-                }
-
-                if isGeminiCLI {
-                    Menu {
-                        ForEach(GeminiCLIService.availableModels, id: \.id) { model in
-                            Button(action: { selectedGeminiCLIModel = model.id }) {
-                                if selectedGeminiCLIModel == model.id {
-                                    Label(model.name, systemImage: "checkmark")
-                                } else {
-                                    Text(model.name)
-                                }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "terminal")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 34, height: 34)
-                            .background(
-                                Circle()
-                                    .fill(
-                                        colorScheme == .dark
-                                            ? Color.white.opacity(0.08)
-                                            : Color.black.opacity(0.04))
-                            )
-                    }
-                    .menuStyle(.borderlessButton)
-                    .help("Select Gemini CLI Model")
                 }
 
                 if thinkingMode != .none {

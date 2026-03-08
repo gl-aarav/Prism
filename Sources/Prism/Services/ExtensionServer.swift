@@ -97,16 +97,6 @@ class ExtensionServer {
                 }
             }
 
-            // Gemini CLI - only show if available
-            if GeminiCLIService.shared.isAvailable {
-                for model in GeminiCLIService.availableModels {
-                    allModels.append([
-                        "id": "geminicli:\(model.id)",
-                        "name": "Gemini CLI: \(model.name)",
-                    ])
-                }
-            }
-
             // NVIDIA API - only show if there are configured accounts with API keys
             let nvidiaAccounts = AccountManager.shared.nvidiaAccounts().filter {
                 !$0.apiKey.isEmpty
@@ -257,7 +247,6 @@ class ExtensionServer {
             let isGemini = modelId.hasPrefix("gemini:")
             let isApple = modelId.hasPrefix("apple:")
             let isCopilot = modelId.hasPrefix("copilot:")
-            let isGeminiCLI = modelId.hasPrefix("geminicli:")
             let isNvidia = modelId.hasPrefix("nvidia:")
 
             // Parse model name and optional account ID (format: "provider:model|accountUUID")
@@ -386,22 +375,6 @@ class ExtensionServer {
                                     accountId: accountId
                                 )
                                 for try await (chunk, _) in stream {
-                                    if !chunk.isEmpty {
-                                        let event = "data: \(try self.jsonEscape(chunk))\n\n"
-                                        try? writer.write(Array(event.utf8))
-                                    }
-                                }
-                            }
-                        } else if isGeminiCLI {
-                            // Gemini CLI
-                            if !GeminiCLIService.shared.isAvailable {
-                                let event =
-                                    "data: \(try self.jsonEscapeDict(["error": "Gemini CLI not found. Install it first."]))\n\n"
-                                try? writer.write(Array(event.utf8))
-                            } else {
-                                for try await chunk in GeminiCLIService.shared.sendMessageStream(
-                                    history: history, model: actualModel, systemPrompt: systemPrompt
-                                ) {
                                     if !chunk.isEmpty {
                                         let event = "data: \(try self.jsonEscape(chunk))\n\n"
                                         try? writer.write(Array(event.utf8))
