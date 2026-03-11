@@ -18,7 +18,7 @@ class PlaywrightEngine {
         this.context = await chromium.launchPersistentContext(PROFILE_DIR, {
             headless: false,
             channel: 'chrome',
-            viewport: { width: 1280, height: 900 },
+            viewport: null,
             args: [
                 '--window-size=1280,900',
                 '--disable-blink-features=AutomationControlled',
@@ -28,6 +28,10 @@ class PlaywrightEngine {
         this.browser = this.context.browser();
         const pages = this.context.pages();
         this.page = pages[0] || await this.context.newPage();
+        // Track new pages so we always know the latest active tab
+        this.context.on('page', (newPage) => {
+            this.page = newPage;
+        });
         return { status: 'launched', engine: 'playwright' };
     }
 
@@ -39,19 +43,20 @@ class PlaywrightEngine {
 
     async screenshot() {
         if (!this.page) throw new Error('Browser not launched');
-        // Sync to whichever tab the user has focused
+        // Use current tracked page directly — no tab cycling
         try {
+            const buffer = await this.page.screenshot({ type: 'png' });
+            return buffer.toString('base64');
+        } catch {
+            // Page may have closed, fall back to last available page
             const pages = this.context.pages();
-            for (const p of pages) {
-                const visible = await p.evaluate(() => document.visibilityState).catch(() => 'hidden');
-                if (visible === 'visible' && p !== this.page) {
-                    this.page = p;
-                    break;
-                }
+            if (pages.length > 0) {
+                this.page = pages[pages.length - 1];
+                const buffer = await this.page.screenshot({ type: 'png' });
+                return buffer.toString('base64');
             }
-        } catch { /* fallback to current this.page */ }
-        const buffer = await this.page.screenshot({ type: 'png' });
-        return buffer.toString('base64');
+            throw new Error('No pages available');
+        }
     }
 
     async click(selector) {
@@ -146,7 +151,28 @@ class PlaywrightEngine {
     async getTabs() {
         if (!this.context) throw new Error('Browser not launched');
         const pages = this.context.pages();
-        return pages.map((p, i) => ({ index: i, url: p.url(), title: '' }));
+        const tabs = [];
+        for (let i = 0; i < pages.length; i++) {
+            let title = '';
+            try { title = await pages[i].title(); } catch { }
+            tabs.push({ index: i, url: pages[i].url(), title });
+        }
+        return tabs;
+    }
+
+    async getTabContent(index) {
+        if (!this.context) throw new Error('Browser not launched');
+        const pages = this.context.pages();
+        if (index < 0 || index >= pages.length) throw new Error('Tab index out of range');
+        const p = pages[index];
+        const content = await p.evaluate(() => {
+            return {
+                url: location.href,
+                title: document.title,
+                content: document.body ? document.body.innerText.substring(0, 20000) : '',
+            };
+        });
+        return content;
     }
 
     async switchTab(index) {

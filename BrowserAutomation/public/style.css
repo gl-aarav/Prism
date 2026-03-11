@@ -875,6 +875,112 @@ body {
     margin-right: 6px;
 }
 
+/* ──────────────────────── COMMAND & TAB DROPDOWNS ──────────────────────── */
+.chat-input-wrapper {
+    position: relative;
+}
+
+.command-dropdown {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    display: none;
+    flex-direction: column;
+    background: var(--glass-bg);
+    backdrop-filter: var(--panel-blur);
+    -webkit-backdrop-filter: var(--panel-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), inset 0 1px 0 var(--border-highlight);
+    z-index: 999;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.command-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 13px;
+}
+
+.command-item:hover,
+.command-item.selected {
+    background: rgba(10, 132, 255, 0.12);
+}
+
+.command-trigger {
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.command-desc {
+    color: var(--text-secondary);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tab-mention-dropdown .command-item {
+    font-size: 12px;
+}
+
+/* ── Mention Pills ── */
+.mention-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 4px;
+}
+
+.mention-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    background: rgba(10, 132, 255, 0.12);
+    border: 1px solid rgba(10, 132, 255, 0.2);
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent);
+    max-width: 200px;
+}
+
+.mention-pill-favicon {
+    width: 12px;
+    height: 12px;
+    border-radius: 2px;
+}
+
+.mention-pill-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mention-pill-remove {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0 2px;
+}
+
+.mention-pill-remove:hover {
+    color: var(--red);
+}
+
 /* ──────────────────────── LIGHT MODE ──────────────────────── */
 html.light-mode {
     --bg-color: #f5f5f7;

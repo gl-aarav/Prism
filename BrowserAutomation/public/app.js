@@ -13,6 +13,22 @@
     let thinkingLevel = 'medium';
     let thinkingDropdownOpen = false;
     let currentThinkingMsg = null;
+    let slashCommands = [
+        { trigger: '/summarize', expansion: 'Summarize the following:' },
+        { trigger: '/explain', expansion: 'Explain the following in detail:' },
+        { trigger: '/translate', expansion: 'Translate the following to English:' },
+        { trigger: '/fix', expansion: 'Fix the grammar and spelling in:' },
+        { trigger: '/code', expansion: 'Write code for the following:' },
+        { trigger: '/rewrite', expansion: 'Rewrite the following to be clearer and more professional:' },
+        { trigger: '/bullets', expansion: 'Convert the following into bullet points:' },
+        { trigger: '/eli5', expansion: 'Explain like I\'m 5:' },
+        { trigger: '/pros-cons', expansion: 'List the pros and cons of:' },
+    ];
+    let cmdFiltered = [];
+    let cmdSelectedIndex = 0;
+    let tabFiltered = [];
+    let tabSelectedIndex = 0;
+    let mentionedTabs = [];
     const AUTO_REFRESH_MS = 1500;
 
     // DOM refs
@@ -34,6 +50,9 @@
     const thinkingBtn = $('#thinkingBtn');
     const thinkingDropdown = $('#thinkingDropdown');
     const themeToggle = $('#themeToggle');
+    const cmdDropdown = $('#cmdDropdown');
+    const tabDropdown = $('#tabDropdown');
+    const mentionPreview = $('#mentionPreview');
 
     // ── WebSocket ──
     function connect() {
@@ -438,7 +457,7 @@
     btnAgentStop.onclick = () => send('agentStop');
 
     // Send message / agent task
-    function sendMessage() {
+    async function sendMessage() {
         const text = chatInput.value.trim();
         if (!text || isStreaming) return;
         const model = modelSelect.value;
@@ -447,19 +466,106 @@
             return;
         }
 
+        // Fetch content from @mentioned tabs
+        let tabContext = '';
+        if (mentionedTabs.length > 0) {
+            for (const mt of mentionedTabs) {
+                try {
+                    const res = await fetch('/api/tabs');
+                    const tabs = await res.json();
+                    const tab = tabs.find(t => t.index === mt.index);
+                    if (tab) {
+                        // Fetch content via a one-shot request
+                        const contentRes = await new Promise((resolve) => {
+                            const handler = (evt) => {
+                                const msg = JSON.parse(evt.data);
+                                if (msg.type === 'result' && msg.action === 'getTabContent') {
+                                    ws.removeEventListener('message', handler);
+                                    resolve(msg.data);
+                                }
+                            };
+                            ws.addEventListener('message', handler);
+                            send('getTabContent', { index: mt.index });
+                            setTimeout(() => { ws.removeEventListener('message', handler); resolve(null); }, 3000);
+                        });
+                        if (contentRes && contentRes.content) {
+                            const truncContent = contentRes.content.length > 20000 ? contentRes.content.substring(0, 20000) + '...' : contentRes.content;
+                            tabContext += `[Tab: ${contentRes.title} (${contentRes.url})]:\n${truncContent}\n\n`;
+                        }
+                    }
+                } catch { /* skip failed tabs */ }
+            }
+            mentionedTabs = [];
+            renderMentionPills();
+        }
+
+        const fullMessage = tabContext ? tabContext + text : text;
         addChatMsg('user', text);
         chatInput.value = '';
 
         if (currentTab === 'agent') {
-            send('agentRun', { task: text, model, thinkingLevel });
+            send('agentRun', { task: fullMessage, model, thinkingLevel });
             btnAgentStop.style.display = 'inline-flex';
         } else {
-            send('chat', { message: text, model, thinkingLevel });
+            send('chat', { message: fullMessage, model, thinkingLevel });
         }
     }
 
     $('#btnSend').onclick = sendMessage;
     chatInput.addEventListener('keydown', (e) => {
+        const cmdVisible = cmdDropdown.style.display === 'flex';
+        const tabVisible = tabDropdown.style.display === 'flex';
+
+        if (cmdVisible) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault(); e.stopPropagation();
+                cmdSelectedIndex = Math.min(cmdSelectedIndex + 1, cmdFiltered.length - 1);
+                renderCommandDropdown();
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault(); e.stopPropagation();
+                cmdSelectedIndex = Math.max(cmdSelectedIndex - 1, 0);
+                renderCommandDropdown();
+                return;
+            }
+            if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+                e.preventDefault(); e.stopPropagation();
+                selectCommand(cmdSelectedIndex);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
+                cmdDropdown.style.display = 'none';
+                return;
+            }
+        }
+
+        if (tabVisible) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault(); e.stopPropagation();
+                tabSelectedIndex = Math.min(tabSelectedIndex + 1, tabFiltered.length - 1);
+                renderTabDropdown();
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault(); e.stopPropagation();
+                tabSelectedIndex = Math.max(tabSelectedIndex - 1, 0);
+                renderTabDropdown();
+                return;
+            }
+            if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+                e.preventDefault(); e.stopPropagation();
+                selectTab(tabSelectedIndex);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
+                tabDropdown.style.display = 'none';
+                return;
+            }
+        }
+
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
@@ -695,6 +801,159 @@
         updateThinkingOptions();
     });
 
+    // ── Slash commands (/ ) ──
+    async function fetchCommands() {
+        try {
+            const res = await fetch('/api/commands');
+            if (res.ok) {
+                const cmds = await res.json();
+                if (Array.isArray(cmds) && cmds.length > 0) {
+                    slashCommands = cmds.map(c => ({ trigger: c.trigger, expansion: c.expansion }));
+                }
+            }
+        } catch { /* use defaults */ }
+    }
+
+    function updateCommandDropdown() {
+        const text = chatInput.value;
+        const slashMatch = text.match(/^\/(\S*)$/);
+        if (!slashMatch) {
+            cmdDropdown.style.display = 'none';
+            return;
+        }
+        const query = slashMatch[1].toLowerCase();
+        cmdFiltered = slashCommands.filter(c => c.trigger.substring(1).startsWith(query));
+        if (cmdFiltered.length === 0) {
+            cmdDropdown.style.display = 'none';
+            return;
+        }
+        cmdSelectedIndex = 0;
+        renderCommandDropdown();
+        cmdDropdown.style.display = 'flex';
+    }
+
+    function renderCommandDropdown() {
+        cmdDropdown.innerHTML = '';
+        cmdFiltered.forEach((cmd, i) => {
+            const item = document.createElement('div');
+            item.className = 'command-item' + (i === cmdSelectedIndex ? ' selected' : '');
+            item.innerHTML = `<span class="command-trigger">${escapeHtml(cmd.trigger)}</span><span class="command-desc">${escapeHtml(cmd.expansion)}</span>`;
+            item.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); });
+            item.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); selectCommand(i); });
+            item.addEventListener('mouseenter', () => { cmdSelectedIndex = i; renderCommandDropdown(); });
+            cmdDropdown.appendChild(item);
+        });
+    }
+
+    function selectCommand(index) {
+        const cmd = cmdFiltered[index];
+        if (cmd) {
+            if (cmd.trigger === '/clear') {
+                chatMessages.innerHTML = '';
+                chatInput.value = '';
+            } else if (cmd.trigger === '/new') {
+                chatMessages.innerHTML = '';
+                chatInput.value = '';
+                send('clearHistory');
+            } else {
+                chatInput.value = cmd.expansion + ' ';
+            }
+        }
+        cmdDropdown.style.display = 'none';
+        chatInput.focus();
+    }
+
+    // ── Tab mentions (@ ) ──
+    async function updateTabDropdown() {
+        const text = chatInput.value;
+        const cursorPos = chatInput.selectionStart;
+        const textBeforeCursor = text.substring(0, cursorPos);
+        const atMatch = textBeforeCursor.match(/(^|[\s])@([^\s]*)$/);
+        if (!atMatch) {
+            tabDropdown.style.display = 'none';
+            return;
+        }
+        const query = atMatch[2].toLowerCase();
+        try {
+            const res = await fetch('/api/tabs');
+            const tabs = await res.json();
+            tabFiltered = tabs.filter(t =>
+                (t.title && t.title.toLowerCase().includes(query)) ||
+                (t.url && t.url.toLowerCase().includes(query))
+            ).slice(0, 8);
+        } catch {
+            tabFiltered = [];
+        }
+        if (tabFiltered.length === 0) {
+            tabDropdown.style.display = 'none';
+            return;
+        }
+        tabSelectedIndex = 0;
+        renderTabDropdown();
+        tabDropdown.style.display = 'flex';
+    }
+
+    function renderTabDropdown() {
+        tabDropdown.innerHTML = '';
+        tabFiltered.forEach((tab, i) => {
+            const item = document.createElement('div');
+            item.className = 'command-item' + (i === tabSelectedIndex ? ' selected' : '');
+            const title = escapeHtml((tab.title || tab.url || '').substring(0, 50));
+            const url = escapeHtml((tab.url || '').substring(0, 40));
+            item.innerHTML = `<span class="command-trigger" style="color:var(--text-primary);font-weight:500;">${title}</span><span class="command-desc">${url}</span>`;
+            item.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); });
+            item.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); selectTab(i); });
+            item.addEventListener('mouseenter', () => { tabSelectedIndex = i; renderTabDropdown(); });
+            tabDropdown.appendChild(item);
+        });
+    }
+
+    function selectTab(index) {
+        const tab = tabFiltered[index];
+        if (!tab) return;
+        const cursorPos = chatInput.selectionStart;
+        const text = chatInput.value;
+        const textBeforeCursor = text.substring(0, cursorPos);
+        const matchStart = textBeforeCursor.lastIndexOf('@');
+        const before = text.substring(0, matchStart);
+        const after = text.substring(cursorPos);
+        chatInput.value = before + after;
+        chatInput.selectionStart = chatInput.selectionEnd = before.length;
+        mentionedTabs.push({ title: tab.title || tab.url, url: tab.url, index: tab.index });
+        tabDropdown.style.display = 'none';
+        renderMentionPills();
+        chatInput.focus();
+    }
+
+    function renderMentionPills() {
+        mentionPreview.innerHTML = '';
+        if (mentionedTabs.length === 0) {
+            mentionPreview.style.display = 'none';
+            return;
+        }
+        mentionPreview.style.display = 'flex';
+        mentionedTabs.forEach((mt, i) => {
+            const pill = document.createElement('span');
+            pill.className = 'mention-pill';
+            const titleText = escapeHtml((mt.title || '').substring(0, 40));
+            pill.innerHTML = `<span class="mention-pill-title">${titleText}</span><button class="mention-pill-remove" title="Remove">&times;</button>`;
+            pill.querySelector('.mention-pill-remove').addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                mentionedTabs.splice(i, 1);
+                renderMentionPills();
+            });
+            mentionPreview.appendChild(pill);
+        });
+    }
+
+    // Chat input event for dropdowns
+    chatInput.addEventListener('input', () => {
+        updateCommandDropdown();
+        updateTabDropdown();
+    });
+
     // ── Init ──
+    fetchCommands();
     connect();
 })();

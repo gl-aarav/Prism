@@ -40,6 +40,28 @@ app.get('/api/status', (req, res) => {
     });
 });
 
+// Proxy slash commands from Prism app
+app.get('/api/commands', async (req, res) => {
+    try {
+        const r = await fetch('http://127.0.0.1:8080/api/commands');
+        if (r.ok) {
+            res.json(await r.json());
+        } else {
+            res.json([]);
+        }
+    } catch {
+        res.json([]);
+    }
+});
+
+// Get open browser tabs
+app.get('/api/tabs', (req, res) => {
+    if (!activeEngine || !activeEngine.isOpen()) {
+        return res.json([]);
+    }
+    activeEngine.getTabs().then(tabs => res.json(tabs)).catch(() => res.json([]));
+});
+
 // WebSocket for real-time control
 wss.on('connection', (ws) => {
     console.log('[WS] Client connected');
@@ -146,6 +168,12 @@ async function handleCommand(ws, msg) {
             const result = await activeEngine.switchTab(payload.index);
             ws.send(JSON.stringify({ type: 'result', action, data: result }));
             await sendScreenshot(ws);
+            break;
+        }
+
+        case 'getTabContent': {
+            const content = await activeEngine.getTabContent(payload.index);
+            ws.send(JSON.stringify({ type: 'result', action, data: content }));
             break;
         }
 
