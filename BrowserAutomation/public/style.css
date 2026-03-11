@@ -613,7 +613,7 @@ body {
     font-weight: 600;
 }
 
-.welcome-msg p + p {
+.welcome-msg p+p {
     margin-top: 8px;
 }
 
