@@ -144,6 +144,27 @@
     }
 
     // ── Models ──
+    const PROVIDER_LABELS = {
+        apple: 'Apple Intelligence',
+        gemini: 'Google Gemini',
+        ollama: 'Ollama',
+        copilot: 'GitHub Copilot',
+        nvidia: 'NVIDIA',
+    };
+
+    function getProviderKey(modelId) {
+        const prefix = modelId.split(':')[0];
+        return prefix || 'other';
+    }
+
+    function saveDefaultModel(id) {
+        try { localStorage.setItem('prism_default_model', id); } catch { }
+    }
+
+    function getSavedModel() {
+        try { return localStorage.getItem('prism_default_model'); } catch { return null; }
+    }
+
     async function loadModels() {
         try {
             const res = await fetch('/api/models');
@@ -153,29 +174,43 @@
                 modelSelect.innerHTML = '<option value="">No models (Prism running?)</option>';
                 return;
             }
-            // Group by provider
+            // Group by provider from model ID prefix
             const groups = {};
             for (const m of models) {
-                const provider = m.name?.split(' - ')?.[0] || m.id.split(':')[0] || 'Other';
-                if (!groups[provider]) groups[provider] = [];
-                groups[provider].push(m);
+                const key = getProviderKey(m.id);
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(m);
             }
-            for (const [provider, items] of Object.entries(groups)) {
+            // Render in a consistent order
+            const order = ['apple', 'gemini', 'ollama', 'copilot', 'nvidia'];
+            const keys = [...order.filter(k => groups[k]), ...Object.keys(groups).filter(k => !order.includes(k))];
+            for (const key of keys) {
                 const optgroup = document.createElement('optgroup');
-                optgroup.label = provider;
-                for (const m of items) {
+                optgroup.label = PROVIDER_LABELS[key] || key;
+                for (const m of groups[key]) {
                     const opt = document.createElement('option');
                     opt.value = m.id;
-                    opt.textContent = m.name || m.id;
+                    // Strip redundant provider prefix from display name
+                    let label = m.name || m.id;
+                    label = label.replace(/^(Apple Intelligence|Gemini|Ollama|Copilot|NVIDIA)\s*:\s*/i, '');
+                    opt.textContent = label;
                     optgroup.appendChild(opt);
                 }
                 modelSelect.appendChild(optgroup);
+            }
+            // Restore saved default
+            const saved = getSavedModel();
+            if (saved && models.some(m => m.id === saved)) {
+                modelSelect.value = saved;
             }
             log(`Loaded ${models.length} models`, 'info');
         } catch {
             modelSelect.innerHTML = '<option value="">Failed to load models</option>';
         }
     }
+
+    // Persist selection on change
+    modelSelect.addEventListener('change', () => saveDefaultModel(modelSelect.value));
 
     // ── Chat ──
     function renderMarkdown(text) {

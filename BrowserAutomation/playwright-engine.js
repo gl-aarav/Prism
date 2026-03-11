@@ -1,5 +1,8 @@
 // Playwright Engine — browser automation via Microsoft Playwright (Chrome)
 const { chromium } = require('playwright');
+const path = require('path');
+
+const PROFILE_DIR = path.join(__dirname, '.chrome-profile-playwright');
 
 class PlaywrightEngine {
     constructor() {
@@ -11,19 +14,20 @@ class PlaywrightEngine {
     get name() { return 'playwright'; }
 
     async launch(options = {}) {
-        this.browser = await chromium.launch({
+        // launchPersistentContext keeps cookies, logins, and sessions across launches
+        this.context = await chromium.launchPersistentContext(PROFILE_DIR, {
             headless: false,
             channel: 'chrome',
+            viewport: { width: 1280, height: 900 },
             args: [
                 '--window-size=1280,900',
                 '--disable-blink-features=AutomationControlled',
                 ...(options.args || []),
             ],
         });
-        this.context = await this.browser.newContext({
-            viewport: { width: 1280, height: 900 },
-        });
-        this.page = await this.context.newPage();
+        this.browser = this.context.browser();
+        const pages = this.context.pages();
+        this.page = pages[0] || await this.context.newPage();
         return { status: 'launched', engine: 'playwright' };
     }
 
@@ -155,8 +159,8 @@ class PlaywrightEngine {
     }
 
     async close() {
-        if (this.browser) {
-            await this.browser.close();
+        if (this.context) {
+            await this.context.close();
             this.browser = null;
             this.context = null;
             this.page = null;
@@ -165,7 +169,7 @@ class PlaywrightEngine {
     }
 
     isOpen() {
-        return !!this.browser;
+        return !!this.context;
     }
 }
 

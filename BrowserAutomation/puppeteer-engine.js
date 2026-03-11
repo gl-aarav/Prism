@@ -1,5 +1,8 @@
 // Puppeteer Engine — browser automation via Google Puppeteer (Chrome)
 const puppeteer = require('puppeteer');
+const path = require('path');
+
+const PROFILE_DIR = path.join(__dirname, '.chrome-profile-puppeteer');
 
 class PuppeteerEngine {
     constructor() {
@@ -14,6 +17,7 @@ class PuppeteerEngine {
             headless: false,
             channel: 'chrome',
             defaultViewport: null,
+            userDataDir: PROFILE_DIR,
             args: [
                 '--window-size=1280,900',
                 '--disable-blink-features=AutomationControlled',
