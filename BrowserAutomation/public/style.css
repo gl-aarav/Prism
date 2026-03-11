@@ -984,10 +984,21 @@ html.light-mode ::-webkit-scrollbar-thumb:hover {
     background: rgba(128, 128, 128, 0.12);
 }
 
-.theme-toggle-btn .sun-icon { display: none; }
-.theme-toggle-btn .moon-icon { display: block; }
-html.light-mode .theme-toggle-btn .sun-icon { display: block; }
-html.light-mode .theme-toggle-btn .moon-icon { display: none; }
+.theme-toggle-btn .sun-icon {
+    display: none;
+}
+
+.theme-toggle-btn .moon-icon {
+    display: block;
+}
+
+html.light-mode .theme-toggle-btn .sun-icon {
+    display: block;
+}
+
+html.light-mode .theme-toggle-btn .moon-icon {
+    display: none;
+}
 
 /* ──────────────────────── THINKING DROPDOWN (chat bar) ──────────────────────── */
 .thinking-btn {
@@ -1106,18 +1117,37 @@ html.light-mode .theme-toggle-btn .moon-icon { display: none; }
 }
 
 @keyframes orbBorderPulse {
-    0% { opacity: 0.5; transform: scale(0.9); }
-    100% { opacity: 1; transform: scale(1.05); }
+    0% {
+        opacity: 0.5;
+        transform: scale(0.9);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
 }
 
 @keyframes orbDotPulse {
-    0% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.7); }
-    100% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+    0% {
+        opacity: 0.5;
+        transform: translate(-50%, -50%) scale(0.7);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.2);
+    }
 }
 
 @keyframes flareSwipe {
-    0% { left: -100%; }
-    100% { left: 200%; }
+    0% {
+        left: -100%;
+    }
+
+    100% {
+        left: 200%;
+    }
 }
 
 /* Thinking collapsible in chat messages */

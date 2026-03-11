@@ -571,14 +571,14 @@
         } else {
             document.documentElement.classList.remove('light-mode');
         }
-        try { localStorage.setItem('prism_theme', mode); } catch {}
+        try { localStorage.setItem('prism_theme', mode); } catch { }
     }
 
     // Restore saved theme
     try {
         const saved = localStorage.getItem('prism_theme');
         if (saved === 'light') setTheme('light');
-    } catch {}
+    } catch { }
 
     themeToggle.addEventListener('click', () => {
         const isLight = document.documentElement.classList.contains('light-mode');
