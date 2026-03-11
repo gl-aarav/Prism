@@ -278,6 +278,7 @@ async function handleAgentRun(ws, payload) {
     isAgentRunning = true;
     const agentHistory = [];
     let stepCount = 0;
+    const maxSteps = 25;
 
     // Inject system prompt as first user message (Prism API ignores systemPrompt body field)
     agentHistory.push({

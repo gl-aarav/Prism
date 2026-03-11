@@ -29,6 +29,7 @@
     let tabFiltered = [];
     let tabSelectedIndex = 0;
     let mentionedTabs = [];
+    let includeContext = true;
     const AUTO_REFRESH_MS = 1500;
 
     // DOM refs
@@ -53,6 +54,11 @@
     const cmdDropdown = $('#cmdDropdown');
     const tabDropdown = $('#tabDropdown');
     const mentionPreview = $('#mentionPreview');
+    const contextToggle = $('#contextToggle');
+    const contextCloseBtn = $('#contextCloseBtn');
+    const contextToggleText = $('#contextToggleText');
+    const btnClearChat = $('#btnClearChat');
+    const btnSendToPrism = $('#btnSendToPrism');
 
     // ── WebSocket ──
     function connect() {
@@ -503,11 +509,18 @@
         addChatMsg('user', text);
         chatInput.value = '';
 
+        // If context is enabled and we're in chat mode, fetch page content
+        let contextPrefix = '';
+        if (includeContext && currentTab === 'chat' && browserOpen) {
+            // The server will include DOM context for agent automatically, but for chat we send it
+            contextPrefix = '[Include current page context in your response]\n\n';
+        }
+
         if (currentTab === 'agent') {
-            send('agentRun', { task: fullMessage, model, thinkingLevel });
+            send('agentRun', { task: fullMessage, model, thinkingLevel, includeContext });
             btnAgentStop.style.display = 'inline-flex';
         } else {
-            send('chat', { message: fullMessage, model, thinkingLevel });
+            send('chat', { message: contextPrefix + fullMessage, model, thinkingLevel });
         }
     }
 
@@ -620,7 +633,6 @@
 
         screenshotPanel.style.flex = `0 0 ${pct * 100}%`;
         chatPanel.style.flex = `0 0 ${(1 - pct) * 100}%`;
-        chatPanel.style.height = 'auto';
     });
 
     document.addEventListener('mouseup', () => {
@@ -635,7 +647,6 @@
     function resetSplitStyles() {
         screenshotPanel.style.flex = '';
         chatPanel.style.flex = '';
-        chatPanel.style.height = '';
     }
 
     $('#btnMaxBrowser').onclick = () => {
@@ -952,6 +963,84 @@
         updateCommandDropdown();
         updateTabDropdown();
     });
+
+    // ── Clear chat button ──
+    btnClearChat.onclick = () => {
+        chatMessages.innerHTML = '';
+        currentAssistantMsg = null;
+        currentThinkingMsg = null;
+        isStreaming = false;
+        send('clearHistory');
+    };
+
+    // ── Context toggle ──
+    function setContextState(enabled) {
+        includeContext = enabled;
+        if (enabled) {
+            contextToggle.classList.remove('disabled');
+            contextToggleText.textContent = 'Include page context';
+            chatInput.placeholder = 'Describe a task or ask about the current page...';
+        } else {
+            contextToggle.classList.add('disabled');
+            contextToggleText.textContent = 'No context';
+            chatInput.placeholder = 'Describe a task for the agent or ask a question...';
+        }
+    }
+
+    contextCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setContextState(!includeContext);
+    });
+
+    contextToggle.addEventListener('click', () => {
+        setContextState(!includeContext);
+    });
+
+    // ── Send to Prism App ──
+    async function forwardChatToApp() {
+        const msgs = chatMessages.querySelectorAll('.chat-msg');
+        const cleanMessages = [];
+        msgs.forEach(m => {
+            if (m.classList.contains('user')) {
+                cleanMessages.push({ role: 'user', content: m.textContent.trim() });
+            } else if (m.classList.contains('assistant') && m._rawText) {
+                cleanMessages.push({ role: 'assistant', content: m._rawText.trim() });
+            } else if (m.classList.contains('assistant')) {
+                cleanMessages.push({ role: 'assistant', content: m.textContent.trim() });
+            }
+        });
+        if (cleanMessages.length === 0) return;
+
+        const modelName = modelSelect.options[modelSelect.selectedIndex]
+            ? modelSelect.options[modelSelect.selectedIndex].textContent : modelSelect.value;
+
+        try {
+            const res = await fetch('http://localhost:8080/api/forward-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    messages: cleanMessages,
+                    model: modelName,
+                }),
+            });
+            if (res.ok) {
+                showForwardSuccess();
+            }
+        } catch (e) {
+            log('Failed to send to Prism: ' + e.message, 'error');
+        }
+    }
+
+    function showForwardSuccess() {
+        const toast = document.createElement('div');
+        toast.className = 'forward-toast';
+        toast.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Sent to Prism';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.classList.add('visible'), 10);
+        setTimeout(() => { toast.classList.remove('visible'); setTimeout(() => toast.remove(), 300); }, 2500);
+    }
+
+    btnSendToPrism.onclick = forwardChatToApp;
 
     // ── Init ──
     fetchCommands();

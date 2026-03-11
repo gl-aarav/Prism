@@ -406,6 +406,7 @@ body {
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
+    min-height: 0;
 }
 
 /* Screenshot Panel */
@@ -419,13 +420,13 @@ body {
 }
 
 .screenshot-panel.hidden-panel {
-    flex: 0 0 0;
+    flex: 0 0 0 !important;
     overflow: hidden;
     min-height: 0;
 }
 
 .screenshot-panel.maximized-panel {
-    flex: 1 1 100%;
+    flex: 1 1 100% !important;
 }
 
 .screenshot-header {
@@ -532,24 +533,25 @@ body {
 
 /* ──────────────────────── CHAT PANEL ──────────────────────── */
 .chat-panel {
-    height: 300px;
+    min-height: 200px;
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
+    flex: 1;
     background: transparent;
     backdrop-filter: blur(20px) saturate(1.5);
-    transition: height 0.25s ease, flex 0.25s ease;
+    transition: flex 0.25s ease;
+    overflow: hidden;
 }
 
 .chat-panel.hidden-panel {
+    min-height: 0;
     height: 0;
     overflow: hidden;
-    flex: 0 0 0;
+    flex: 0 0 0 !important;
 }
 
 .chat-panel.maximized-panel {
-    flex: 1 1 100%;
-    height: auto;
+    flex: 1 1 100% !important;
 }
 
 .chat-tabs {
@@ -558,6 +560,9 @@ body {
     flex-shrink: 0;
     padding: 0 8px;
     align-items: center;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(20px);
 }
 
 .chat-tab {
@@ -571,10 +576,12 @@ body {
     border-bottom: 2px solid transparent;
     transition: all 0.2s ease;
     font-family: var(--font);
+    position: relative;
 }
 
 .chat-tab:hover {
     color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .chat-tab.active {
@@ -589,19 +596,25 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 0;
 }
 
 .welcome-msg {
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 1.7;
-    padding: 12px;
+    padding: 24px 16px;
     text-align: center;
+    margin: auto 0;
 }
 
 .welcome-msg strong {
     color: var(--text-primary);
     font-weight: 600;
+}
+
+.welcome-msg p + p {
+    margin-top: 8px;
 }
 
 /* Messages — matches Chrome extension style */
@@ -729,6 +742,7 @@ body {
 .chat-input-area {
     padding: 8px 12px 12px;
     flex-shrink: 0;
+    min-height: 0;
 }
 
 .agent-controls {
@@ -1064,6 +1078,19 @@ html.light-mode .action-btn:hover {
     border-color: rgba(0, 0, 0, 0.12);
 }
 
+html.light-mode .chat-tabs {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+html.light-mode .chat-tab:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+html.light-mode .context-toggle-wrapper.disabled {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
 html.light-mode ::-webkit-scrollbar-thumb {
     background-color: rgba(0, 0, 0, 0.15);
 }
@@ -1325,4 +1352,112 @@ html.light-mode .theme-toggle-btn .moon-icon {
     .log-panel {
         display: none;
     }
+}
+
+@media (max-width: 700px) {
+    .sidebar {
+        display: none;
+    }
+
+    .header-center {
+        display: none;
+    }
+}
+
+/* ──────────────────────── CHAT HEADER BUTTONS ──────────────────────── */
+.chat-header-btn {
+    opacity: 0.6;
+    transition: all 0.2s;
+}
+
+.chat-header-btn:hover {
+    opacity: 1;
+    color: var(--accent);
+    background: rgba(10, 132, 255, 0.1);
+}
+
+/* ──────────────────────── CONTEXT TOGGLE ──────────────────────── */
+.context-toggle-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px 4px 8px;
+    background: rgba(10, 132, 255, 0.08);
+    border: 1px solid rgba(10, 132, 255, 0.15);
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 6px;
+    user-select: none;
+}
+
+.context-toggle-wrapper:hover {
+    background: rgba(10, 132, 255, 0.14);
+    border-color: rgba(10, 132, 255, 0.25);
+}
+
+.context-toggle-wrapper.disabled {
+    background: rgba(128, 128, 128, 0.08);
+    border-color: rgba(128, 128, 128, 0.12);
+    color: var(--text-muted);
+}
+
+.context-toggle-wrapper.disabled:hover {
+    background: rgba(128, 128, 128, 0.14);
+}
+
+.context-toggle-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.context-close-btn {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 2px;
+    opacity: 0.6;
+    transition: opacity 0.15s;
+    display: flex;
+    align-items: center;
+}
+
+.context-close-btn:hover {
+    opacity: 1;
+}
+
+/* ──────────────────────── SEND TO PRISM TOAST ──────────────────────── */
+.forward-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--glass-bg);
+    backdrop-filter: var(--panel-blur);
+    -webkit-backdrop-filter: var(--panel-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: 100px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.forward-toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
 }
