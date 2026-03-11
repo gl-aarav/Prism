@@ -12,11 +12,14 @@ async function fetchModels() {
     }
 }
 
-async function streamChat(messages, model, systemPrompt, onChunk) {
+async function streamChat(messages, model, systemPrompt, onChunk, options = {}) {
     const body = {
         messages,
         model,
     };
+    if (options.thinkingLevel && options.thinkingLevel !== 'off') {
+        body.thinkingLevel = options.thinkingLevel;
+    }
 
     const res = await fetch(`${PRISM_BASE}/api/chat`, {
         method: 'POST',

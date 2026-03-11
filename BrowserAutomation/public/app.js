@@ -10,6 +10,9 @@
     let isStreaming = false;
     let autoRefreshTimer = null;
     let browserOpen = false;
+    let thinkingLevel = 'medium';
+    let thinkingDropdownOpen = false;
+    let currentThinkingMsg = null;
     const AUTO_REFRESH_MS = 1500;
 
     // DOM refs
@@ -28,6 +31,9 @@
     const pageTitle = $('#pageTitle');
     const pageUrl = $('#pageUrl');
     const btnAgentStop = $('#btnAgentStop');
+    const thinkingBtn = $('#thinkingBtn');
+    const thinkingDropdown = $('#thinkingDropdown');
+    const themeToggle = $('#themeToggle');
 
     // ── WebSocket ──
     function connect() {
@@ -204,13 +210,13 @@
                 modelSelect.value = saved;
             }
             log(`Loaded ${models.length} models`, 'info');
+            updateThinkingOptions();
         } catch {
             modelSelect.innerHTML = '<option value="">Failed to load models</option>';
         }
     }
 
-    // Persist selection on change
-    modelSelect.addEventListener('change', () => saveDefaultModel(modelSelect.value));
+    // Persist selection on change (handled in thinking options section below)
 
     // ── Chat ──
     function renderMarkdown(text) {
@@ -253,16 +259,65 @@
     }
 
     function appendThinking(text) {
-        // Find or create thinking message
-        let thinkMsg = chatMessages.querySelector('.chat-msg.thinking:last-of-type');
-        if (!thinkMsg) {
-            thinkMsg = addChatMsg('thinking', '');
+        // Create or find existing thinking block (collapsible)
+        if (!currentThinkingMsg) {
+            currentThinkingMsg = document.createElement('div');
+            currentThinkingMsg.className = 'chat-msg thinking-block';
+            currentThinkingMsg._rawThinking = '';
+
+            // Animated thinking indicator
+            const indicator = document.createElement('div');
+            indicator.className = 'thinking-indicator';
+            indicator.innerHTML = `<div class="working-orb"></div><span class="working-text">Thinking...</span>`;
+            currentThinkingMsg.appendChild(indicator);
+            currentThinkingMsg._indicator = indicator;
+
+            // Collapsible toggle
+            const toggle = document.createElement('button');
+            toggle.className = 'thinking-toggle';
+            toggle.style.display = 'none';
+            toggle.innerHTML = `<svg class="thinking-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg><span>Thinking</span>`;
+            currentThinkingMsg.appendChild(toggle);
+            currentThinkingMsg._toggle = toggle;
+
+            // Collapsible content
+            const content = document.createElement('div');
+            content.className = 'thinking-content';
+            const textEl = document.createElement('div');
+            textEl.className = 'thinking-text';
+            content.appendChild(textEl);
+            currentThinkingMsg.appendChild(content);
+            currentThinkingMsg._content = content;
+            currentThinkingMsg._textEl = textEl;
+
+            toggle.addEventListener('click', () => {
+                toggle.classList.toggle('expanded');
+                content.classList.toggle('expanded');
+            });
+
+            chatMessages.appendChild(currentThinkingMsg);
         }
-        thinkMsg.textContent += text;
+
+        currentThinkingMsg._rawThinking += text;
+        currentThinkingMsg._textEl.textContent = currentThinkingMsg._rawThinking;
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
+    function finishThinking() {
+        if (currentThinkingMsg) {
+            // Hide the animated indicator, show the toggle
+            if (currentThinkingMsg._indicator) {
+                currentThinkingMsg._indicator.style.display = 'none';
+            }
+            if (currentThinkingMsg._toggle && currentThinkingMsg._rawThinking) {
+                currentThinkingMsg._toggle.style.display = 'flex';
+            }
+            currentThinkingMsg = null;
+        }
+    }
+
     function finishAssistantMsg() {
+        finishThinking();
         if (currentAssistantMsg && currentAssistantMsg._rawText) {
             currentAssistantMsg.innerHTML = renderMarkdown(currentAssistantMsg._rawText);
         }
@@ -396,10 +451,10 @@
         chatInput.value = '';
 
         if (currentTab === 'agent') {
-            send('agentRun', { task: text, model });
+            send('agentRun', { task: text, model, thinkingLevel });
             btnAgentStop.style.display = 'inline-flex';
         } else {
-            send('chat', { message: text, model });
+            send('chat', { message: text, model, thinkingLevel });
         }
     }
 
@@ -508,6 +563,137 @@
         chatPanel.classList.remove('maximized-panel');
         screenshotPanel.classList.remove('hidden-panel');
     };
+
+    // ── Theme toggle ──
+    function setTheme(mode) {
+        if (mode === 'light') {
+            document.documentElement.classList.add('light-mode');
+        } else {
+            document.documentElement.classList.remove('light-mode');
+        }
+        try { localStorage.setItem('prism_theme', mode); } catch {}
+    }
+
+    // Restore saved theme
+    try {
+        const saved = localStorage.getItem('prism_theme');
+        if (saved === 'light') setTheme('light');
+    } catch {}
+
+    themeToggle.addEventListener('click', () => {
+        const isLight = document.documentElement.classList.contains('light-mode');
+        setTheme(isLight ? 'dark' : 'light');
+    });
+
+    // ── Thinking dropdown per model ──
+    function updateThinkingOptions() {
+        const modelId = (modelSelect.value || '').toLowerCase();
+        if (!thinkingDropdown) return;
+
+        let levels = [];
+
+        if (modelId.startsWith('copilot:') || modelId.startsWith('apple:') || modelId.startsWith('nano:')) {
+            thinkingBtn.style.display = 'none';
+            thinkingDropdownOpen = false;
+            thinkingDropdown.style.display = 'none';
+            return;
+        } else if (modelId.startsWith('nvidia:')) {
+            const model = modelId.replace('nvidia:', '');
+            if (model.includes('deepseek') || model.includes('glm')) {
+                levels = [{ value: 'off', label: 'Off' }, { value: 'high', label: 'On' }];
+            } else {
+                thinkingBtn.style.display = 'none';
+                thinkingDropdownOpen = false;
+                thinkingDropdown.style.display = 'none';
+                return;
+            }
+        } else if (modelId.startsWith('gemini:')) {
+            const model = modelId.replace('gemini:', '');
+            if (model.startsWith('gemini-3-pro')) {
+                levels = [{ value: 'low', label: 'Low' }, { value: 'high', label: 'High' }];
+            } else if (model.startsWith('gemini-3') || model.startsWith('gemini-2.5')) {
+                levels = [
+                    { value: 'off', label: 'Off' },
+                    { value: 'low', label: 'Low' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'high', label: 'High' }
+                ];
+            } else {
+                thinkingBtn.style.display = 'none';
+                thinkingDropdownOpen = false;
+                thinkingDropdown.style.display = 'none';
+                return;
+            }
+        } else if (modelId.startsWith('ollama:')) {
+            const model = modelId.replace('ollama:', '');
+            if (model.includes('gpt-oss')) {
+                levels = [
+                    { value: 'low', label: 'Low' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'high', label: 'High' }
+                ];
+            } else if (model.includes('deepseek')) {
+                levels = [{ value: 'off', label: 'Off' }, { value: 'high', label: 'On' }];
+            } else {
+                thinkingBtn.style.display = 'none';
+                thinkingDropdownOpen = false;
+                thinkingDropdown.style.display = 'none';
+                return;
+            }
+        } else {
+            levels = [
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' }
+            ];
+        }
+
+        thinkingBtn.style.display = 'flex';
+        thinkingDropdown.innerHTML = '';
+        let foundActive = false;
+        levels.forEach(l => {
+            const btn = document.createElement('button');
+            btn.className = 'thinking-level-option';
+            btn.dataset.level = l.value;
+            btn.textContent = l.label;
+            if (l.value === thinkingLevel) {
+                btn.classList.add('active');
+                foundActive = true;
+            }
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                thinkingLevel = btn.dataset.level;
+                thinkingDropdownOpen = false;
+                thinkingDropdown.style.display = 'none';
+                thinkingDropdown.querySelectorAll('.thinking-level-option').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+            thinkingDropdown.appendChild(btn);
+        });
+        if (!foundActive && levels.length > 0) {
+            thinkingLevel = levels[0].value;
+            thinkingDropdown.querySelector('.thinking-level-option')?.classList.add('active');
+        }
+    }
+
+    thinkingBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        thinkingDropdownOpen = !thinkingDropdownOpen;
+        thinkingDropdown.style.display = thinkingDropdownOpen ? 'flex' : 'none';
+    });
+
+    document.addEventListener('click', () => {
+        if (thinkingDropdownOpen) {
+            thinkingDropdownOpen = false;
+            thinkingDropdown.style.display = 'none';
+        }
+    });
+
+    // Update thinking options on model change
+    modelSelect.addEventListener('change', () => {
+        saveDefaultModel(modelSelect.value);
+        updateThinkingOptions();
+    });
 
     // ── Init ──
     connect();

@@ -190,7 +190,7 @@ async function sendScreenshot(ws) {
 }
 
 async function handleChat(ws, payload) {
-    const { message, model } = payload;
+    const { message, model, thinkingLevel } = payload;
     conversationHistory.push({ role: 'user', content: message });
 
     let fullResponse = '';
@@ -202,7 +202,7 @@ async function handleChat(ws, payload) {
             } else if (chunk.type === 'thinking') {
                 ws.send(JSON.stringify({ type: 'chatThinking', text: chunk.text }));
             }
-        });
+        }, { thinkingLevel });
         conversationHistory.push({ role: 'assistant', content: fullResponse });
         ws.send(JSON.stringify({ type: 'chatDone' }));
     } catch (err) {
@@ -242,7 +242,7 @@ I see the Google homepage. I'll type in the search box.
 \`\`\``;
 
 async function handleAgentRun(ws, payload) {
-    const { task, model } = payload;
+    const { task, model, thinkingLevel } = payload;
     if (!activeEngine || !activeEngine.isOpen()) {
         return ws.send(JSON.stringify({ type: 'error', text: 'Launch a browser first' }));
     }
@@ -284,7 +284,7 @@ async function handleAgentRun(ws, payload) {
                     fullResponse += chunk.text;
                     ws.send(JSON.stringify({ type: 'agentChunk', text: chunk.text }));
                 }
-            });
+            }, { thinkingLevel });
         } catch (err) {
             ws.send(JSON.stringify({ type: 'error', text: `Agent error: ${err.message}` }));
             break;
@@ -312,7 +312,7 @@ async function handleAgentRun(ws, payload) {
                         retryResponse += chunk.text;
                         ws.send(JSON.stringify({ type: 'agentChunk', text: chunk.text }));
                     }
-                });
+                }, { thinkingLevel });
             } catch (err) {
                 ws.send(JSON.stringify({ type: 'error', text: `Agent retry error: ${err.message}` }));
                 break;

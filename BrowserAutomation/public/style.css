@@ -716,13 +716,13 @@ body {
     color: #e8e8e8;
 }
 
-.chat-msg.thinking {
-    background: rgba(255, 159, 10, 0.08);
-    border: 1px solid rgba(255, 159, 10, 0.12);
-    color: var(--orange);
-    font-size: 11px;
-    font-style: italic;
-    border-radius: var(--radius-sm);
+.chat-msg.thinking-block {
+    padding: 4px 0;
+    background: transparent;
+    border: none;
+    align-self: flex-start;
+    max-width: 100%;
+    border-radius: 0;
 }
 
 /* ──────────────────────── INPUT AREA — glass bar ──────────────────────── */
@@ -873,6 +873,305 @@ body {
     animation: spin 0.6s linear infinite;
     vertical-align: middle;
     margin-right: 6px;
+}
+
+/* ──────────────────────── LIGHT MODE ──────────────────────── */
+html.light-mode {
+    --bg-color: #f5f5f7;
+    --panel-bg: rgba(255, 255, 255, 0.65);
+    --panel-blur: blur(40px) saturate(200%);
+    --border-color: rgba(0, 0, 0, 0.08);
+    --border-highlight: rgba(255, 255, 255, 0.6);
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-muted: #aeaeb2;
+    --accent: #0A84FF;
+    --accent-gradient-start: #0A84FF;
+    --accent-gradient-end: #34C759;
+    --user-bubble-start: rgba(10, 132, 255, 0.12);
+    --user-bubble-end: rgba(52, 199, 89, 0.12);
+    --glass-bg: rgba(255, 255, 255, 0.55);
+    --glass-border: rgba(0, 0, 0, 0.08);
+    --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.06);
+    --green: #34C759;
+    --red: #FF3B30;
+    --orange: #FF9F0A;
+    --purple: #5E5CE6;
+}
+
+html.light-mode .app-background {
+    background:
+        radial-gradient(ellipse at 10% 40%, rgba(10, 132, 255, 0.06), transparent 55%),
+        radial-gradient(ellipse at 90% 25%, rgba(94, 92, 230, 0.05), transparent 55%),
+        radial-gradient(ellipse at 50% 90%, rgba(52, 199, 89, 0.04), transparent 50%);
+}
+
+html.light-mode .engine-btn.active {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+html.light-mode .select option {
+    background: #ffffff;
+    color: var(--text-primary);
+}
+
+html.light-mode .screenshot-viewport {
+    background: rgba(245, 245, 247, 0.6);
+}
+
+html.light-mode .chat-input {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+html.light-mode .chat-msg .code-block {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+html.light-mode .chat-msg .code-block code {
+    color: #1d1d1f;
+}
+
+html.light-mode .chat-msg .inline-code {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: #1d1d1f;
+}
+
+html.light-mode .chat-msg .code-block .code-lang {
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.03);
+    border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+html.light-mode .split-handle-bar {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+html.light-mode .action-btn {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+html.light-mode .action-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    border-color: rgba(0, 0, 0, 0.12);
+}
+
+html.light-mode ::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.15);
+}
+
+html.light-mode ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Theme toggle button */
+.theme-toggle-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+}
+
+.theme-toggle-btn:hover {
+    color: var(--text-primary);
+    background: rgba(128, 128, 128, 0.12);
+}
+
+.theme-toggle-btn .sun-icon { display: none; }
+.theme-toggle-btn .moon-icon { display: block; }
+html.light-mode .theme-toggle-btn .sun-icon { display: block; }
+html.light-mode .theme-toggle-btn .moon-icon { display: none; }
+
+/* ──────────────────────── THINKING DROPDOWN (chat bar) ──────────────────────── */
+.thinking-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+    display: none;
+    align-items: center;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.thinking-btn:hover {
+    color: var(--text-primary);
+    background: rgba(128, 128, 128, 0.12);
+}
+
+.thinking-dropdown {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    right: 0;
+    display: none;
+    flex-direction: column;
+    background: var(--glass-bg);
+    backdrop-filter: var(--panel-blur);
+    -webkit-backdrop-filter: var(--panel-blur);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 var(--border-highlight);
+    z-index: 999;
+    min-width: 100px;
+}
+
+.thinking-level-option {
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.thinking-level-option:hover {
+    background: rgba(128, 128, 128, 0.12);
+}
+
+.thinking-level-option.active {
+    background: rgba(10, 132, 255, 0.12);
+    color: var(--accent);
+}
+
+/* Thinking indicator in chat */
+.thinking-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    min-height: 32px;
+}
+
+.thinking-indicator .working-orb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid rgba(10, 132, 255, 0.5);
+    position: relative;
+    flex-shrink: 0;
+    animation: orbBorderPulse 1.2s ease-in-out infinite alternate;
+}
+
+.thinking-indicator .working-orb::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0A84FF, #34C759);
+    animation: orbDotPulse 1.2s ease-in-out infinite alternate-reverse;
+}
+
+.thinking-indicator .working-text {
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    background: linear-gradient(135deg, #0A84FF, #34C759);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    position: relative;
+    overflow: hidden;
+    line-height: 18px;
+}
+
+.thinking-indicator .working-text::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: flareSwipe 2s ease-in-out infinite;
+}
+
+@keyframes orbBorderPulse {
+    0% { opacity: 0.5; transform: scale(0.9); }
+    100% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes orbDotPulse {
+    0% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.7); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+}
+
+@keyframes flareSwipe {
+    0% { left: -100%; }
+    100% { left: 200%; }
+}
+
+/* Thinking collapsible in chat messages */
+.thinking-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.thinking-toggle:hover {
+    color: var(--text-primary);
+}
+
+.thinking-chevron {
+    transition: transform 0.25s ease;
+    transform: rotate(0deg);
+}
+
+.thinking-toggle.expanded .thinking-chevron {
+    transform: rotate(90deg);
+}
+
+.thinking-content {
+    display: none;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.thinking-content.expanded {
+    display: block;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.thinking-text {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    padding: 8px;
+    margin: 4px 0;
+    background: rgba(128, 128, 128, 0.06);
+    border-radius: var(--radius-sm);
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 /* ──────────────────────── RESPONSIVE ──────────────────────── */
