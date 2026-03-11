@@ -1,0 +1,16 @@
+{
+    "name": "prism-browser-automation",
+    "version": "1.0.0",
+    "description": "Browser automation UI for Prism AI — Puppeteer & Playwright with all Prism models",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "test": "node test-chrome.js"
+    },
+    "dependencies": {
+        "express": "^4.21.0",
+        "puppeteer": "^23.0.0",
+        "playwright": "^1.48.0",
+        "ws": "^8.18.0"
+    }
+}

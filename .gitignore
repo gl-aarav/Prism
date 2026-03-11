@@ -22,14 +22,3 @@ tmp/
 *.swp
 create_app.sh
 create_dmg.sh
-BrowserAutomation/ai-bridge.js
-BrowserAutomation/package-lock.json
-BrowserAutomation/package.json
-BrowserAutomation/playwright-engine.js
-BrowserAutomation/puppeteer-engine.js
-BrowserAutomation/server.js
-BrowserAutomation/test-chrome.js
-BrowserAutomation/public/app.js
-BrowserAutomation/public/index.html
-BrowserAutomation/public/style.css
-BrowserAutomation/.gitignore
