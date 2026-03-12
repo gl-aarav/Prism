@@ -713,7 +713,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 api.runtime.sendMessage({ action: 'agentCaptureTab' }, resolve);
             });
             if (result && result.ok && result.image) {
-                pendingAttachments.push({ name: 'screenshot.png', dataUrl: result.image });
+                // Show screenshot inline in chat
+                const es = document.getElementById('emptyState');
+                if (es) es.style.display = 'none';
+                appendAgentScreenshot(result.image);
+
+                // Also add as attachment for the next message
+                pendingAttachments.push({ name: 'screenshot.png', dataUrl: result.image, mimeType: 'image/jpeg' });
                 renderAttachmentPreviews();
                 promptInput.focus();
             }
@@ -977,7 +983,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     '- {"type":"scrollToPosition","position":"top|bottom|50"} - Scroll to top, bottom, or percentage\n' +
                     '- {"type":"hover","selector":"CSS or text"} - Hover over element\n' +
                     '- {"type":"focus","selector":"CSS or text"} - Focus element\n' +
-                    '- {"type":"drag","selector":"CSS","dx":100,"dy":0} - Drag element\n' +
+                    '- {"type":"drag","selector":"CSS","dx":100,"dy":0} - Drag element by pixel offset\n' +
+                    '- {"type":"dragAndDrop","source":"CSS or text","target":"CSS or text"} - Drag one element and drop it onto another element (uses HTML5 Drag and Drop API + mouse events for maximum compatibility with Trello, Kanban boards, sortable lists, etc.)\n' +
                     '- {"type":"toggleCheckbox","selector":"CSS"} - Toggle checkbox/radio\n' +
                     '- {"type":"fillForm","fields":[{"selector":"#id","value":"..."}]} - Fill multiple form fields\n' +
                     '- {"type":"selectText","selector":"CSS"} - Select all text inside an element\n' +
@@ -1496,6 +1503,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'scroll': return { icon: '\uD83D\uDCDC', label: 'Scrolled ' + (action.direction || 'down') + ' ' + (action.amount || 300) + 'px' };
             case 'hover': return { icon: '\uD83C\uDFAF', label: 'Hovered over ' + sel };
             case 'drag': return { icon: '\u270B', label: 'Dragged ' + sel + ' by (' + (action.dx || 0) + ', ' + (action.dy || 0) + ')' };
+            case 'dragAndDrop': return { icon: '\uD83D\uDD90\uFE0F', label: 'Dragged "' + (action.source || '').substring(0, 20) + '" onto "' + (action.target || '').substring(0, 20) + '"' };
             case 'toggleCheckbox': return { icon: '\u2611\uFE0F', label: 'Toggled checkbox ' + sel };
             case 'fillForm': return { icon: '\uD83D\uDCDD', label: 'Filled form with ' + (action.fields ? action.fields.length : 0) + ' fields' };
             case 'getElements': return { icon: '\uD83D\uDD0D', label: 'Scanned page elements' };
@@ -1654,6 +1662,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'drag':
                     result = await api.tabs.sendMessage(tab.id, { action: 'agentDrag', selector: action.selector, dx: action.dx, dy: action.dy });
+                    break;
+                case 'dragAndDrop':
+                    result = await api.tabs.sendMessage(tab.id, { action: 'agentDragAndDrop', source: action.source, target: action.target });
                     break;
                 case 'toggleCheckbox':
                     result = await api.tabs.sendMessage(tab.id, { action: 'agentToggleCheckbox', selector: action.selector });

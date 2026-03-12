@@ -559,25 +559,122 @@ api.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     const endX = startX + (request.dx || 0);
                     const endY = startY + (request.dy || 0);
 
-                    // Proper drag sequence
+                    // Mouse-based drag sequence
                     el.dispatchEvent(new MouseEvent('mousedown', { clientX: startX, clientY: startY, bubbles: true, cancelable: true }));
                     await sleep(50);
+
+                    // HTML5 DragEvent sequence for apps that use the Drag and Drop API
+                    try {
+                        const dt = new DataTransfer();
+                        el.dispatchEvent(new DragEvent('dragstart', { clientX: startX, clientY: startY, dataTransfer: dt, bubbles: true, cancelable: true }));
+                        await sleep(30);
+                    } catch (e) { /* DragEvent not supported in some contexts */ }
+
                     // Intermediate moves for frameworks that track movement
-                    const steps = 5;
+                    const steps = 10;
                     for (let i = 1; i <= steps; i++) {
                         const x = startX + (endX - startX) * (i / steps);
                         const y = startY + (endY - startY) * (i / steps);
                         el.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                        try {
+                            el.dispatchEvent(new DragEvent('drag', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                        } catch (e) { }
                         await sleep(20);
                     }
+
                     el.dispatchEvent(new MouseEvent('mouseup', { clientX: endX, clientY: endY, bubbles: true, cancelable: true }));
-                    // Also dispatch drop for drag-and-drop APIs
+
+                    // Dispatch drop events on the target element
                     const dropTarget = document.elementFromPoint(endX, endY);
                     if (dropTarget) {
+                        try {
+                            const dt = new DataTransfer();
+                            dropTarget.dispatchEvent(new DragEvent('dragenter', { clientX: endX, clientY: endY, dataTransfer: dt, bubbles: true, cancelable: true }));
+                            dropTarget.dispatchEvent(new DragEvent('dragover', { clientX: endX, clientY: endY, dataTransfer: dt, bubbles: true, cancelable: true }));
+                            dropTarget.dispatchEvent(new DragEvent('drop', { clientX: endX, clientY: endY, dataTransfer: dt, bubbles: true, cancelable: true }));
+                        } catch (e) { }
                         dropTarget.dispatchEvent(new MouseEvent('mouseup', { clientX: endX, clientY: endY, bubbles: true }));
                     }
+                    try {
+                        el.dispatchEvent(new DragEvent('dragend', { clientX: endX, clientY: endY, bubbles: true, cancelable: true }));
+                    } catch (e) { }
+
                     sendResponse({ ok: true, summary: `Dragged "${getLabel(el)}" by (${request.dx}, ${request.dy})` });
                 } else { sendResponse({ ok: false, error: "Element not found" }); }
+            } catch (e) { sendResponse({ ok: false, error: e.message }); }
+        })();
+        return true;
+    }
+
+    if (request.action === "agentDragAndDrop") {
+        (async () => {
+            try {
+                let sourceEl = resolveSelector(request.source);
+                if (!sourceEl) sourceEl = await waitForElement(request.source, 2000);
+                let targetEl = resolveSelector(request.target);
+                if (!targetEl) targetEl = await waitForElement(request.target, 2000);
+
+                if (!sourceEl) { sendResponse({ ok: false, error: `Source element not found: ${request.source}` }); return; }
+                if (!targetEl) { sendResponse({ ok: false, error: `Target element not found: ${request.target}` }); return; }
+
+                sourceEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                await sleep(200);
+
+                const sourceRect = sourceEl.getBoundingClientRect();
+                const startX = sourceRect.left + sourceRect.width / 2;
+                const startY = sourceRect.top + sourceRect.height / 2;
+
+                const targetRect = targetEl.getBoundingClientRect();
+                const endX = targetRect.left + targetRect.width / 2;
+                const endY = targetRect.top + targetRect.height / 2;
+
+                // Mouse-based drag
+                sourceEl.dispatchEvent(new MouseEvent('mousedown', { clientX: startX, clientY: startY, bubbles: true, cancelable: true }));
+                await sleep(50);
+
+                // HTML5 DragEvent sequence
+                const dt = new DataTransfer();
+                try {
+                    dt.setData('text/plain', sourceEl.textContent?.trim()?.substring(0, 200) || '');
+                    dt.effectAllowed = 'all';
+                    sourceEl.dispatchEvent(new DragEvent('dragstart', { clientX: startX, clientY: startY, dataTransfer: dt, bubbles: true, cancelable: true }));
+                    await sleep(30);
+                } catch (e) { }
+
+                // Intermediate mouse moves
+                const steps = 10;
+                for (let i = 1; i <= steps; i++) {
+                    const x = startX + (endX - startX) * (i / steps);
+                    const y = startY + (endY - startY) * (i / steps);
+                    sourceEl.dispatchEvent(new MouseEvent('mousemove', { clientX: x, clientY: y, bubbles: true, cancelable: true }));
+                    try {
+                        sourceEl.dispatchEvent(new DragEvent('drag', { clientX: x, clientY: y, dataTransfer: dt, bubbles: true, cancelable: true }));
+                    } catch (e) { }
+                    await sleep(20);
+                }
+
+                // Scroll target into view if needed
+                targetEl.scrollIntoView({ behavior: 'instant', block: 'center' });
+                await sleep(100);
+                const finalTargetRect = targetEl.getBoundingClientRect();
+                const finalEndX = finalTargetRect.left + finalTargetRect.width / 2;
+                const finalEndY = finalTargetRect.top + finalTargetRect.height / 2;
+
+                // Drop events on target
+                try {
+                    targetEl.dispatchEvent(new DragEvent('dragenter', { clientX: finalEndX, clientY: finalEndY, dataTransfer: dt, bubbles: true, cancelable: true }));
+                    targetEl.dispatchEvent(new DragEvent('dragover', { clientX: finalEndX, clientY: finalEndY, dataTransfer: dt, bubbles: true, cancelable: true }));
+                    targetEl.dispatchEvent(new DragEvent('drop', { clientX: finalEndX, clientY: finalEndY, dataTransfer: dt, bubbles: true, cancelable: true }));
+                } catch (e) { }
+
+                sourceEl.dispatchEvent(new MouseEvent('mouseup', { clientX: finalEndX, clientY: finalEndY, bubbles: true, cancelable: true }));
+                targetEl.dispatchEvent(new MouseEvent('mouseup', { clientX: finalEndX, clientY: finalEndY, bubbles: true, cancelable: true }));
+
+                try {
+                    sourceEl.dispatchEvent(new DragEvent('dragend', { clientX: finalEndX, clientY: finalEndY, dataTransfer: dt, bubbles: true, cancelable: true }));
+                } catch (e) { }
+
+                sendResponse({ ok: true, summary: `Dragged "${getLabel(sourceEl)}" onto "${getLabel(targetEl)}"` });
             } catch (e) { sendResponse({ ok: false, error: e.message }); }
         })();
         return true;
