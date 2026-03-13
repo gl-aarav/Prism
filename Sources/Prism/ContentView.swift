@@ -6620,103 +6620,60 @@ struct MessageView: View, Equatable {
                     }
 
                     if isEditing {
-                        // Inline editing mode - improved UI
-                        VStack(alignment: .trailing, spacing: 12) {
-                            // Edit header
+                        // Inline editing mode - themed style
+                        VStack(alignment: .trailing, spacing: 0) {
+                            // Text editor area
+                            ZStack(alignment: .topLeading) {
+                                if editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("Edit your message…")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.secondary.opacity(0.5))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                }
+                                TextEditor(text: $editText)
+                                    .font(.system(size: 13))
+                                    .scrollContentBackground(.hidden)
+                                    .focused($isEditFocused)
+                                    .frame(minHeight: 60, maxHeight: 200)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 6)
+                            }
+
+                            // Inline action bar
                             HStack(spacing: 6) {
-                                Image(systemName: "pencil.circle.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(.blue.opacity(0.9))
-                                Text("Editing your last message")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.primary.opacity(0.85))
-                                Text("Cmd+Enter to send")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                // Theme accent indicator
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: appTheme.colors,
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 8, height: 8)
+                                    Text("Editing")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                }
+
                                 Spacer()
+
                                 Button {
                                     withAnimation(.easeOut(duration: 0.2)) {
                                         isEditing = false
                                         editText = ""
                                     }
                                 } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 14))
+                                    Text("Cancel")
+                                        .font(.system(size: 11, weight: .medium))
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
                                 .keyboardShortcut(.escape, modifiers: [])
-                            }
 
-                            // Text editor with improved styling
-                            ZStack(alignment: .topLeading) {
-                                if editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Text("Refine your message...")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(.secondary.opacity(0.7))
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 12)
-                                }
-                                TextEditor(text: $editText)
-                                    .font(.system(size: 14))
-                                    .scrollContentBackground(.hidden)
-                                    .focused($isEditFocused)
-                                    .frame(minHeight: 90, maxHeight: 260)
-                                    .padding(10)
-                            }
-                            .background(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.blue.opacity(colorScheme == .dark ? 0.14 : 0.08),
-                                                Color.clear,
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(
-                                        isEditFocused
-                                            ? Color.blue.opacity(0.7) : Color.primary.opacity(0.15),
-                                        lineWidth: isEditFocused ? 1.6 : 1
-                                    )
-                            )
-
-                            // Action buttons
-                            HStack(spacing: 10) {
-                                Text("\(editText.count) chars")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                                Spacer()
-                                Button(action: {
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        isEditing = false
-                                        editText = ""
-                                    }
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "xmark")
-                                            .font(.system(size: 11, weight: .semibold))
-                                        Text("Cancel")
-                                            .font(.system(size: 12, weight: .medium))
-                                    }
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .fill(Color.gray.opacity(0.15))
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .keyboardShortcut(.escape, modifiers: [])
-
-                                Button(action: {
+                                Button {
                                     if let onEdit = onEdit,
                                         !editText.trimmingCharacters(in: .whitespacesAndNewlines)
                                             .isEmpty
@@ -6727,37 +6684,56 @@ struct MessageView: View, Equatable {
                                             editText = ""
                                         }
                                     }
-                                }) {
-                                    HStack(spacing: 5) {
-                                        Image(systemName: "arrow.up.circle.fill")
-                                            .font(.system(size: 12, weight: .semibold))
-                                        Text("Save & Send")
-                                            .font(.system(size: 12, weight: .semibold))
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "arrow.up")
+                                            .font(.system(size: 10, weight: .bold))
+                                        Text("Send")
+                                            .font(.system(size: 11, weight: .semibold))
                                     }
                                     .foregroundStyle(.white)
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 5)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 10)
+                                        Capsule()
                                             .fill(
                                                 LinearGradient(
-                                                    colors: [Color.blue, Color.blue.opacity(0.8)],
-                                                    startPoint: .top,
-                                                    endPoint: .bottom
+                                                    colors: appTheme.colors,
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
                                                 )
                                             )
                                     )
-                                    .shadow(color: Color.blue.opacity(0.3), radius: 4, y: 2)
                                 }
                                 .buttonStyle(.plain)
                                 .keyboardShortcut(.return, modifiers: [.command])
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.bottom, 8)
+                            .padding(.top, 2)
                         }
-                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: appTheme.colors.map { $0.opacity(0.08) },
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .glassEffect(.regular, in: .rect(cornerRadius: 16))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: appTheme.colors.map { $0.opacity(isEditFocused ? 0.5 : 0.2) },
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: isEditFocused ? 1.5 : 1
+                                )
                         )
                         .frame(maxWidth: maxBubbleWidth)
                         .onAppear {

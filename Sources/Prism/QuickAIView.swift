@@ -1041,59 +1041,57 @@ struct QuickAIMessageView: View, Equatable {
                     }
 
                     if isEditing {
-                        // Inline editing mode
-                        VStack(alignment: .trailing, spacing: 10) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "pencil.circle.fill")
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(.blue)
-                                Text("Editing message")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
+                        // Inline editing mode - themed style
+                        VStack(alignment: .trailing, spacing: 0) {
+                            // Text editor area
+                            ZStack(alignment: .topLeading) {
+                                if editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("Edit your message…")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary.opacity(0.5))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 9)
+                                }
+                                TextEditor(text: $editText)
+                                    .font(.system(size: 12))
+                                    .scrollContentBackground(.hidden)
+                                    .frame(minHeight: 50, maxHeight: 160)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
                             }
 
-                            TextEditor(text: $editText)
-                                .font(.system(size: 13))
-                                .scrollContentBackground(.hidden)
-                                .frame(minHeight: 60, maxHeight: 200)
-                                .padding(10)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
+                            // Inline action bar
+                            HStack(spacing: 6) {
+                                HStack(spacing: 3) {
+                                    Circle()
                                         .fill(
-                                            colorScheme == .dark
-                                                ? Color.white.opacity(0.05)
-                                                : Color.black.opacity(0.03))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.blue.opacity(0.4), lineWidth: 1.5)
-                                )
+                                            LinearGradient(
+                                                colors: appTheme.colors,
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 6, height: 6)
+                                    Text("Editing")
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                }
 
-                            HStack(spacing: 8) {
-                                Button(action: {
+                                Spacer()
+
+                                Button {
                                     withAnimation(.easeOut(duration: 0.2)) {
                                         isEditing = false
                                         editText = ""
                                     }
-                                }) {
-                                    HStack(spacing: 3) {
-                                        Image(systemName: "xmark")
-                                            .font(.system(size: 10, weight: .semibold))
-                                        Text("Cancel")
-                                            .font(.system(size: 11, weight: .medium))
-                                    }
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.gray.opacity(0.15))
-                                    )
+                                } label: {
+                                    Text("Cancel")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
 
-                                Button(action: {
+                                Button {
                                     if let onEdit = onEdit,
                                         !editText.trimmingCharacters(in: .whitespacesAndNewlines)
                                             .isEmpty
@@ -1104,36 +1102,55 @@ struct QuickAIMessageView: View, Equatable {
                                             editText = ""
                                         }
                                     }
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "arrow.up.circle.fill")
-                                            .font(.system(size: 11, weight: .semibold))
-                                        Text("Save & Send")
-                                            .font(.system(size: 11, weight: .semibold))
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "arrow.up")
+                                            .font(.system(size: 9, weight: .bold))
+                                        Text("Send")
+                                            .font(.system(size: 10, weight: .semibold))
                                     }
                                     .foregroundStyle(.white)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 8)
+                                        Capsule()
                                             .fill(
                                                 LinearGradient(
-                                                    colors: [Color.blue, Color.blue.opacity(0.8)],
-                                                    startPoint: .top,
-                                                    endPoint: .bottom
+                                                    colors: appTheme.colors,
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
                                                 )
                                             )
                                     )
-                                    .shadow(color: Color.blue.opacity(0.3), radius: 3, y: 2)
                                 }
                                 .buttonStyle(.plain)
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.bottom, 6)
+                            .padding(.top, 2)
                         }
-                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: appTheme.colors.map { $0.opacity(0.08) },
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .glassEffect(.regular, in: .rect(cornerRadius: 14))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: appTheme.colors.map { $0.opacity(0.3) },
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
                         )
                     } else if !message.content.isEmpty {
                         Text(message.content)
