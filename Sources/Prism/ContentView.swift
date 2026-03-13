@@ -6532,6 +6532,7 @@ struct MessageView: View, Equatable {
     @State private var isThinkingExpanded = false
     @State private var isEditing = false
     @State private var editText = ""
+    @FocusState private var isEditFocused: Bool
     @State private var cachedStreamingBlocks: [MarkdownBlock] = []
     @State private var cachedStreamingContent: String = ""
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
@@ -6625,33 +6626,73 @@ struct MessageView: View, Equatable {
                             HStack(spacing: 6) {
                                 Image(systemName: "pencil.circle.fill")
                                     .font(.system(size: 14))
-                                    .foregroundStyle(.blue)
-                                Text("Editing message")
-                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.blue.opacity(0.9))
+                                Text("Editing your last message")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.primary.opacity(0.85))
+                                Text("Cmd+Enter to send")
+                                    .font(.caption2)
                                     .foregroundStyle(.secondary)
                                 Spacer()
+                                Button {
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        isEditing = false
+                                        editText = ""
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .keyboardShortcut(.escape, modifiers: [])
                             }
 
                             // Text editor with improved styling
-                            TextEditor(text: $editText)
-                                .font(.system(size: 14))
-                                .scrollContentBackground(.hidden)
-                                .frame(minHeight: 80, maxHeight: 250)
-                                .padding(12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(
-                                            colorScheme == .dark
-                                                ? Color.white.opacity(0.05)
-                                                : Color.black.opacity(0.03))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color.blue.opacity(0.4), lineWidth: 1.5)
-                                )
+                            ZStack(alignment: .topLeading) {
+                                if editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text("Refine your message...")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(.secondary.opacity(0.7))
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 12)
+                                }
+                                TextEditor(text: $editText)
+                                    .font(.system(size: 14))
+                                    .scrollContentBackground(.hidden)
+                                    .focused($isEditFocused)
+                                    .frame(minHeight: 90, maxHeight: 260)
+                                    .padding(10)
+                            }
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.blue.opacity(colorScheme == .dark ? 0.14 : 0.08),
+                                                Color.clear,
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(
+                                        isEditFocused
+                                            ? Color.blue.opacity(0.7) : Color.primary.opacity(0.15),
+                                        lineWidth: isEditFocused ? 1.6 : 1
+                                    )
+                            )
 
                             // Action buttons
                             HStack(spacing: 10) {
+                                Text("\(editText.count) chars")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                                Spacer()
                                 Button(action: {
                                     withAnimation(.easeOut(duration: 0.2)) {
                                         isEditing = false
@@ -6673,6 +6714,7 @@ struct MessageView: View, Equatable {
                                     )
                                 }
                                 .buttonStyle(.plain)
+                                .keyboardShortcut(.escape, modifiers: [])
 
                                 Button(action: {
                                     if let onEdit = onEdit,
@@ -6708,6 +6750,7 @@ struct MessageView: View, Equatable {
                                     .shadow(color: Color.blue.opacity(0.3), radius: 4, y: 2)
                                 }
                                 .buttonStyle(.plain)
+                                .keyboardShortcut(.return, modifiers: [.command])
                             }
                         }
                         .padding(14)
@@ -6717,6 +6760,11 @@ struct MessageView: View, Equatable {
                                 .stroke(Color.blue.opacity(0.2), lineWidth: 1)
                         )
                         .frame(maxWidth: maxBubbleWidth)
+                        .onAppear {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                isEditFocused = true
+                            }
+                        }
                     } else {
                         // Normal display mode
                         Text(message.content)
