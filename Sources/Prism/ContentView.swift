@@ -6624,7 +6624,8 @@ struct MessageView: View, Equatable {
                         VStack(alignment: .trailing, spacing: 0) {
                             // Text editor area
                             ZStack(alignment: .topLeading) {
-                                if editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                if editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                {
                                     Text("Edit your message…")
                                         .font(.system(size: 13))
                                         .foregroundStyle(.secondary.opacity(0.5))
@@ -6728,7 +6729,9 @@ struct MessageView: View, Equatable {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .stroke(
                                     LinearGradient(
-                                        colors: appTheme.colors.map { $0.opacity(isEditFocused ? 0.5 : 0.2) },
+                                        colors: appTheme.colors.map {
+                                            $0.opacity(isEditFocused ? 0.5 : 0.2)
+                                        },
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     ),

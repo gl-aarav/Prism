@@ -1045,7 +1045,8 @@ struct QuickAIMessageView: View, Equatable {
                         VStack(alignment: .trailing, spacing: 0) {
                             // Text editor area
                             ZStack(alignment: .topLeading) {
-                                if editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                if editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                {
                                     Text("Edit your message…")
                                         .font(.system(size: 12))
                                         .foregroundStyle(.secondary.opacity(0.5))
