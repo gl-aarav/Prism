@@ -295,6 +295,23 @@ class ExtensionServer {
                                 endpoint = account.endpoint
                             }
 
+                            // Check if this is an image generation model
+                            if OllamaService.isImageGenerationModel(actualModel) {
+                                let userPrompt = history.last(where: { $0.isUser })?.content ?? ""
+                                for try await (progress, imageData) in ollama.generateImage(
+                                    prompt: userPrompt, endpoint: endpoint, model: actualModel)
+                                {
+                                    if let progress = progress {
+                                        let event = "data: \(try self.jsonEscape(progress))\n\n"
+                                        try? writer.write(Array(event.utf8))
+                                    }
+                                    if let imgData = imageData {
+                                        let base64 = imgData.base64EncodedString()
+                                        let imageEvent = "data: \(try self.jsonEscapeDict(["image": "data:image/png;base64,\(base64)"]))\n\n"
+                                        try? writer.write(Array(imageEvent.utf8))
+                                    }
+                                }
+                            } else {
                             var currentHistory = history
                             if webSearchEnabled {
                                 if let lastUserMsg = currentHistory.last(where: { $0.isUser }) {
@@ -330,6 +347,7 @@ class ExtensionServer {
                                     let event = "data: \(try self.jsonEscape(chunk))\n\n"
                                     try? writer.write(Array(event.utf8))
                                 }
+                            }
                             }
                         } else if isGemini {
                             let gemini = GeminiService()

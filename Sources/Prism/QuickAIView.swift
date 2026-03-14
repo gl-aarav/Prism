@@ -671,6 +671,55 @@ struct QuickAIView: View {
 
                 let activeModel = selectedOllamaModel
 
+                // Check if this is an image generation model
+                if OllamaService.isImageGenerationModel(activeModel) {
+                    let userPrompt = chatManager.getCurrentMessages().last(where: { $0.isUser })?.content ?? ""
+                    DispatchQueue.main.async {
+                        self.streamBuffer[aiMsgId] = "Generating image..."
+                    }
+
+                    do {
+                        var receivedImage: NSImage? = nil
+
+                        for try await (progress, imageData) in ollamaService.generateImage(
+                            prompt: userPrompt, endpoint: activeURL, model: activeModel)
+                        {
+                            if let progress = progress {
+                                let snapshot = progress
+                                DispatchQueue.main.async {
+                                    self.streamBuffer[aiMsgId] = snapshot
+                                }
+                            }
+                            if let imgData = imageData, let img = NSImage(data: imgData) {
+                                receivedImage = img
+                            }
+                        }
+
+                        let finalImage = receivedImage
+                        DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId,
+                                content: finalImage != nil ? "" : "No image was generated.",
+                                image: finalImage)
+                            if let versions = existingVersions {
+                                self.chatManager.attachVersions(versions, to: aiMsgId)
+                            }
+                            self.chatManager.finalizeMessageUpdate()
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.isLoading = false
+                        }
+                    } catch {
+                        DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                            self.chatManager.finalizeMessageUpdate()
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.isLoading = false
+                        }
+                    }
+                } else {
                 // Web search augmentation (Ollama only)
                 let searchQuery =
                     chatManager.getCurrentMessages().last(where: { $0.isUser })?.content ?? ""
@@ -743,6 +792,7 @@ struct QuickAIView: View {
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
+                }
                 }
             } else if selectedProvider == "GitHub Copilot"
                 || selectedProvider.hasPrefix("GitHub Copilot|")

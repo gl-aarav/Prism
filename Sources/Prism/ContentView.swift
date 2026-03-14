@@ -991,11 +991,109 @@ class WebSearchService {
 class OllamaService {
     private let session: URLSession
 
+    /// Known model name patterns that indicate image generation (use /api/generate, not /api/chat).
+    static func isImageGenerationModel(_ model: String) -> Bool {
+        let lower = model.lowercased()
+        // Match known image generation model families
+        return lower.contains("flux")
+            || lower.contains("z-image")
+            || lower.contains("stable-diffusion")
+            || lower.contains("sdxl")
+            || lower.contains("sd3")
+            || lower.hasPrefix("x/")
+    }
+
     init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 120
         config.timeoutIntervalForResource = 300
         self.session = URLSession(configuration: config)
+    }
+
+    /// Generate an image using Ollama's /api/generate endpoint.
+    /// Returns an AsyncThrowingStream that yields progress strings and then the final image data.
+    func generateImage(
+        prompt: String, endpoint: String, model: String
+    ) -> AsyncThrowingStream<(String?, Data?), Error> {
+        return AsyncThrowingStream { continuation in
+            Task {
+                let baseURL = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                guard let url = URL(string: "\(baseURL)/api/generate") else {
+                    continuation.finish(throwing: URLError(.badURL))
+                    return
+                }
+
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.timeoutInterval = 300
+
+                let body: [String: Any] = [
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": true,
+                ]
+
+                do {
+                    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+                    let (result, response) = try await self.session.bytes(for: request)
+
+                    guard let httpResponse = response as? HTTPURLResponse else {
+                        continuation.finish(throwing: URLError(.badServerResponse))
+                        return
+                    }
+
+                    if httpResponse.statusCode != 200 {
+                        var errorMsg = ""
+                        for try await line in result.lines {
+                            errorMsg += line
+                        }
+                        if let data = errorMsg.data(using: .utf8),
+                            let json = try? JSONSerialization.jsonObject(with: data)
+                                as? [String: Any],
+                            let msg = json["error"] as? String
+                        {
+                            errorMsg = msg
+                        }
+                        continuation.finish(
+                            throwing: OllamaAPIError(
+                                statusCode: httpResponse.statusCode, message: errorMsg))
+                        return
+                    }
+
+                    for try await line in result.lines {
+                        guard let data = line.data(using: .utf8),
+                            let json = try? JSONSerialization.jsonObject(with: data)
+                                as? [String: Any]
+                        else { continue }
+
+                        // Check for progress updates
+                        if let completed = json["completed"] as? Int,
+                            let total = json["total"] as? Int,
+                            total > 0
+                        {
+                            let progress = "Generating image... \(completed)/\(total)"
+                            continuation.yield((progress, nil))
+                        }
+
+                        // Check for final image
+                        if let done = json["done"] as? Bool, done {
+                            if let base64Image = json["image"] as? String,
+                                let imageData = Data(base64Encoded: base64Image)
+                            {
+                                continuation.yield((nil, imageData))
+                            }
+                            break
+                        }
+                    }
+
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
 
     /// Compress and resize image data to fit within Ollama's request body limits.
@@ -2869,6 +2967,65 @@ struct ContentView: View {
                     self.streamingMessageId = aiMsgId
                 }
 
+                // Check if this is an image generation model
+                if OllamaService.isImageGenerationModel(activeModel) {
+                    // Use /api/generate for image gen models
+                    let userPrompt = currentHistory.last(where: { $0.isUser })?.content ?? input
+                    DispatchQueue.main.async {
+                        self.chatManager.updateMessage(
+                            id: aiMsgId, content: "Generating image...",
+                            isStreaming: true, isGeneratingImage: true)
+                    }
+
+                    do {
+                        var receivedImage: NSImage? = nil
+                        var progressText = "Generating image..."
+
+                        for try await (progress, imageData) in ollamaService.generateImage(
+                            prompt: userPrompt, endpoint: activeURL, model: activeModel)
+                        {
+                            if let progress = progress {
+                                progressText = progress
+                                let snapshot = progressText
+                                DispatchQueue.main.async {
+                                    self.streamBuffer[aiMsgId] = snapshot
+                                }
+                            }
+                            if let imgData = imageData, let img = NSImage(data: imgData) {
+                                receivedImage = img
+                            }
+                        }
+
+                        let finalImage = receivedImage
+                        DispatchQueue.main.async {
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.streamingMessageId = nil
+                            self.chatManager.updateMessage(
+                                id: aiMsgId,
+                                content: finalImage != nil ? "" : "No image was generated.",
+                                image: finalImage,
+                                isStreaming: false,
+                                isGeneratingImage: false)
+                            if let versions = existingVersions {
+                                self.chatManager.attachVersions(versions, to: aiMsgId)
+                            }
+                            self.chatManager.finalizeMessageUpdate()
+                            self.isLoading = false
+                        }
+                    } catch {
+                        DispatchQueue.main.async {
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.streamingMessageId = nil
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                                isStreaming: false, isGeneratingImage: false)
+                            self.chatManager.finalizeMessageUpdate()
+                            self.isLoading = false
+                        }
+                    }
+                } else {
                 do {
                     var fullContent = ""
                     var fullThinking = ""
@@ -2924,6 +3081,7 @@ struct ContentView: View {
                         self.chatManager.finalizeMessageUpdate()
                         self.isLoading = false
                     }
+                }
                 }
             } else if selectedProvider == "GitHub Copilot"
                 || selectedProvider.hasPrefix("GitHub Copilot|")
