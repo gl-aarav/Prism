@@ -343,9 +343,9 @@ struct QuickAIView: View {
         if selectedProvider.contains("Ollama") {
             var activeURL = ollamaURL
             if selectedProvider.contains("|"),
-               let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
-               let uuid = UUID(uuidString: uuidStr),
-               let account = AccountManager.shared.accounts.first(where: { $0.id == uuid })
+                let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
+                let uuid = UUID(uuidString: uuidStr),
+                let account = AccountManager.shared.accounts.first(where: { $0.id == uuid })
             {
                 activeURL = account.endpoint.isEmpty ? ollamaURL : account.endpoint
             }
