@@ -2290,6 +2290,7 @@ struct ContentView: View {
 
             // Auto-activate web view tool when Custom or Web provider is selected
             .onChange(of: selectedProvider) { _, newProvider in
+                updateOllamaModels()
                 if isWebViewProvider(newProvider) {
                     withAnimation {
                         showWebView = true
@@ -2324,6 +2325,21 @@ struct ContentView: View {
         }
         .onAppear {
             activeToolName = ""
+            updateOllamaModels()
+        }
+    }
+
+    private func updateOllamaModels() {
+        if selectedProvider == "Ollama" || selectedProvider.hasPrefix("Ollama|") {
+            var activeURL = ollamaURL
+            if selectedProvider.contains("|"),
+               let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
+               let uuid = UUID(uuidString: uuidStr),
+               let account = accountManager.accounts.first(where: { $0.id == uuid })
+            {
+                activeURL = account.endpoint.isEmpty ? ollamaURL : account.endpoint
+            }
+            OllamaModelManager.shared.fetchInstalledModels(endpoint: activeURL)
         }
     }
 
@@ -2665,7 +2681,9 @@ struct ContentView: View {
         currentTask = Task {
             // Web search augmentation
             var effectiveSystemPrompt = systemPrompt
-            if webSearchEnabled && selectedProvider == "Ollama" {
+            if webSearchEnabled
+                && (selectedProvider == "Ollama" || selectedProvider.hasPrefix("Ollama|"))
+            {
                 do {
                     let searchResults = try await webSearchService.search(query: input)
                     let searchContext = webSearchService.buildSearchContext(results: searchResults)
@@ -2828,7 +2846,17 @@ struct ContentView: View {
                         self.isLoading = false
                     }
                 }
-            } else if selectedProvider == "Ollama" {
+            } else if selectedProvider == "Ollama" || selectedProvider.hasPrefix("Ollama|") {
+                // Resolve URL for multi-account
+                var activeURL = ollamaURL
+                if selectedProvider.contains("|"),
+                    let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
+                    let uuid = UUID(uuidString: uuidStr),
+                    let account = accountManager.accounts.first(where: { $0.id == uuid })
+                {
+                    activeURL = account.endpoint.isEmpty ? ollamaURL : account.endpoint
+                }
+
                 let aiMsgId = UUID()
                 let activeModel = selectedOllamaModel
                 var aiMsg = Message(content: "", model: activeModel, isUser: false)
@@ -2847,7 +2875,7 @@ struct ContentView: View {
                     var lastUpdateTime = Date()
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
-                        history: currentHistory, endpoint: ollamaURL, model: activeModel,
+                        history: currentHistory, endpoint: activeURL, model: activeModel,
                         systemPrompt: effectiveSystemPrompt, thinkingLevel: currentThinkingLevel,
                         webSearchEnabled: webSearchEnabled,
                         webSearchService: webSearchEnabled ? webSearchService : nil)

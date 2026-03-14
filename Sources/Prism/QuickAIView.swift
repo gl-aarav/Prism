@@ -187,6 +187,10 @@ struct QuickAIView: View {
             }
 
             recalcPanelSize()
+            updateOllamaModels()
+        }
+        .onChange(of: selectedProvider) { _, _ in
+            updateOllamaModels()
         }
         .onChange(of: isExpanded) { _, expanded in
             if expanded {
@@ -333,6 +337,20 @@ struct QuickAIView: View {
             }
         }
         return provider
+    }
+
+    private func updateOllamaModels() {
+        if selectedProvider.contains("Ollama") {
+            var activeURL = ollamaURL
+            if selectedProvider.contains("|"),
+               let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
+               let uuid = UUID(uuidString: uuidStr),
+               let account = AccountManager.shared.accounts.first(where: { $0.id == uuid })
+            {
+                activeURL = account.endpoint.isEmpty ? ollamaURL : account.endpoint
+            }
+            OllamaModelManager.shared.fetchInstalledModels(endpoint: activeURL)
+        }
     }
 
     // MARK: - Slash Command Helpers
@@ -631,6 +649,16 @@ struct QuickAIView: View {
                     }
                 }
             } else if selectedProvider.contains("Ollama") {
+                // Resolve URL for multi-account
+                var activeURL = ollamaURL
+                if selectedProvider.contains("|"),
+                    let uuidStr = selectedProvider.split(separator: "|").last.map(String.init),
+                    let uuid = UUID(uuidString: uuidStr),
+                    let account = AccountManager.shared.accounts.first(where: { $0.id == uuid })
+                {
+                    activeURL = account.endpoint.isEmpty ? ollamaURL : account.endpoint
+                }
+
                 let aiMsgId = UUID()
                 var aiMsg = Message(content: "", isUser: false)
                 aiMsg.id = aiMsgId
@@ -667,7 +695,7 @@ struct QuickAIView: View {
                     var lastUpdateTime = Date()
 
                     for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
-                        history: chatManager.getCurrentMessages(), endpoint: ollamaURL,
+                        history: chatManager.getCurrentMessages(), endpoint: activeURL,
                         model: activeModel, systemPrompt: ollamaSystemPrompt,
                         thinkingLevel: thinkingLevel,
                         webSearchEnabled: webSearchEnabled,
