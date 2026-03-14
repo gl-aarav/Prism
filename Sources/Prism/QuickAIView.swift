@@ -1851,46 +1851,116 @@ extension QuickAIView {
                             systemImage: getProviderIcon("Apple Foundation"))
                     }
                 }
-                .opacity(expandedContentOpacity)
-                .offset(y: headerOffset)
-                Section("API") {
-                    Button(action: { selectedProvider = "Gemini API" }) {
-                        Label(
-                            "Gemini API", systemImage: getProviderIcon("Gemini API")
-                        )
-                    }
-                    Button(action: { selectedProvider = "Ollama" }) {
-                        Label("Ollama", systemImage: getProviderIcon("Ollama"))
-                    }
-                    if AccountManager.shared.nvidiaAccounts().contains(where: { !$0.apiKey.isEmpty }
-                    ) {
-                        Button(action: { selectedProvider = "NVIDIA API" }) {
-                            Label("NVIDIA API", systemImage: getProviderIcon("NVIDIA API"))
+
+                // Only show Gemini if there are configured accounts with API keys
+                let geminiAccounts = AccountManager.shared.geminiAccounts().filter {
+                    !$0.apiKey.isEmpty
+                }
+                if !geminiAccounts.isEmpty {
+                    Section("Gemini API") {
+                        if geminiAccounts.count == 1 {
+                            Button(action: { selectedProvider = "Gemini API" }) {
+                                Label(
+                                    geminiAccounts[0].displayName,
+                                    systemImage: getProviderIcon("Gemini API"))
+                            }
+                        } else {
+                            ForEach(Array(geminiAccounts.enumerated()), id: \.element.id) {
+                                index, account in
+                                Button(action: {
+                                    selectedProvider = "Gemini API|\(account.id.uuidString)"
+                                }) {
+                                    Label(
+                                        account.displayName,
+                                        systemImage: getProviderIcon("Gemini API"))
+                                }
+                            }
                         }
                     }
-                    if copilotService.isAuthenticated {
-                        let copilotAccounts = AccountManager.shared.copilotAccounts()
+                }
+
+                // Only show Ollama if there are configured accounts
+                let ollamaAccounts = AccountManager.shared.ollamaAccounts()
+                if !ollamaAccounts.isEmpty {
+                    Section("Ollama") {
+                        if ollamaAccounts.count == 1 {
+                            Button(action: { selectedProvider = "Ollama" }) {
+                                Label(
+                                    ollamaAccounts[0].displayName,
+                                    systemImage: getProviderIcon("Ollama"))
+                            }
+                        } else {
+                            ForEach(Array(ollamaAccounts.enumerated()), id: \.element.id) {
+                                index, account in
+                                Button(action: {
+                                    selectedProvider = "Ollama|\(account.id.uuidString)"
+                                }) {
+                                    Label(
+                                        account.displayName,
+                                        systemImage: getProviderIcon("Ollama"))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Only show NVIDIA if there are configured accounts with API keys
+                let nvidiaAccounts = AccountManager.shared.nvidiaAccounts().filter {
+                    !$0.apiKey.isEmpty
+                }
+                if !nvidiaAccounts.isEmpty {
+                    Section("NVIDIA API") {
+                        if nvidiaAccounts.count == 1 {
+                            Button(action: { selectedProvider = "NVIDIA API" }) {
+                                Label(
+                                    nvidiaAccounts[0].displayName,
+                                    systemImage: getProviderIcon("NVIDIA API"))
+                            }
+                        } else {
+                            ForEach(Array(nvidiaAccounts.enumerated()), id: \.element.id) {
+                                index, account in
+                                Button(action: {
+                                    selectedProvider = "NVIDIA API|\(account.id.uuidString)"
+                                }) {
+                                    Label(
+                                        account.displayName,
+                                        systemImage: getProviderIcon("NVIDIA API"))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Only show GitHub Copilot if signed in
+                if copilotService.isAuthenticated {
+                    let copilotAccounts = AccountManager.shared.copilotAccounts()
+                    Section("GitHub Copilot") {
                         if copilotAccounts.count <= 1 {
                             Button(action: { selectedProvider = "GitHub Copilot" }) {
                                 Label(
-                                    "GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot")
-                                )
+                                    "GitHub Copilot",
+                                    systemImage: getProviderIcon("GitHub Copilot"))
                             }
                         } else {
                             ForEach(copilotAccounts) { account in
                                 let ghUser =
                                     copilotService.accountAuthState[account.id]?.userName ?? ""
                                 let label =
-                                    ghUser.isEmpty ? "GitHub Copilot" : "GitHub Copilot (\(ghUser))"
+                                    ghUser.isEmpty
+                                    ? "GitHub Copilot" : "GitHub Copilot (\(ghUser))"
                                 Button(action: {
-                                    selectedProvider = "GitHub Copilot|\(account.id.uuidString)"
+                                    selectedProvider =
+                                        "GitHub Copilot|\(account.id.uuidString)"
                                 }) {
-                                    Label(label, systemImage: getProviderIcon("GitHub Copilot"))
+                                    Label(
+                                        label,
+                                        systemImage: getProviderIcon("GitHub Copilot"))
                                 }
                             }
                         }
                     }
                 }
+
                 Section("Shortcuts") {
                     Button(action: { selectedProvider = "Private Cloud" }) {
                         Label(
