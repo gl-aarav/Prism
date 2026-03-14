@@ -7,18 +7,6 @@ class OllamaModelManager: ObservableObject {
     @AppStorage("OllamaFavorites") private var favoritesJSON: String = "[]"
     @AppStorage("OllamaCustomModels") private var customModelsJSON: String = "[]"
 
-    @Published var availableModels: [String] = [
-        "llama3.3",
-        "llama3.2",
-        "llama3.1",
-        "deepseek-r1",
-        "phi4",
-        "mistral-small",
-        "gemma2",
-        "qwen2.5",
-        "codellama",
-    ]
-
     /// Models fetched from the local Ollama instance via /api/tags.
     @Published var installedModels: [String] = []
 
@@ -27,6 +15,7 @@ class OllamaModelManager: ObservableObject {
     }
 
     /// Fetch the list of locally installed models from Ollama's /api/tags endpoint.
+    /// Replaces the previous list so switching between Ollama accounts shows the correct models.
     func fetchInstalledModels(endpoint: String? = nil) {
         let baseURL =
             (endpoint ?? UserDefaults.standard.string(forKey: "OllamaURL")
@@ -39,31 +28,22 @@ class OllamaModelManager: ObservableObject {
         request.timeoutInterval = 5
 
         URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-            guard let data = data,
+            guard let self = self else { return }
+
+            let names: [String]
+            if let data = data,
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                 let models = json["models"] as? [[String: Any]]
-            else { return }
+            {
+                names = models.compactMap { $0["name"] as? String }
+            } else {
+                names = []
+            }
 
-            let names = models.compactMap { $0["name"] as? String }
             DispatchQueue.main.async {
-                self?.installedModels = names
-                // Merge into availableModels so pickers reflect what's actually installed
-                let merged = Array(Set((self?.availableModels ?? []) + names)).sorted()
-                self?.availableModels = merged
+                self.installedModels = names.sorted()
             }
         }.resume()
-    }
-
-    // Helper to group models by manufacturer/series
-    func getManufacturer(for model: String) -> String {
-        let lower = model.lowercased()
-        if lower.contains("llama") { return "Meta" }
-        if lower.contains("deepseek") { return "DeepSeek" }
-        if lower.contains("qwen") { return "Qwen" }
-        if lower.contains("gemma") { return "Google" }
-        if lower.contains("mistral") { return "Mistral" }
-        if lower.contains("phi") { return "Microsoft" }
-        return "Other"
     }
 
     var customModels: [String] {
@@ -104,16 +84,14 @@ class OllamaModelManager: ObservableObject {
     }
 
     var allModels: [String] {
-        let combined = Array(Set(availableModels + customModels))
+        let combined = Array(Set(installedModels + customModels))
         return combined.sorted()
     }
 
-    var groupedModels: [String: [String]] {
-        Dictionary(grouping: sortedModels, by: { getManufacturer(for: $0) })
-    }
-
-    var sortedManufacturers: [String] {
-        ["Meta", "DeepSeek", "Microsoft", "Qwen", "Google", "Mistral", "Other"]
+    var sortedModels: [String] {
+        let favorites = favoriteModels
+        let others = allModels.filter { !favorites.contains($0) }
+        return favorites + others
     }
 
     var favoriteModels: [String] {
@@ -133,12 +111,6 @@ class OllamaModelManager: ObservableObject {
                 objectWillChange.send()
             }
         }
-    }
-
-    var sortedModels: [String] {
-        let favorites = favoriteModels
-        let others = allModels.filter { !favorites.contains($0) }
-        return favorites + others
     }
 
     func toggleFavorite(_ model: String) {

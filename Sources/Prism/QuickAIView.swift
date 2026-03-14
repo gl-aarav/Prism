@@ -2170,37 +2170,61 @@ extension QuickAIView {
                 // Thinking Level Selector
                 if selectedProvider.contains("Ollama") {
                     Menu {
-                        Section("Favorites") {
-                            ForEach(ollamaManager.favoriteModels, id: \.self) { model in
-                                Button(action: { selectedOllamaModel = model }) {
-                                    if selectedOllamaModel == model {
-                                        Label(model, systemImage: "checkmark")
-                                            .foregroundStyle(
-                                                colorScheme == .dark ? Color.white : Color.primary)
-                                    } else {
-                                        Text(model)
+                        if !ollamaManager.favoriteModels.isEmpty {
+                            Section("Favorites") {
+                                ForEach(ollamaManager.favoriteModels, id: \.self) { model in
+                                    Button(action: { selectedOllamaModel = model }) {
+                                        if selectedOllamaModel == model {
+                                            Label(model, systemImage: "checkmark")
+                                                .foregroundStyle(
+                                                    colorScheme == .dark
+                                                        ? Color.white : Color.primary)
+                                        } else {
+                                            Text(model)
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        ForEach(ollamaManager.sortedManufacturers, id: \.self) { manufacturer in
-                            let models = ollamaManager.availableModels
-                                .filter { !ollamaManager.isFavorite($0) }
-                                .filter { ollamaManager.getManufacturer(for: $0) == manufacturer }
+                        // Show installed models from the active Ollama server
+                        let installedNonFav = ollamaManager.installedModels
+                            .filter { !ollamaManager.isFavorite($0) }
+                            .sorted()
+                        if !installedNonFav.isEmpty {
+                            Section("Installed") {
+                                ForEach(installedNonFav, id: \.self) { model in
+                                    Button(action: { selectedOllamaModel = model }) {
+                                        if selectedOllamaModel == model {
+                                            Label(model, systemImage: "checkmark")
+                                                .foregroundStyle(
+                                                    colorScheme == .dark
+                                                        ? Color.white : Color.primary)
+                                        } else {
+                                            Text(model)
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
-                            if !models.isEmpty {
-                                Section(manufacturer) {
-                                    ForEach(models, id: \.self) { model in
-                                        Button(action: { selectedOllamaModel = model }) {
-                                            if selectedOllamaModel == model {
-                                                Label(model, systemImage: "checkmark")
-                                                    .foregroundStyle(
-                                                        colorScheme == .dark
-                                                            ? Color.white : Color.primary)
-                                            } else {
-                                                Text(model)
-                                            }
+                        // Show custom models that aren't installed or favorited
+                        let installedSet = Set(ollamaManager.installedModels)
+                        let customNonInstalled = ollamaManager.customModels
+                            .filter { !ollamaManager.isFavorite($0) }
+                            .filter { !installedSet.contains($0) }
+                            .sorted()
+                        if !customNonInstalled.isEmpty {
+                            Section("Custom") {
+                                ForEach(customNonInstalled, id: \.self) { model in
+                                    Button(action: { selectedOllamaModel = model }) {
+                                        if selectedOllamaModel == model {
+                                            Label(model, systemImage: "checkmark")
+                                                .foregroundStyle(
+                                                    colorScheme == .dark
+                                                        ? Color.white : Color.primary)
+                                        } else {
+                                            Text(model)
                                         }
                                     }
                                 }
