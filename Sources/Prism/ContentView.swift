@@ -3026,62 +3026,64 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                do {
-                    var fullContent = ""
-                    var fullThinking = ""
-                    var lastUpdateTime = Date()
+                    do {
+                        var fullContent = ""
+                        var fullThinking = ""
+                        var lastUpdateTime = Date()
 
-                    for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
-                        history: currentHistory, endpoint: activeURL, model: activeModel,
-                        systemPrompt: effectiveSystemPrompt, thinkingLevel: currentThinkingLevel,
-                        webSearchEnabled: webSearchEnabled,
-                        webSearchService: webSearchEnabled ? webSearchService : nil)
-                    {
-                        fullContent += contentChunk
-                        if let thinking = thinkingChunk {
-                            fullThinking += thinking
-                        }
-
-                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
-                            let contentSnapshot = fullContent
-                            let thinkingSnapshot = fullThinking.isEmpty ? nil : fullThinking
-
-                            DispatchQueue.main.async {
-                                self.streamBuffer[aiMsgId] = contentSnapshot
-                                if let t = thinkingSnapshot {
-                                    self.streamThinkingBuffer[aiMsgId] = t
-                                }
+                        for try await (contentChunk, thinkingChunk)
+                            in ollamaService.sendMessageStream(
+                                history: currentHistory, endpoint: activeURL, model: activeModel,
+                                systemPrompt: effectiveSystemPrompt,
+                                thinkingLevel: currentThinkingLevel,
+                                webSearchEnabled: webSearchEnabled,
+                                webSearchService: webSearchEnabled ? webSearchService : nil)
+                        {
+                            fullContent += contentChunk
+                            if let thinking = thinkingChunk {
+                                fullThinking += thinking
                             }
-                            lastUpdateTime = Date()
+
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                let contentSnapshot = fullContent
+                                let thinkingSnapshot = fullThinking.isEmpty ? nil : fullThinking
+
+                                DispatchQueue.main.async {
+                                    self.streamBuffer[aiMsgId] = contentSnapshot
+                                    if let t = thinkingSnapshot {
+                                        self.streamThinkingBuffer[aiMsgId] = t
+                                    }
+                                }
+                                lastUpdateTime = Date()
+                            }
+                        }
+                        DispatchQueue.main.async {
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.streamingMessageId = nil
+                            self.chatManager.updateMessage(
+                                id: aiMsgId,
+                                content: fullContent,
+                                thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
+                                isStreaming: false)
+                            if let versions = existingVersions {
+                                self.chatManager.attachVersions(versions, to: aiMsgId)
+                            }
+                            self.chatManager.finalizeMessageUpdate()
+                            self.isLoading = false
+                        }
+                    } catch {
+                        DispatchQueue.main.async {
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.streamingMessageId = nil
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: "Error: \(error.localizedDescription)",
+                                isStreaming: false)
+                            self.chatManager.finalizeMessageUpdate()
+                            self.isLoading = false
                         }
                     }
-                    DispatchQueue.main.async {
-                        self.streamBuffer.removeValue(forKey: aiMsgId)
-                        self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
-                        self.streamingMessageId = nil
-                        self.chatManager.updateMessage(
-                            id: aiMsgId,
-                            content: fullContent,
-                            thinkingContent: fullThinking.isEmpty ? nil : fullThinking,
-                            isStreaming: false)
-                        if let versions = existingVersions {
-                            self.chatManager.attachVersions(versions, to: aiMsgId)
-                        }
-                        self.chatManager.finalizeMessageUpdate()
-                        self.isLoading = false
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        self.streamBuffer.removeValue(forKey: aiMsgId)
-                        self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
-                        self.streamingMessageId = nil
-                        self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)",
-                            isStreaming: false)
-                        self.chatManager.finalizeMessageUpdate()
-                        self.isLoading = false
-                    }
-                }
                 }
             } else if selectedProvider == "GitHub Copilot"
                 || selectedProvider.hasPrefix("GitHub Copilot|")
@@ -7792,7 +7794,7 @@ struct SettingsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
-        
+
         Section(header: Label("Gemini Favorited Models", systemImage: "star.fill")) {
             if geminiManager.favoriteModels.isEmpty {
                 Text("No favorite models")
@@ -7911,7 +7913,7 @@ struct SettingsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
-        
+
         Section(header: Label("Ollama Favorited Models", systemImage: "star.fill")) {
             if ollamaManager.favoriteModels.isEmpty {
                 Text("No favorite models")
