@@ -7792,6 +7792,32 @@ struct SettingsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
+        
+        Section(header: Label("Gemini Favorited Models", systemImage: "star.fill")) {
+            if geminiManager.favoriteModels.isEmpty {
+                Text("No favorite models")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            } else {
+                ForEach(geminiManager.favoriteModels, id: \.self) { model in
+                    HStack {
+                        Text(model)
+                            .font(.system(.callout, design: .monospaced))
+                        Spacer()
+                        Button(role: .destructive) {
+                            geminiManager.toggleFavorite(model)
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    .padding(8)
+                    .background(Color.gray.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -7883,6 +7909,32 @@ struct SettingsView: View {
                 .padding(8)
                 .background(Color.gray.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+        
+        Section(header: Label("Ollama Favorited Models", systemImage: "star.fill")) {
+            if ollamaManager.favoriteModels.isEmpty {
+                Text("No favorite models")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            } else {
+                ForEach(ollamaManager.favoriteModels, id: \.self) { model in
+                    HStack {
+                        Text(model)
+                            .font(.system(.callout, design: .monospaced))
+                        Spacer()
+                        Button(role: .destructive) {
+                            ollamaManager.toggleFavorite(model)
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    .padding(8)
+                    .background(Color.gray.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
             }
         }
     }
@@ -7986,6 +8038,32 @@ struct SettingsView: View {
                 .padding(8)
                 .background(Color.gray.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+        }
+
+        Section(header: Label("NVIDIA Favorited Models", systemImage: "star.fill")) {
+            if nvidiaManager.favoriteModels.isEmpty {
+                Text("No favorite models")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            } else {
+                ForEach(nvidiaManager.favoriteModels, id: \.self) { model in
+                    HStack {
+                        Text(model)
+                            .font(.system(.callout, design: .monospaced))
+                        Spacer()
+                        Button(role: .destructive) {
+                            nvidiaManager.toggleFavorite(model)
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    .padding(8)
+                    .background(Color.gray.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
             }
         }
     }
