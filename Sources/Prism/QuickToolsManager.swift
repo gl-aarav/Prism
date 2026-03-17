@@ -19,6 +19,7 @@ class QuickToolsManager: ObservableObject {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.backgroundColor = .clear
+        panel.isOpaque = false
         panel.hasShadow = false
         panel.isReleasedWhenClosed = false
         panel.isMovableByWindowBackground = true

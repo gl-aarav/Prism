@@ -44,6 +44,7 @@ struct NativeTextInput: NSViewRepresentable {
         textView.textContainer?.widthTracksTextView = true
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
+        textView.focusRingType = .none
         textView.autoresizingMask = [.width]
         textView.string = text
 
@@ -54,6 +55,7 @@ struct NativeTextInput: NSViewRepresentable {
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         scrollView.autohidesScrollers = true
+        scrollView.focusRingType = .none
 
         let lineHeight = computeLineHeight(font: font)
         scrollView.maxContentHeight = lineHeight * CGFloat(maxLines)

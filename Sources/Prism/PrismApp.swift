@@ -73,6 +73,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Disable Tab key selection app-wide so elements don't get selected
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 48 { // Tab key
+                return nil
+            }
+            return event
+        }
+
         // Ensure the app is a regular app (shows in Dock, has UI)
         NSApp.setActivationPolicy(.regular)
 

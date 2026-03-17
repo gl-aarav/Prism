@@ -16,46 +16,7 @@ struct QuickToolsView: View {
         min(max(tintIntensity, 0.0), 1.0)
     }
 
-    private var customBackground: some View {
-        let colors = appTheme.colors
 
-        let startColor = colors.first ?? .blue
-        let endColor = colors.last ?? .green
-
-        let baseDarkStart = 0.12
-        let baseDarkEnd = 0.08
-        let baseLightStart = 0.16
-        let baseLightEnd = 0.12
-
-        let gradient = LinearGradient(
-            stops: [
-                .init(
-                    color: startColor.opacity(
-                        (colorScheme == .dark ? baseDarkStart : baseLightStart)
-                            * clampedTint * 2),
-                    location: 0.0),
-                .init(
-                    color: endColor.opacity(
-                        (colorScheme == .dark ? baseDarkEnd : baseLightEnd) * clampedTint * 2),
-                    location: 1.0),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-
-        return ZStack {
-            Color.clear
-                .glassEffect(.regular, in: .rect(cornerRadius: 16))
-                .opacity(
-                    colorScheme == .dark
-                        ? clampedOpacity + 0.2
-                        : clampedOpacity + 0.16
-                )
-
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(gradient)
-        }
-    }
 
 
 
@@ -128,6 +89,7 @@ struct QuickToolsView: View {
                     )
                     .glassEffect(.regular, in: .capsule)
                 }
+                .menuStyle(.borderlessButton)
                 Spacer()
             }
             .padding(.horizontal, 14)
@@ -135,7 +97,7 @@ struct QuickToolsView: View {
             .background(Color.clear)
             .zIndex(10)
         }
-        .background(customBackground)
+        .background(ExpandedPanelBackground(cornerRadius: 16))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -153,6 +115,7 @@ struct QuickToolsView: View {
                 selectedTool = canonicalSelectedTool
             }
         }
+        .focusEffectDisabled()
     }
 
     private func iconForTool(_ tool: String) -> String {

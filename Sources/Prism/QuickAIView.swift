@@ -232,6 +232,7 @@ struct QuickAIView: View {
             }
             recalcPanelSize()
         }
+        .focusEffectDisabled()
     }
 
     func sendButtonStyle(darkened: Bool = false) -> AnyShapeStyle {
