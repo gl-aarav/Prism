@@ -35,6 +35,13 @@ Navigate and control the web using AI agents. Prism includes a powerful browser 
 *   **Real-time Interaction**: See exactly what the agent sees with live screenshots and a synchronized DOM tree view.
 *   **Multi-Tab Support**: The AI can manage multiple tabs and complex workflows across different websites.
 
+**How to run it:**
+1. Ensure the main **Prism app** is running (it powers the local AI API).
+2. Open your terminal and navigate to the `BrowserAutomation` directory within the project folder.
+3. Run `npm install` to install the required dependencies (Playwright, Puppeteer, etc.).
+4. Run `npm start` to launch the automation server.
+5. Open your web browser and navigate to `http://localhost:9090` to access the Browser Automation UI.
+
 ### 🖥️ Versatile Interfaces
 Prism adapts to how you work with multiple entry points, all **synchronized** in real-time:
 1.  **Main Window**: A full-featured chat interface for deep work and long conversations.
