@@ -41,24 +41,15 @@ class QuickToolsManager: ObservableObject {
     func hidePanel() {
         guard let panel = panel else { return }
 
-        // Start animation before closing
-        NotificationCenter.default.post(
-            name: NSWindow.didResignKeyNotification,
-            object: panel
-        )
+        panel.orderOut(nil)
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
-            guard let self = self, let panel = self.panel else { return }
-            panel.orderOut(nil)
-
-            let otherWindowsVisible = NSApp.windows.contains { $0 != panel && $0.isVisible }
-            if !otherWindowsVisible {
-                if let previousApp = self.previousApp {
-                    previousApp.activate(options: [])
-                    self.previousApp = nil
-                } else {
-                    NSApp.hide(nil)
-                }
+        let otherWindowsVisible = NSApp.windows.contains { $0 != panel && $0.isVisible }
+        if !otherWindowsVisible {
+            if let previousApp = self.previousApp {
+                previousApp.activate(options: [])
+                self.previousApp = nil
+            } else {
+                NSApp.hide(nil)
             }
         }
     }

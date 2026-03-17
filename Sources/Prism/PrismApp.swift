@@ -80,20 +80,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         // Force main window to appear if needed
-        // Observe new windows becoming main to auto-zoom them
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main
-        ) { notification in
-            guard let window = notification.object as? NSWindow,
-                !(window is QuickAIPanel),
-                !(window is WebOverlayPanel),
-                !(window is NSPanel)
-            else { return }
-            // Zoom the window to fill the screen if it isn't already zoomed
-            if !window.isZoomed {
-                window.zoom(nil)
-            }
-        }
 
         DispatchQueue.main.async {
             // Find the main window (not the Quick AI panel or Web Overlay)
@@ -104,8 +90,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window.styleMask.insert(.fullSizeContentView)
                 window.isReleasedWhenClosed = false
                 window.makeKeyAndOrderFront(nil)
-                // Zoom to fill the screen instead of centering at default size
-                window.zoom(nil)
             }
         }
 

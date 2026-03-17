@@ -4,10 +4,7 @@ struct QuickToolsView: View {
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("QuickToolSelected") private var selectedTool: String = "Image Generation"
     @Environment(\.colorScheme) private var colorScheme
-    @State private var panelScale: CGFloat = 0.95
-    @State private var panelOpacity: Double = 0.0
-    @State private var panelOffsetY: CGFloat = 25
-    @State private var panelBlur: CGFloat = 6
+
     @AppStorage("QuickToolsBackgroundOpacity") private var backgroundOpacity: Double = 0.25
     @AppStorage("QuickToolsTintIntensity") private var tintIntensity: Double = 0.5
 
@@ -60,13 +57,7 @@ struct QuickToolsView: View {
         }
     }
 
-    private var panelSpring: Animation {
-        .spring(response: 0.5, dampingFraction: 0.82, blendDuration: 0.1)
-    }
 
-    private var panelCollapseSpring: Animation {
-        .spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.05)
-    }
 
     private var canonicalSelectedTool: String {
         switch selectedTool {
@@ -157,53 +148,9 @@ struct QuickToolsView: View {
                     lineWidth: 0.5
                 )
         )
-        .scaleEffect(panelScale)
-        .opacity(panelOpacity)
-        .offset(y: panelOffsetY)
-        .blur(radius: panelBlur)
-        .compositingGroup()
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) {
-            notification in
-            if let window = notification.object as? NSWindow, window as? QuickToolsPanel != nil {
-                panelScale = 0.88
-                panelOpacity = 0.0
-                panelOffsetY = 40
-                panelBlur = 8
-
-                withAnimation(panelSpring) {
-                    panelScale = 1.0
-                    panelOpacity = 1.0
-                    panelOffsetY = 0
-                    panelBlur = 0
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) {
-            notification in
-            if let window = notification.object as? NSWindow, window as? QuickToolsPanel != nil {
-                withAnimation(panelCollapseSpring) {
-                    panelScale = 0.92
-                    panelOpacity = 0.0
-                    panelOffsetY = 25
-                    panelBlur = 6
-                }
-            }
-        }
         .onAppear {
             if selectedTool != canonicalSelectedTool {
                 selectedTool = canonicalSelectedTool
-            }
-
-            panelScale = 0.88
-            panelOpacity = 0.0
-            panelOffsetY = 40
-            panelBlur = 8
-
-            withAnimation(panelSpring) {
-                panelScale = 1.0
-                panelOpacity = 1.0
-                panelOffsetY = 0
-                panelBlur = 0
             }
         }
     }
