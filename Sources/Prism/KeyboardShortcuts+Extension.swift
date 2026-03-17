@@ -6,4 +6,6 @@ extension KeyboardShortcuts.Name {
         "toggleAIAutocomplete", default: .init(.c, modifiers: [.control, .option]))
     static let toggleWebOverlay = Self(
         "toggleWebOverlay", default: .init(.space, modifiers: [.control, .shift]))
+    static let toggleQuickTools = Self(
+        "toggleQuickTools", default: .init(.t, modifiers: [.control, .shift]))
 }

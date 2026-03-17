@@ -76,7 +76,7 @@ struct Message: Identifiable, Codable, Equatable {
     var id = UUID()
     var content: String {
         didSet {
-            _cachedBlocks = nil
+            _cachedBlocks = Message.parseMarkdown(content)
         }
     }
     var thinkingContent: String?
@@ -2024,6 +2024,7 @@ struct ContentView: View {
     @State private var showImageGen: Bool = false
     @State private var showPDFCreator: Bool = false
     @State private var showWebView: Bool = false
+    @AppStorage("ToolSelectedWebView") private var toolSelectedWebView: String = "ChatGPT Web"
     @AppStorage("ActiveToolName") private var activeToolName: String = ""
     @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
     @AppStorage("SelectedCustomWebViewURL") private var selectedCustomWebViewURL: String = ""
@@ -2323,28 +2324,58 @@ struct ContentView: View {
                             .transition(.opacity)
                         }
                         if showWebView {
-                            ZStack(alignment: .top) {
-                                if isWebViewProvider(selectedProvider),
-                                    let url = getWebURL(for: selectedProvider)
-                                {
-                                    WebView(url: url)
+                            ZStack(alignment: .topTrailing) {
+                                // Web content fills underneath
+                                ZStack(alignment: .top) {
+                                    if let url = getWebURL(for: toolSelectedWebView) {
+                                        WebView(url: url)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    } else {
+                                        VStack(spacing: 16) {
+                                            Image(systemName: "globe")
+                                                .font(.system(size: 48))
+                                                .foregroundStyle(.secondary.opacity(0.3))
+                                            Text(
+                                                "Valid Web View URL not found"
+                                            )
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(.secondary)
+                                        }
                                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                } else if let url = resolvedCustomWebViewURL() {
-                                    WebView(url: url)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                } else {
-                                    VStack(spacing: 16) {
-                                        Image(systemName: "globe")
-                                            .font(.system(size: 48))
-                                            .foregroundStyle(.secondary.opacity(0.3))
-                                        Text(
-                                            "Add a custom Web View in Settings"
-                                        )
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(.secondary)
                                     }
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 }
+
+                                // Floating Glass Pill in Top Right
+                                Picker("Web View", selection: $toolSelectedWebView) {
+                                    Text("ChatGPT").tag("ChatGPT Web")
+                                    Text("Claude").tag("Claude Web")
+                                    Text("Gemini").tag("Gemini Web")
+                                    Text("Perplexity").tag("Perplexity Web")
+                                    Text("Grok").tag("Grok Web")
+
+                                    Divider()
+
+                                    ForEach(customWebViews()) { webView in
+                                        Text(webView.name.isEmpty ? webView.url : webView.name)
+                                            .tag("CustomWebView:\(webView.url)")
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .fixedSize()
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(.ultraThinMaterial)
+                                )
+                                .glassEffect(.regular, in: .capsule)
+                                .overlay(
+                                    Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
+                                .padding(.trailing, 16)
+                                .padding(.top, 16)
+                                .zIndex(10)
+
                             }
                             .transition(.opacity)
                         }
@@ -2485,6 +2516,14 @@ struct ContentView: View {
             let views = try? JSONDecoder().decode([CustomWebView].self, from: data)
         else { return [] }
         return views
+    }
+
+    private func getCustomWebURL(for provider: String) -> URL? {
+        if provider.hasPrefix("CustomWebView:") {
+            let urlStr = String(provider.dropFirst("CustomWebView:".count))
+            return URL(string: urlStr)
+        }
+        return nil
     }
 
     private func resolvedCustomWebViewURL() -> URL? {
@@ -6747,7 +6786,7 @@ struct MessageView: View, Equatable {
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @Environment(\.colorScheme) private var colorScheme
-    private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    // private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect() // removed to prevent layout loops
 
     static func == (lhs: MessageView, rhs: MessageView) -> Bool {
         return lhs.message == rhs.message && lhs.liveContent == rhs.liveContent
@@ -7170,12 +7209,6 @@ struct MessageView: View, Equatable {
             }
         }
         .padding(.vertical, 4)
-        .onReceive(cursorTimer) { _ in
-            // Only toggle cursor for messages that are actively streaming
-            if liveContent != nil || message.isStreaming {
-                isCursorVisible.toggle()
-            }
-        }
         .onChange(of: liveThinking) { _, newValue in
             if let val = newValue, !val.isEmpty, liveContent == nil || liveContent!.isEmpty {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
@@ -7274,6 +7307,12 @@ struct SettingsView: View {
     @AppStorage("QuickAIClickOutsideCloses") private var quickAIClickOutsideCloses: Bool = false
     @AppStorage("WebOverlayClickOutsideCloses") private var webOverlayClickOutsideCloses: Bool =
         false
+    @AppStorage("EnableQuickTools") private var enableQuickTools: Bool = true
+    @AppStorage("QuickToolsClickOutsideCloses") private var quickToolsClickOutsideCloses: Bool =
+        false
+    @AppStorage("QuickToolsBackgroundOpacity") private var quickToolsBackgroundOpacity: Double =
+        0.25
+    @AppStorage("QuickToolsTintIntensity") private var quickToolsTintIntensity: Double = 0.5
     @AppStorage("WebOverlayBackgroundOpacity") private var webOverlayBackgroundOpacity: Double =
         0.25
     @AppStorage("WebOverlayTintIntensity") private var webOverlayTintIntensity: Double = 0.5
@@ -7614,6 +7653,69 @@ struct SettingsView: View {
     }
 
     // MARK: - Quick AI Section
+
+    @ViewBuilder
+    private var quickToolsSection: some View {
+        Section(header: Label("Quick Tools", systemImage: "briefcase")) {
+            Toggle(isOn: $enableQuickTools) {
+                Label("Enable Quick Tools Hotkey", systemImage: "hammer")
+            }
+            .toggleStyle(.switch)
+
+            if enableQuickTools {
+                LabeledContent {
+                    KeyboardShortcuts.Recorder(for: .toggleQuickTools)
+                } label: {
+                    Label("Global Shortcut", systemImage: "command")
+                }
+
+                Toggle(isOn: $quickToolsClickOutsideCloses) {
+                    Label("Click Outside Closes Quick Tools", systemImage: "cursorarrow.click")
+                }
+                .toggleStyle(.switch)
+            }
+        }
+
+        if enableQuickTools {
+            Section(header: Label("Quick Tools Appearance", systemImage: "paintbrush")) {
+                LabeledContent {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { quickToolsBackgroundOpacity },
+                                set: { quickToolsBackgroundOpacity = min(max($0, 0.05), 1.0) }
+                            ),
+                            in: 0.05...1.0
+                        )
+                        Text("\(Int(min(max(quickToolsBackgroundOpacity, 0.05), 1.0) * 100))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                } label: {
+                    Label("Glass Opacity", systemImage: "circle.dotted")
+                }
+
+                LabeledContent {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { quickToolsTintIntensity },
+                                set: { quickToolsTintIntensity = min(max($0, 0.0), 1.0) }
+                            ),
+                            in: 0.0...1.0
+                        )
+                        Text("\(Int(min(max(quickToolsTintIntensity, 0.0), 1.0) * 100))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                } label: {
+                    Label("Theme Tint", systemImage: "paintbrush.pointed")
+                }
+            }
+        }
+    }
 
     @ViewBuilder
     private var quickAISection: some View {
@@ -8630,6 +8732,7 @@ struct SettingsView: View {
             generalSection
             webOverlaySection
             quickAISection
+            quickToolsSection
 
             // AI Providers
             geminiSection

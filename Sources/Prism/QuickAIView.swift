@@ -1032,7 +1032,7 @@ struct QuickAIMessageView: View, Equatable {
     @State private var editText = ""
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @Environment(\.colorScheme) private var colorScheme
-    private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    // private let cursorTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect() // removed to prevent layout loops
 
     static func == (lhs: QuickAIMessageView, rhs: QuickAIMessageView) -> Bool {
         return lhs.message == rhs.message && lhs.liveContent == rhs.liveContent
@@ -1338,11 +1338,16 @@ struct QuickAIMessageView: View, Equatable {
                         {
                             ThinkingIndicator()
                         } else if !activeContent.isEmpty || message.isStreaming {
-                            let displayContent =
-                                activeContent + (message.isStreaming && isCursorVisible ? " ▋" : "")
-                            MarkdownView(blocks: Message.parseMarkdown(displayContent))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .id("streamingMarkdown")
+                            if message.isStreaming {
+                                let displayContent = activeContent + (isCursorVisible ? " ▋" : "")
+                                MarkdownView(blocks: Message.parseMarkdown(displayContent))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .id("streamingMarkdown")
+                            } else {
+                                MarkdownView(blocks: message.blocks)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .id("streamingMarkdown")
+                            }
                         }
 
                         // Action Buttons
@@ -1455,11 +1460,6 @@ struct QuickAIMessageView: View, Equatable {
                 .glassEffect(.regular, in: .rect(cornerRadius: 14))
 
                 Spacer()
-            }
-        }
-        .onReceive(cursorTimer) { _ in
-            if message.isStreaming {
-                isCursorVisible.toggle()
             }
         }
         .onChange(of: liveThinking) { _, newValue in

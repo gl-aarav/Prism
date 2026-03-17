@@ -124,6 +124,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         QuickAIManager.shared.setup()
         WebOverlayManager.shared.setup()
+        QuickToolsManager.shared.setup()
 
         // Setup menu bar status item
         setupStatusItem()
@@ -140,6 +141,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if UserDefaults.standard.bool(forKey: "EnableWebOverlay") {
                 WebOverlayManager.shared.toggle()
             }
+        }
+
+        // Quick Tools shortcut
+        KeyboardShortcuts.onKeyUp(for: .toggleQuickTools) {
+            QuickToolsManager.shared.toggle()
         }
 
         // AI Autocomplete: register toggle shortcut and auto-start if enabled
