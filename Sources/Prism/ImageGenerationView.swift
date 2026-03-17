@@ -208,24 +208,6 @@ struct ImageGenerationView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            // Title pill
-            HStack(spacing: 8) {
-                Image(systemName: "paintbrush.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: appTheme.colors.isEmpty ? [.orange, .pink] : appTheme.colors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                Text("Image Generation")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: .capsule)
-
             Spacer()
 
             // Style indicator

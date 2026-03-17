@@ -4348,23 +4348,6 @@ struct HeaderView: View {
                     }
                 }
 
-                Section("Web Views") {
-                    ForEach(WebOverlayService.allCases) { service in
-                        if WebOverlayManager.shared.isServiceEnabled(service) {
-                            Button(action: { selectedProvider = "\(service.rawValue) Web" }) {
-                                Label(service.rawValue, systemImage: service.icon)
-                            }
-                        }
-                    }
-                    ForEach(customWebViews) { webView in
-                        Button(action: { selectedProvider = "CustomWebView:\(webView.url)" }) {
-                            Label(
-                                webView.name.isEmpty ? webView.url : webView.name,
-                                systemImage: "globe")
-                        }
-                    }
-                }
-
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: getProviderIcon(selectedProvider))

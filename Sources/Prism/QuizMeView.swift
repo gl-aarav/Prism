@@ -251,24 +251,6 @@ struct QuizMeView: View {
 
     private var quizHeader: some View {
         HStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "questionmark.bubble")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: appTheme.colors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                Text("Quiz Me")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: .capsule)
-
             Spacer()
 
             if let session = activeSession, !session.finished {

@@ -24,17 +24,8 @@ class QuickToolsManager: ObservableObject {
         panel.isMovableByWindowBackground = true
 
         let rootView = QuickToolsView(
-            onClose: { [weak panel] in
-                panel?.orderOut(nil)
-                let otherWindowsVisible = NSApp.windows.contains { $0 != panel && $0.isVisible }
-                if !otherWindowsVisible {
-                    if let previousApp = QuickToolsManager.shared.previousApp {
-                        previousApp.activate(options: [])
-                        QuickToolsManager.shared.previousApp = nil
-                    } else {
-                        NSApp.hide(nil)
-                    }
-                }
+            onClose: {
+                QuickToolsManager.shared.hidePanel()
             }
         )
         .edgesIgnoringSafeArea(.all)
@@ -51,20 +42,36 @@ class QuickToolsManager: ObservableObject {
         self.panel = panel
     }
 
-    func toggle() {
+    func hidePanel() {
         guard let panel = panel else { return }
 
-        if panel.isVisible && panel.isKeyWindow {
+        // Start animation before closing
+        NotificationCenter.default.post(
+            name: NSWindow.didResignKeyNotification,
+            object: panel
+        )
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self = self, let panel = self.panel else { return }
             panel.orderOut(nil)
+            
             let otherWindowsVisible = NSApp.windows.contains { $0 != panel && $0.isVisible }
             if !otherWindowsVisible {
-                if let previousApp = previousApp {
+                if let previousApp = self.previousApp {
                     previousApp.activate(options: [])
                     self.previousApp = nil
                 } else {
                     NSApp.hide(nil)
                 }
             }
+        }
+    }
+
+    func toggle() {
+        guard let panel = panel else { return }
+
+        if panel.isVisible && panel.isKeyWindow {
+            hidePanel()
         } else {
             if !NSApp.isActive {
                 previousApp = NSWorkspace.shared.frontmostApplication
@@ -97,16 +104,7 @@ class QuickToolsPanel: NSPanel {
     override func resignKey() {
         super.resignKey()
         if UserDefaults.standard.bool(forKey: "QuickToolsClickOutsideCloses") {
-            orderOut(nil)
-            let otherWindowsVisible = NSApp.windows.contains { $0 != self && $0.isVisible }
-            if !otherWindowsVisible {
-                if let previousApp = QuickToolsManager.shared.previousApp {
-                    previousApp.activate(options: [])
-                    QuickToolsManager.shared.previousApp = nil
-                } else {
-                    NSApp.hide(nil)
-                }
-            }
+            QuickToolsManager.shared.hidePanel()
         }
     }
 }

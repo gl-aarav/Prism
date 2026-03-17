@@ -22,21 +22,46 @@ struct QuickToolsView: View {
     }
 
     private var customBackground: some View {
-        ZStack {
-            Color.clear
-                .background(.ultraThinMaterial)
+        let colors = appTheme.colors
 
-            if appTheme != .default {
-                LinearGradient(
-                    colors: appTheme.colors.map {
-                        $0.opacity(colorScheme == .dark ? clampedTint * 0.85 : clampedTint * 0.6)
-                    },
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+        let startColor = colors.first ?? .blue
+        let endColor = colors.last ?? .green
+
+        let baseDarkStart = 0.08
+        let baseDarkEnd = 0.05
+        let baseLightStart = 0.12
+        let baseLightEnd = 0.08
+
+        let gradient = LinearGradient(
+            stops: [
+                .init(
+                    color: startColor.opacity(
+                        (colorScheme == .dark ? baseDarkStart : baseLightStart)
+                            * clampedTint * 2),
+                    location: 0.0),
+                .init(
+                    color: endColor.opacity(
+                        (colorScheme == .dark ? baseDarkEnd : baseLightEnd) * clampedTint * 2),
+                    location: 1.0),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        return ZStack {
+            Color.clear
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                .opacity(
+                    colorScheme == .dark
+                        ? clampedOpacity + 0.16
+                        : clampedOpacity + 0.12
                 )
+                
+            if appTheme != .default {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(gradient)
             }
         }
-        .opacity(clampedOpacity)
     }
 
     var body: some View {
@@ -65,22 +90,23 @@ struct QuickToolsView: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: iconForTool(selectedTool))
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                         Text(selectedTool)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.headline)
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                        Image(systemName: "chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                     .contentShape(Rectangle())
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                    )
+                    .glassEffect(.regular, in: .capsule)
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .background(
-                    Capsule()
-                        .fill(Color(NSColor.controlBackgroundColor))
-                        .overlay(
-                            Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
-                        )
-                )
 
                 Spacer()
 
@@ -142,7 +168,7 @@ struct QuickToolsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) {
             notification in
             if let window = notification.object as? NSWindow, window as? QuickToolsPanel != nil {
-                panelScale = 0.95
+                panelScale = 0.92
                 panelOpacity = 0.0
 
                 let springResponse = 0.40
@@ -155,6 +181,22 @@ struct QuickToolsView: View {
                 ) {
                     panelScale = 1.0
                     panelOpacity = 1.0
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) {
+            notification in
+            if let window = notification.object as? NSWindow, window as? QuickToolsPanel != nil {
+                let springResponse = 0.40
+                let springDamping = 0.82
+
+                withAnimation(
+                    .spring(
+                        response: springResponse, dampingFraction: springDamping,
+                        blendDuration: 0.08)
+                ) {
+                    panelScale = 0.92
+                    panelOpacity = 0.0
                 }
             }
         }

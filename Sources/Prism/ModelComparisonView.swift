@@ -241,25 +241,6 @@ struct ModelComparisonView: View {
 
     private var headerBar: some View {
         HStack(spacing: 10) {
-            // Title pill
-            HStack(spacing: 8) {
-                Image(systemName: "square.split.2x1")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: appTheme.colors,
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                Text("Model Comparison")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: .capsule)
-
             Spacer()
 
             // Slot count indicator
