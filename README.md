@@ -10,14 +10,17 @@
 
 ### 🧠 Multi-Model Intelligence
 *   **Google Gemini**: Harness the power of Google's latest cloud models (Gemini 1.5 Pro/Flash) for complex reasoning, coding, and multimodal analysis.
+*   **GitHub Copilot Integration**: Seamlessly connect your GitHub Copilot subscription to access a wide range of top-tier models from OpenAI, Anthropic, and more directly within Prism.
+*   **NVIDIA NIM**: Access ultra-fast, high-performance models (Llama 3, Mistral) through NVIDIA's optimized infrastructure.
 *   **Ollama Integration**: Run privacy-focused local models (like Llama 3, DeepSeek, Mistral) directly on your machine. Zero data leaves your device.
 *   **Apple Foundation Models**: Access Apple's on-device foundation models (Apple Intelligence) for private, lightning-fast AI responses.
-*   **Apple Shortcuts**: Trigger system ai shortcuts.
+*   **Apple Shortcuts**: Integrated system-wide triggers to invoke AI actions via the Shortcuts app.
 
 ### ✍️ System-Wide AI Writing Layer
 Transform any text field on your Mac into an AI-powered workspace using macOS Accessibility APIs:
 *   **Inline AI Autocomplete**: Get intelligent, contextual text predictions and continuations directly at your cursor as you type in any application.
 *   **Global Command Bar (IntelliBar)**: Instantly summon a floating command bar to perform quick actions on selected text anywhere on your system.
+*   **Personalized Writing Style (Memory)**: Prism learns your unique writing style over time, adapting its suggestions to match your tone and vocabulary for truly personalized assistance.
 *   **Refinement Panel**: A dedicated interface for powerful text manipulations:
     *   Rewrite and improve clarity
     *   Summarize long content
@@ -26,11 +29,19 @@ Transform any text field on your Mac into an AI-powered workspace using macOS Ac
     *   Match specific writing styles
     *   Generate new content or edit code
 
+### 🌐 Prism Browser Automation (Agentic Control)
+Navigate and control the web using AI agents. Prism includes a powerful browser automation engine (Playwright/Puppeteer) that allows you to:
+*   **Task-Based Browsing**: Give the AI a goal (e.g., "Find the cheapest flights to NYC") and watch it navigate, search, and extract information for you.
+*   **Real-time Interaction**: See exactly what the agent sees with live screenshots and a synchronized DOM tree view.
+*   **Multi-Tab Support**: The AI can manage multiple tabs and complex workflows across different websites.
+
 ### 🖥️ Versatile Interfaces
-Prism adapts to how you work with three distinct modes, all **synchronized** in real-time:
+Prism adapts to how you work with multiple entry points, all **synchronized** in real-time:
 1.  **Main Window**: A full-featured chat interface for deep work and long conversations.
 2.  **Menu Bar App**: Always one click away for quick questions and status checks.
 3.  **Quick AI Panel** (`Ctrl + Space`): A Spotlight-like floating search bar. Summon it instantly from anywhere to ask a question, then dismiss it just as fast.
+4.  **Interactive Web Overlay**: A dedicated, floating web view panel for quick internet access and searches alongside your AI.
+5.  **Browser Extensions (Chrome & Safari)**: Bring Prism's intelligence directly into your browser. Enhance web pages, extract content, and enable seamless agentic browser control.
 
 ### 🔀 Model Comparison Mode
 *   **Side-by-Side Comparison**: Send the same prompt to multiple AI models simultaneously and compare their responses.
@@ -40,6 +51,7 @@ Prism adapts to how you work with three distinct modes, all **synchronized** in 
 
 ### 🎭 Rich Chat Experience
 *   **Multimodal Input**: Drag and drop or paste **multiple images** simultaneously to analyze them. Attach PDFs and have AI process their contents.
+*   **Professional PDF Export**: Convert any chat or markdown text into a professionally formatted PDF document with customizable page sizes (Letter, A4, Legal) and high-quality math rendering.
 *   **Advanced Math Rendering**: Beautiful LaTeX rendering for complex block equations (`$$...$$`) and seamless inline math support (`$...$`) with automatic symbol conversion.
 *   **Code Highlighting**: Syntax highlighting for all major programming languages with one-click copy.
 *   **Thinking Process**: View the internal "thought process" of reasoning models (like DeepSeek R1) in a beautifully animated, collapsible section.
@@ -47,6 +59,7 @@ Prism adapts to how you work with three distinct modes, all **synchronized** in 
 
 ### 🎨 Image & Video Generation
 *   **AI Image Creation**: Generate stunning visuals using AI. Includes support for custom aspect ratios and ultra-high resolution **4K generation**.
+*   **Local Image Generation**: Run image generation securely and privately on your machine using Ollama integration.
 *   **Video Generation (Veo)**: Create dynamic AI videos directly within Prism with a premium integrated video player UI.
 *   **Multiple Styles**: Choose from various styles including Animation, Illustration, Sketch (Apple Intelligence) and Watercolor, Vector, Anime, Print (ChatGPT).
 *   **Persistent Gallery**: All generated images and videos are saved and accessible in a gallery view.
@@ -69,6 +82,8 @@ Prism adapts to how you work with three distinct modes, all **synchronized** in 
 *   **Streaming**: Character-by-character streaming responses for immediate feedback.
 *   **Liquid Glass Aesthetic**: Sleek, modern UI with glassmorphism effects and macOS Tahoe design cues.
 *   **Highly Customizable**: Personalize your experience with custom themes, adjustable opacity, default models, and system prompts.
+*   **Background Mode**: Prism runs silently in the background without cluttering your Dock, available instantly via hotkey.
+*   **Automatic Updates**: Built-in over-the-air update system keeps your app on the latest version seamlessly.
 
 ---
 
@@ -96,20 +111,14 @@ Once cloned, open `Package.swift` or the project directory in Xcode, wait for Sw
 
 Click the **Gear Icon** in the main window to access Settings:
 
-### 1. Google Gemini
-*   Get your API key from [Google AI Studio](https://aistudio.google.com/).
-*   Paste it into the **API Key** field to enable Gemini 1.5, image generation, and Veo video generation.
-*   Set your default model.
+### 1. Model Providers
+*   **Google Gemini**: Get your API key from [Google AI Studio](https://aistudio.google.com/), or authenticate securely using the integrated Gemini CLI.
+*   **GitHub Copilot**: Sign in with your GitHub account to enable Copilot-powered models.
+*   **NVIDIA NIM**: Enter your NVIDIA API key for high-performance Llama models.
+*   **Ollama**: Install [Ollama](https://ollama.com/) and run `ollama serve`. Use `ollama run llama3` to pull models.
+*   **Apple Intelligence**: Select Apple Foundation Models for on-device processing (requires compatible Mac).
 
-### 2. Ollama (Local Models)
-*   Install [Ollama](https://ollama.com/) and run `ollama serve`.
-*   Pull a model (e.g., `ollama run llama3`).
-*   Enter the model name and URL in Prism settings.
-
-### 3. Apple Intelligence
-*   Select Apple Foundation Models in your settings for on-device processing. (Requires compatible Mac).
-
-### 4. System Prompt & Hotkeys
+### 2. System Prompt & Hotkeys
 *   Customize the system prompt to set the AI's personality and behavior.
 *   Change the default **Quick AI Hotkey** (default: `Control + Space`).
 
@@ -134,7 +143,7 @@ Prism supports extensive LaTeX formatting:
 
 *   **Local Storage**: All chat history is stored locally on your Mac in JSON format.
 *   **Ollama & Apple Intelligence**: When using local models, your data never leaves your computer.
-*   **Direct Connections**: Prism connects directly to the APIs you configure (Google, Ollama). No middleman servers intercept your prompts.
+*   **Direct Connections**: Prism connects directly to the APIs you configure. No middleman servers intercept your prompts.
 
 ---
 
