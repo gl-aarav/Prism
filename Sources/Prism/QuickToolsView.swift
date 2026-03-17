@@ -4,9 +4,10 @@ struct QuickToolsView: View {
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("QuickToolSelected") private var selectedTool: String = "Image Generation"
     @Environment(\.colorScheme) private var colorScheme
-    @State private var isPresented: Bool = false
     @State private var panelScale: CGFloat = 0.95
     @State private var panelOpacity: Double = 0.0
+    @State private var panelOffsetY: CGFloat = 25
+    @State private var panelBlur: CGFloat = 6
     @AppStorage("QuickToolsBackgroundOpacity") private var backgroundOpacity: Double = 0.25
     @AppStorage("QuickToolsTintIntensity") private var tintIntensity: Double = 0.5
 
@@ -67,16 +68,25 @@ struct QuickToolsView: View {
         .spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.05)
     }
 
+    private var canonicalSelectedTool: String {
+        switch selectedTool {
+        case "Model Comparison": return "Compare"
+        case "PDF Creator": return "File Creator"
+        case "Image Generator": return "Image Generation"
+        default: return selectedTool
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             // Content Area
             Group {
-                switch selectedTool {
+                switch canonicalSelectedTool {
                 case "Image Generation":
                     ImageGenerationView()
-                case "PDF Creator":
+                case "File Creator":
                     PDFCreatorView()
-                case "Model Comparison":
+                case "Compare":
                     ModelComparisonView()
                 case "Commands":
                     CommandsManagementView()
@@ -93,28 +103,25 @@ struct QuickToolsView: View {
             HStack {
                 Menu {
                     Button(action: { selectedTool = "Image Generation" }) {
-                        Label("Image Generator", systemImage: "photo.artframe")
+                        Label("Image Generation", systemImage: "paintbrush")
                     }
-                    Button(action: { selectedTool = "PDF Creator" }) {
-                        Label("PDF Creator", systemImage: "doc.text")
+                    Button(action: { selectedTool = "File Creator" }) {
+                        Label("File Creator", systemImage: "doc.richtext")
                     }
-                    Button(action: { selectedTool = "Model Comparison" }) {
-                        Label(
-                            "Model Comparison",
-                            systemImage:
-                                "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                    Button(action: { selectedTool = "Compare" }) {
+                        Label("Compare", systemImage: "square.split.2x1")
                     }
                     Button(action: { selectedTool = "Commands" }) {
                         Label("Commands", systemImage: "command")
                     }
                     Button(action: { selectedTool = "Quiz Me" }) {
-                        Label("Quiz Me", systemImage: "questionmark.circle")
+                        Label("Quiz Me", systemImage: "questionmark.bubble")
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: iconForTool(selectedTool))
+                        Image(systemName: iconForTool(canonicalSelectedTool))
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                        Text(selectedTool)
+                        Text(canonicalSelectedTool)
                             .font(.headline)
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                         Image(systemName: "chevron.down")
@@ -152,15 +159,22 @@ struct QuickToolsView: View {
         )
         .scaleEffect(panelScale)
         .opacity(panelOpacity)
+        .offset(y: panelOffsetY)
+        .blur(radius: panelBlur)
+        .compositingGroup()
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) {
             notification in
             if let window = notification.object as? NSWindow, window as? QuickToolsPanel != nil {
-                panelScale = 0.92
+                panelScale = 0.88
                 panelOpacity = 0.0
+                panelOffsetY = 40
+                panelBlur = 8
 
                 withAnimation(panelSpring) {
                     panelScale = 1.0
                     panelOpacity = 1.0
+                    panelOffsetY = 0
+                    panelBlur = 0
                 }
             }
         }
@@ -170,28 +184,37 @@ struct QuickToolsView: View {
                 withAnimation(panelCollapseSpring) {
                     panelScale = 0.92
                     panelOpacity = 0.0
+                    panelOffsetY = 25
+                    panelBlur = 6
                 }
             }
         }
         .onAppear {
-            panelScale = 0.95
+            if selectedTool != canonicalSelectedTool {
+                selectedTool = canonicalSelectedTool
+            }
+
+            panelScale = 0.88
             panelOpacity = 0.0
+            panelOffsetY = 40
+            panelBlur = 8
 
             withAnimation(panelSpring) {
                 panelScale = 1.0
                 panelOpacity = 1.0
+                panelOffsetY = 0
+                panelBlur = 0
             }
         }
     }
 
     private func iconForTool(_ tool: String) -> String {
         switch tool {
-        case "Image Generation": return "photo.artframe"
-        case "PDF Creator": return "doc.text"
-        case "Model Comparison":
-            return "arrow.left.and.right.righttriangle.left.righttriangle.right"
+        case "Image Generation": return "paintbrush"
+        case "File Creator": return "doc.richtext"
+        case "Compare": return "square.split.2x1"
         case "Commands": return "command"
-        case "Quiz Me": return "questionmark.circle"
+        case "Quiz Me": return "questionmark.bubble"
         default: return "hammer"
         }
     }

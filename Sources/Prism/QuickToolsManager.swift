@@ -47,7 +47,7 @@ class QuickToolsManager: ObservableObject {
             object: panel
         )
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
             guard let self = self, let panel = self.panel else { return }
             panel.orderOut(nil)
 
