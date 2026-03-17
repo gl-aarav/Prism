@@ -24,7 +24,7 @@ class QuickToolsManager: ObservableObject {
         panel.isMovableByWindowBackground = true
 
         let rootView = QuickToolsView()
-        .edgesIgnoringSafeArea(.all)
+            .edgesIgnoringSafeArea(.all)
 
         let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
         containerView.autoresizingMask = [.width, .height]
