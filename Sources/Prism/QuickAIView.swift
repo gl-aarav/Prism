@@ -125,14 +125,13 @@ struct QuickAIView: View {
                 }
 
                 if isExpanded {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 0) {
                         messagesSection
                             .safeAreaInset(edge: .top) {
                                 headerSection
                             }
                     }
                     // ...existing code...
-                    .padding(10)
                     .background(ExpandedPanelBackground(cornerRadius: 20))
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     // ...existing code...
@@ -2109,7 +2108,8 @@ extension QuickAIView {
                         .equatable()
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
             .scrollIndicators(.hidden)
             .onChange(of: chatManager.getCurrentMessages().count) { _, _ in
