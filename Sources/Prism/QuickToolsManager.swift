@@ -23,11 +23,7 @@ class QuickToolsManager: ObservableObject {
         panel.isReleasedWhenClosed = false
         panel.isMovableByWindowBackground = true
 
-        let rootView = QuickToolsView(
-            onClose: {
-                QuickToolsManager.shared.hidePanel()
-            }
-        )
+        let rootView = QuickToolsView()
         .edgesIgnoringSafeArea(.all)
 
         let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
@@ -51,7 +47,7 @@ class QuickToolsManager: ObservableObject {
             object: panel
         )
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
             guard let self = self, let panel = self.panel else { return }
             panel.orderOut(nil)
 

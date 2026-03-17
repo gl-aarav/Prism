@@ -1,12 +1,9 @@
 import SwiftUI
 
 struct QuickToolsView: View {
-    let onClose: () -> Void
-
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("QuickToolSelected") private var selectedTool: String = "Image Generation"
     @Environment(\.colorScheme) private var colorScheme
-    @State private var hoverClose: Bool = false
     @State private var isPresented: Bool = false
     @State private var panelScale: CGFloat = 0.95
     @State private var panelOpacity: Double = 0.0
@@ -27,10 +24,10 @@ struct QuickToolsView: View {
         let startColor = colors.first ?? .blue
         let endColor = colors.last ?? .green
 
-        let baseDarkStart = 0.08
-        let baseDarkEnd = 0.05
-        let baseLightStart = 0.12
-        let baseLightEnd = 0.08
+        let baseDarkStart = 0.12
+        let baseDarkEnd = 0.08
+        let baseLightStart = 0.16
+        let baseLightEnd = 0.12
 
         let gradient = LinearGradient(
             stops: [
@@ -53,20 +50,46 @@ struct QuickToolsView: View {
                 .glassEffect(.regular, in: .rect(cornerRadius: 16))
                 .opacity(
                     colorScheme == .dark
-                        ? clampedOpacity + 0.16
-                        : clampedOpacity + 0.12
+                        ? clampedOpacity + 0.2
+                        : clampedOpacity + 0.16
                 )
 
-            if appTheme != .default {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(gradient)
-            }
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(gradient)
         }
     }
 
+    private var panelSpring: Animation {
+        .spring(response: 0.5, dampingFraction: 0.82, blendDuration: 0.1)
+    }
+
+    private var panelCollapseSpring: Animation {
+        .spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.05)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Header bar
+        ZStack(alignment: .topLeading) {
+            // Content Area
+            Group {
+                switch selectedTool {
+                case "Image Generation":
+                    ImageGenerationView()
+                case "PDF Creator":
+                    PDFCreatorView()
+                case "Model Comparison":
+                    ModelComparisonView()
+                case "Commands":
+                    CommandsManagementView()
+                case "Quiz Me":
+                    QuizMeView()
+                default:
+                    ImageGenerationView()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.clear)
+
+            // Floating tool selector
             HStack {
                 Menu {
                     Button(action: { selectedTool = "Image Generation" }) {
@@ -107,48 +130,12 @@ struct QuickToolsView: View {
                     )
                     .glassEffect(.regular, in: .capsule)
                 }
-
                 Spacer()
-
-                Button(action: onClose) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(hoverClose ? .primary : .secondary)
-                        .animation(.easeInOut(duration: 0.1), value: hoverClose)
-                }
-                .buttonStyle(.plain)
-                .onHover { h in hoverClose = h }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
             .background(Color.clear)
-            .overlay(
-                Rectangle()
-                    .fill(Color.primary.opacity(0.1))
-                    .frame(height: 1),
-                alignment: .bottom
-            )
             .zIndex(10)
-
-            // Content Area
-            Group {
-                switch selectedTool {
-                case "Image Generation":
-                    ImageGenerationView()
-                case "PDF Creator":
-                    PDFCreatorView()
-                case "Model Comparison":
-                    ModelComparisonView()
-                case "Commands":
-                    CommandsManagementView()
-                case "Quiz Me":
-                    QuizMeView()
-                default:
-                    ImageGenerationView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.clear)
         }
         .background(customBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -171,14 +158,7 @@ struct QuickToolsView: View {
                 panelScale = 0.92
                 panelOpacity = 0.0
 
-                let springResponse = 0.40
-                let springDamping = 0.82
-
-                withAnimation(
-                    .spring(
-                        response: springResponse, dampingFraction: springDamping,
-                        blendDuration: 0.08)
-                ) {
+                withAnimation(panelSpring) {
                     panelScale = 1.0
                     panelOpacity = 1.0
                 }
@@ -187,14 +167,7 @@ struct QuickToolsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) {
             notification in
             if let window = notification.object as? NSWindow, window as? QuickToolsPanel != nil {
-                let springResponse = 0.40
-                let springDamping = 0.82
-
-                withAnimation(
-                    .spring(
-                        response: springResponse, dampingFraction: springDamping,
-                        blendDuration: 0.08)
-                ) {
+                withAnimation(panelCollapseSpring) {
                     panelScale = 0.92
                     panelOpacity = 0.0
                 }
@@ -204,13 +177,7 @@ struct QuickToolsView: View {
             panelScale = 0.95
             panelOpacity = 0.0
 
-            let springResponse = 0.40
-            let springDamping = 0.82
-
-            withAnimation(
-                .spring(
-                    response: springResponse, dampingFraction: springDamping, blendDuration: 0.08)
-            ) {
+            withAnimation(panelSpring) {
                 panelScale = 1.0
                 panelOpacity = 1.0
             }
