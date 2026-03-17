@@ -54,7 +54,7 @@ class QuickToolsManager: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
             guard let self = self, let panel = self.panel else { return }
             panel.orderOut(nil)
-            
+
             let otherWindowsVisible = NSApp.windows.contains { $0 != panel && $0.isVisible }
             if !otherWindowsVisible {
                 if let previousApp = self.previousApp {

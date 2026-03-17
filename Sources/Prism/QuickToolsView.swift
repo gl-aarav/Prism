@@ -56,7 +56,7 @@ struct QuickToolsView: View {
                         ? clampedOpacity + 0.16
                         : clampedOpacity + 0.12
                 )
-                
+
             if appTheme != .default {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(gradient)
