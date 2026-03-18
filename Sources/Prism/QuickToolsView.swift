@@ -100,7 +100,7 @@ struct QuickToolsView: View {
             .background(Color.clear)
             .zIndex(10)
         }
-        .background(ExpandedPanelBackground(cornerRadius: 16))
+        .background(QuickToolsPanelBackground(cornerRadius: 16))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -129,6 +129,64 @@ struct QuickToolsView: View {
         case "Commands": return "command"
         case "Quiz Me": return "questionmark.bubble"
         default: return "hammer"
+        }
+    }
+}
+
+struct QuickToolsPanelBackground: View {
+    var cornerRadius: CGFloat = 16
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("QuickToolsBackgroundOpacity") private var backgroundOpacity: Double = 0.25
+    @AppStorage("QuickToolsTintIntensity") private var tintIntensity: Double = 0.5
+    @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+
+    private var clampedBackgroundOpacity: Double {
+        min(max(backgroundOpacity, 0.05), 1.0)
+    }
+
+    private var clampedTintIntensity: Double {
+        min(max(tintIntensity, 0.0), 1.0)
+    }
+
+    var body: some View {
+        let colors = appTheme.colors
+        let startColor = colors.first ?? .blue
+        let endColor = colors.last ?? .green
+
+        let baseDarkStart = 0.08
+        let baseDarkEnd = 0.05
+        let baseLightStart = 0.12
+        let baseLightEnd = 0.08
+
+        let gradient = LinearGradient(
+            stops: [
+                .init(
+                    color: startColor.opacity(
+                        (colorScheme == .dark ? baseDarkStart : baseLightStart)
+                            * clampedTintIntensity * 2),
+                    location: 0.0),
+                .init(
+                    color: endColor.opacity(
+                        (colorScheme == .dark ? baseDarkEnd : baseLightEnd)
+                            * clampedTintIntensity * 2),
+                    location: 1.0),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(gradient)
+
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.clear)
+                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                .opacity(
+                    colorScheme == .dark
+                        ? clampedBackgroundOpacity + 0.16
+                        : clampedBackgroundOpacity + 0.12
+                )
         }
     }
 }
