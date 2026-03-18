@@ -39,7 +39,6 @@ struct PrismApp: App {
         Settings {
             SettingsView()
                 .environmentObject(ChatManager.shared)
-                .frame(minWidth: 700, minHeight: 780)
         }
         .defaultSize(width: 760, height: 820)
         .windowStyle(.hiddenTitleBar)
