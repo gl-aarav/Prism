@@ -483,7 +483,9 @@ class UpdateManager: ObservableObject {
         in releases: [GitHubRelease], assetName: String, marker: String
     ) -> (version: String, downloadURL: URL?)? {
         for release in releases {
-            guard let asset = release.assets.first(where: { $0.name == assetName }) else { continue }
+            guard let asset = release.assets.first(where: { $0.name == assetName }) else {
+                continue
+            }
             let url = URL(string: asset.browser_download_url)
 
             guard let body = release.body,

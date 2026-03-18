@@ -8981,15 +8981,24 @@ struct SettingsView: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: tab.icon)
                                         .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(selectedTab == tab ? .white : tab.iconColor)
+                                        .foregroundStyle(
+                                            selectedTab == tab ? .white : tab.iconColor
+                                        )
                                         .frame(width: 26, height: 26)
                                         .background(
                                             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                                .fill(selectedTab == tab ? tab.iconColor : tab.iconColor.opacity(0.15))
+                                                .fill(
+                                                    selectedTab == tab
+                                                        ? tab.iconColor
+                                                        : tab.iconColor.opacity(0.15))
                                         )
 
                                     Text(tab.rawValue)
-                                        .font(.system(size: 13, weight: selectedTab == tab ? .semibold : .regular))
+                                        .font(
+                                            .system(
+                                                size: 13,
+                                                weight: selectedTab == tab ? .semibold : .regular)
+                                        )
                                         .foregroundStyle(.primary)
                                         .lineLimit(1)
                                         .padding(.vertical, 2)
@@ -9090,7 +9099,6 @@ struct SettingsView: View {
         }
     }
 }
-
 
 // Helper
 struct TypingIndicator: View {
