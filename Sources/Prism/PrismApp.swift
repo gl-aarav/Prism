@@ -101,11 +101,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
-        ) { notification in
-            guard let window = notification.object as? NSWindow else { return }
-            if self.isSettingsWindow(window) {
+        // Catch settings window on multiple lifecycle events to prevent "Prism Settings" ever showing
+        for notificationName in [
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didBecomeMainNotification,
+            NSWindow.didUpdateNotification,
+        ] {
+            NotificationCenter.default.addObserver(
+                forName: notificationName, object: nil, queue: .main
+            ) { notification in
+                guard let window = notification.object as? NSWindow else { return }
+                if self.isSettingsWindow(window) {
+                    self.applySettingsWindowAppearance(window)
+                }
+            }
+        }
+
+        // Proactively apply to any settings window already created
+        DispatchQueue.main.async {
+            for window in NSApp.windows where self.isSettingsWindow(window) {
                 self.applySettingsWindowAppearance(window)
             }
         }
@@ -179,10 +193,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func isSettingsWindow(_ window: NSWindow) -> Bool {
         window.title.localizedCaseInsensitiveContains("settings")
+            || window.identifier == NSUserInterfaceItemIdentifier("PrismSettingsWindow")
     }
 
     private func applySettingsWindowAppearance(_ window: NSWindow) {
         window.titleVisibility = .hidden
+        window.title = ""
+        window.identifier = NSUserInterfaceItemIdentifier("PrismSettingsWindow")
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
         window.isOpaque = false

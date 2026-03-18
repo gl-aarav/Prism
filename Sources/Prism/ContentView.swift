@@ -9031,7 +9031,7 @@ struct SettingsView: View {
             }
             .padding(.vertical, 14)
         }
-        .safeAreaPadding(.top, 8)
+        .safeAreaPadding(.top, 16)
         .safeAreaPadding(.bottom, 10)
         .frame(width: 210)
         .background(Color.white.opacity(0.05))
@@ -9048,7 +9048,7 @@ struct SettingsView: View {
                     .font(.system(size: 20, weight: .bold))
             }
             .padding(.horizontal, 24)
-            .padding(.top, 22)
+            .padding(.top, 26)
             .padding(.bottom, 10)
 
             Form {
@@ -9075,7 +9075,9 @@ struct SettingsView: View {
                 .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.15), radius: 24, y: 10)
-        .padding(10)
+        .padding(.top, 42)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 10)
     }
 
     // MARK: - Body
@@ -9100,6 +9102,8 @@ struct SettingsView: View {
                 if let window = window {
                     window.titlebarAppearsTransparent = true
                     window.titleVisibility = .hidden
+                    window.title = ""
+                    window.identifier = NSUserInterfaceItemIdentifier("PrismSettingsWindow")
                     window.styleMask.insert(.fullSizeContentView)
 
                     // Clear the default Settings toolbar to remove the white bar
@@ -9122,6 +9126,13 @@ struct SettingsView: View {
                     if let minBtn = window.standardWindowButton(.miniaturizeButton) {
                         minBtn.isHidden = true
                         minBtn.isEnabled = false
+                    }
+
+                    // Re-apply after a short delay in case macOS resets the title
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        window.titleVisibility = .hidden
+                        window.title = ""
+                        window.toolbar = nil
                     }
                 }
             })
@@ -9858,5 +9869,9 @@ struct WindowAccessor: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            self.callback(nsView.window)
+        }
+    }
 }
