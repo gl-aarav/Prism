@@ -16,10 +16,6 @@ struct QuickToolsView: View {
         min(max(tintIntensity, 0.0), 1.0)
     }
 
-
-
-
-
     private var canonicalSelectedTool: String {
         switch selectedTool {
         case "Model Comparison": return "Compare"
