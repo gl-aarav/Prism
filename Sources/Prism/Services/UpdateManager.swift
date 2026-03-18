@@ -19,6 +19,7 @@ class UpdateManager: ObservableObject {
     @Published var chromeZipDownloadURL: URL? = nil
     @Published var safariZipDownloadURL: URL? = nil
     @Published var isPreRelease = false
+    @Published var showUpdateOverlay = false
 
     @Published var isChecking = false
     @Published var isDownloading = false
@@ -110,30 +111,17 @@ class UpdateManager: ObservableObject {
                 updateAvailable = true
             }
 
-            // Check Chrome extension version independently
-            // Look through all releases for the latest one that has Chrome.zip
+            // Check Chrome extension version independently.
+            // Parse from release notes tag (Chrome-Version), never from the app release tag.
             let chromeCandidates = enablePreRelease ? releases : releases.filter { !$0.prerelease }
-            for release in chromeCandidates {
-                if let chromeAsset = release.assets.first(where: { $0.name == chromeZipName }) {
-                    chromeZipDownloadURL = URL(string: chromeAsset.browser_download_url)
-                    // Parse chrome version from release body: "Chrome-Version: X.Y.Z"
-                    if let body = release.body,
-                        let range = body.range(
-                            of: #"Chrome-Version:\s*(\S+)"#, options: .regularExpression)
-                    {
-                        let match = body[range]
-                        let ver =
-                            match.split(separator: ":").last?.trimmingCharacters(in: .whitespaces)
-                            ?? ""
-                        latestChromeVersion = ver
-                    } else {
-                        // Fallback: use release tag as chrome version
-                        let tag = release.tag_name.trimmingCharacters(
-                            in: CharacterSet(charactersIn: "vV"))
-                        latestChromeVersion = tag
-                    }
-                    break
-                }
+            if let chromeInfo = latestExtensionInfo(
+                in: chromeCandidates, assetName: chromeZipName, marker: "Chrome-Version")
+            {
+                chromeZipDownloadURL = chromeInfo.downloadURL
+                latestChromeVersion = chromeInfo.version
+            } else {
+                chromeZipDownloadURL = nil
+                latestChromeVersion = ""
             }
 
             // Compare against installed Chrome extension version
@@ -150,30 +138,17 @@ class UpdateManager: ObservableObject {
                 chromeUpdateAvailable = false
             }
 
-            // Check Safari extension version independently
-            // Look through all releases for the latest one that has Safari.zip
+            // Check Safari extension version independently.
+            // Parse from release notes tag (Safari-Version), never from the app release tag.
             let safariCandidates = enablePreRelease ? releases : releases.filter { !$0.prerelease }
-            for release in safariCandidates {
-                if let safariAsset = release.assets.first(where: { $0.name == safariZipName }) {
-                    safariZipDownloadURL = URL(string: safariAsset.browser_download_url)
-                    // Parse safari version from release body: "Safari-Version: X.Y.Z"
-                    if let body = release.body,
-                        let range = body.range(
-                            of: #"Safari-Version:\s*(\S+)"#, options: .regularExpression)
-                    {
-                        let match = body[range]
-                        let ver =
-                            match.split(separator: ":").last?.trimmingCharacters(in: .whitespaces)
-                            ?? ""
-                        latestSafariVersion = ver
-                    } else {
-                        // Fallback: use release tag as safari version
-                        let tag = release.tag_name.trimmingCharacters(
-                            in: CharacterSet(charactersIn: "vV"))
-                        latestSafariVersion = tag
-                    }
-                    break
-                }
+            if let safariInfo = latestExtensionInfo(
+                in: safariCandidates, assetName: safariZipName, marker: "Safari-Version")
+            {
+                safariZipDownloadURL = safariInfo.downloadURL
+                latestSafariVersion = safariInfo.version
+            } else {
+                safariZipDownloadURL = nil
+                latestSafariVersion = ""
             }
 
             // Compare against installed Safari extension version
@@ -474,6 +449,7 @@ class UpdateManager: ObservableObject {
     }
 
     func dismiss() {
+        showUpdateOverlay = false
         updateAvailable = false
         latestVersion = ""
         releaseNotes = ""
@@ -493,6 +469,53 @@ class UpdateManager: ObservableObject {
         safariErrorMessage = nil
         isDownloadingSafari = false
         safariDownloadProgress = 0
+    }
+
+    func showOverlay() {
+        showUpdateOverlay = true
+    }
+
+    func hideOverlay() {
+        showUpdateOverlay = false
+    }
+
+    private func latestExtensionInfo(
+        in releases: [GitHubRelease], assetName: String, marker: String
+    ) -> (version: String, downloadURL: URL?)? {
+        for release in releases {
+            guard let asset = release.assets.first(where: { $0.name == assetName }) else { continue }
+            let url = URL(string: asset.browser_download_url)
+
+            guard let body = release.body,
+                let version = extractVersionTag(named: marker, from: body)
+            else {
+                continue
+            }
+
+            return (version, url)
+        }
+
+        return nil
+    }
+
+    private func extractVersionTag(named marker: String, from text: String) -> String? {
+        // Supports variants like:
+        // Chrome-Version: 12.4.0
+        // Chrome-Version 12.4.0
+        // Chrome-Version = v12.4.0
+        let escapedMarker = NSRegularExpression.escapedPattern(for: marker)
+        let pattern = "(?im)\\b\(escapedMarker)\\b\\s*[:=-]?\\s*(v?[0-9][0-9A-Za-z.-]*)"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard
+            let match = regex.firstMatch(in: text, options: [], range: range),
+            let valueRange = Range(match.range(at: 1), in: text)
+        else { return nil }
+
+        return text[valueRange]
+            .trimmingCharacters(in: CharacterSet(charactersIn: " \t\n\r,.;"))
+            .trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
     }
 
     // MARK: - Version Comparison

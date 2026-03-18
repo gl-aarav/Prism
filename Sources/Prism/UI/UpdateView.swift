@@ -148,7 +148,7 @@ struct UpdateView: View {
                 HStack {
                     Spacer()
                     Button {
-                        NSApp.windows.first(where: { $0.title == "Software Update" })?.close()
+                        updateManager.hideOverlay()
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 11, weight: .semibold))
@@ -397,14 +397,14 @@ struct UpdateView: View {
             }
             .foregroundStyle(themeColors.first ?? .white)
 
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: true) {
                 Text(updateManager.releaseNotes)
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
             }
-            .frame(maxHeight: 70)
+            .frame(minHeight: 52, maxHeight: 130)
         }
         .padding(12)
         .background {
@@ -668,7 +668,6 @@ struct UpdateView: View {
         HStack(spacing: 12) {
             Button {
                 updateManager.dismiss()
-                NSApp.windows.first(where: { $0.title == "Software Update" })?.close()
             } label: {
                 Text(secondaryLabel)
                     .font(.system(size: 14, weight: .medium, design: .rounded))

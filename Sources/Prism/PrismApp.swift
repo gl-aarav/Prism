@@ -39,7 +39,7 @@ struct PrismApp: App {
         Settings {
             SettingsView()
                 .environmentObject(ChatManager.shared)
-                .frame(minWidth: 420, minHeight: 500)
+                .frame(minWidth: 680, minHeight: 760)
         }
     }
 }
@@ -54,7 +54,6 @@ class AppState: ObservableObject {
 class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
     private var statusItem: NSStatusItem?
-    private var updateWindow: NSWindow?
 
     override init() {
         super.init()
@@ -168,33 +167,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @MainActor
     func showUpdateWindow() {
-        if let existing = updateWindow, existing.isVisible {
-            existing.makeKeyAndOrderFront(nil)
-            return
-        }
-        // Clear stale reference to prevent use-after-free
-        updateWindow = nil
-
-        let view = UpdateView()
-        let hostingView = NSHostingView(rootView: view)
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 520),
-            styleMask: [.borderless, .fullSizeContentView],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
-        window.backgroundColor = .clear
-        window.isOpaque = false
-        window.hasShadow = true
-        window.contentView = hostingView
-        window.center()
-        window.title = "Software Update"
-        window.makeKeyAndOrderFront(nil)
-        updateWindow = window
+        showOrCreateMainWindow()
+        UpdateManager.shared.showOverlay()
     }
 
     private func setupStatusItem() {

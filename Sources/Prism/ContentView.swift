@@ -1982,6 +1982,7 @@ enum ThinkingMode {
 
 struct ContentView: View {
     @ObservedObject private var chatManager = ChatManager.shared
+    @ObservedObject private var updateManager = UpdateManager.shared
     @State private var inputText: String = ""
     @State private var selectedAttachments: [Attachment] = []
     // Legacy single selection states removed/replaced
@@ -2460,6 +2461,18 @@ struct ContentView: View {
                 }
                 .transition(.opacity)
                 .zIndex(200)
+            }
+
+            if updateManager.showUpdateOverlay {
+                ZStack {
+                    Color.black.opacity(0.25)
+                        .ignoresSafeArea()
+
+                    UpdateView()
+                        .shadow(color: .black.opacity(0.35), radius: 30, y: 16)
+                }
+                .transition(.opacity)
+                .zIndex(300)
             }
         }
         .onAppear {
@@ -7321,6 +7334,92 @@ struct MessageView: View, Equatable {
     }
 }
 
+// MARK: - Settings Tab Enum
+
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case general = "General"
+    case appearance = "Appearance"
+    case quickAI = "Quick AI"
+    case quickTools = "Quick Tools"
+    case webOverlay = "Web Overlay"
+    case gemini = "Gemini"
+    case ollama = "Ollama"
+    case nvidia = "NVIDIA"
+    case copilot = "GitHub Copilot"
+    case customWebViews = "Custom Web Views"
+    case systemPrompt = "System Prompt"
+    case autocomplete = "Autocomplete"
+    case downloads = "Downloads"
+    case shortcuts = "Shortcuts"
+    case updates = "Updates"
+    case dataPrivacy = "Data & Privacy"
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .general: return "gear"
+        case .appearance: return "paintbrush"
+        case .quickAI: return "window.shade.open"
+        case .quickTools: return "briefcase"
+        case .webOverlay: return "macwindow.on.rectangle"
+        case .gemini: return "diamond"
+        case .ollama: return "server.rack"
+        case .nvidia: return "bolt.fill"
+        case .copilot: return "chevron.left.forwardslash.chevron.right"
+        case .customWebViews: return "macwindow"
+        case .systemPrompt: return "text.quote"
+        case .autocomplete: return "text.cursor"
+        case .downloads: return "arrow.down.doc"
+        case .shortcuts: return "command"
+        case .updates: return "arrow.triangle.2.circlepath"
+        case .dataPrivacy: return "externaldrive"
+        }
+    }
+
+    var iconColor: Color {
+        switch self {
+        case .general: return .gray
+        case .appearance: return .pink
+        case .quickAI: return .blue
+        case .quickTools: return .orange
+        case .webOverlay: return .purple
+        case .gemini: return .cyan
+        case .ollama: return .green
+        case .nvidia: return .green
+        case .copilot: return .indigo
+        case .customWebViews: return .teal
+        case .systemPrompt: return .yellow
+        case .autocomplete: return .mint
+        case .downloads: return .blue
+        case .shortcuts: return .gray
+        case .updates: return .green
+        case .dataPrivacy: return .red
+        }
+    }
+
+    enum Category: String, CaseIterable {
+        case app = ""
+        case overlays = "Overlays"
+        case providers = "AI Providers"
+        case advanced = "Advanced"
+    }
+
+    var category: Category {
+        switch self {
+        case .general, .appearance: return .app
+        case .quickAI, .quickTools, .webOverlay: return .overlays
+        case .gemini, .ollama, .nvidia, .copilot, .customWebViews: return .providers
+        case .systemPrompt, .autocomplete, .downloads, .shortcuts, .updates, .dataPrivacy:
+            return .advanced
+        }
+    }
+
+    static func tabs(for category: Category) -> [SettingsTab] {
+        allCases.filter { $0.category == category }
+    }
+}
+
 struct SettingsView: View {
     @AppStorage("GeminiKey") private var geminiKey: String = ""
     @AppStorage("GeminiModel") private var geminiModel: String = "gemini-1.5-flash"
@@ -8854,55 +8953,144 @@ struct SettingsView: View {
         }
     }
 
+    @State private var selectedTab: SettingsTab = .general
+
     // MARK: - Body
 
     var body: some View {
-        Form {
-            Section {
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(height: 50)
-            }
-            .listRowBackground(Color.clear)
+        HStack(spacing: 0) {
+            // MARK: Sidebar
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(SettingsTab.Category.allCases, id: \.rawValue) { category in
+                        if !category.rawValue.isEmpty {
+                            Text(category.rawValue)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 16)
+                                .padding(.top, 18)
+                                .padding(.bottom, 6)
+                        }
 
-            appearanceSection
+                        ForEach(SettingsTab.tabs(for: category)) { tab in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    selectedTab = tab
+                                }
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: tab.icon)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(selectedTab == tab ? .white : tab.iconColor)
+                                        .frame(width: 26, height: 26)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                                .fill(selectedTab == tab ? tab.iconColor : tab.iconColor.opacity(0.15))
+                                        )
+
+                                    Text(tab.rawValue)
+                                        .font(.system(size: 13, weight: selectedTab == tab ? .semibold : .regular))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(1)
+                                        .padding(.vertical, 2)
+
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .fill(
+                                            selectedTab == tab
+                                                ? Color(nsColor: .quaternaryLabelColor).opacity(0.2)
+                                                : Color.clear
+                                        )
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .focusable(false)
+                            .focusEffectDisabled()
+                            .padding(.horizontal, 6)
+                        }
+                    }
+                }
+                .padding(.vertical, 14)
+            }
+            .safeAreaPadding(.top, 8)
+            .safeAreaPadding(.bottom, 10)
+            .frame(width: 210)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+
+            Divider()
+
+            // MARK: Content Pane
+            VStack(alignment: .leading, spacing: 0) {
+                // Header
+                HStack(spacing: 10) {
+                    Image(systemName: selectedTab.icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(selectedTab.iconColor)
+                    Text(selectedTab.rawValue)
+                        .font(.system(size: 20, weight: .bold))
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 22)
+                .padding(.bottom, 10)
+
+                Form {
+                    contentForTab(selectedTab)
+                }
+                .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
+                .safeAreaPadding(.bottom, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(minWidth: 640, idealWidth: 680, minHeight: 700, idealHeight: 760)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+
+    @ViewBuilder
+    private func contentForTab(_ tab: SettingsTab) -> some View {
+        switch tab {
+        case .general:
             generalSection
-            webOverlaySection
+        case .appearance:
+            appearanceSection
+        case .quickAI:
             quickAISection
+        case .quickTools:
             quickToolsSection
-
-            // AI Providers
+        case .webOverlay:
+            webOverlaySection
+        case .gemini:
             geminiSection
+        case .ollama:
             ollamaSection
+        case .nvidia:
             nvidiaSection
+        case .copilot:
             copilotSection
+        case .customWebViews:
             customProviderSection
-
+        case .systemPrompt:
             systemPromptSection
+        case .autocomplete:
             autocompleteSections
+        case .downloads:
             fileDownloadsSection
+        case .shortcuts:
             shortcutsSection
+        case .updates:
             updatesSection
+        case .dataPrivacy:
             dataSection
-
-            Section {
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(height: 50)
-            }
-            .listRowBackground(Color.clear)
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
-        .frame(minWidth: 420, idealWidth: 450, minHeight: 650, idealHeight: 750)
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.clear)
-                .glassEffect(.regular, in: .rect(cornerRadius: 12))
-        }
-        .padding()
     }
 }
+
 
 // Helper
 struct TypingIndicator: View {
