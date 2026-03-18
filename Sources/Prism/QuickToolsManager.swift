@@ -57,7 +57,8 @@ class QuickToolsManager: ObservableObject {
     func toggle() {
         guard let panel = panel else { return }
 
-        if panel.isVisible && panel.isKeyWindow {
+        // Match click-outside close behavior: if the panel is visible, always hide via hidePanel().
+        if panel.isVisible {
             hidePanel()
         } else {
             if !NSApp.isActive {
