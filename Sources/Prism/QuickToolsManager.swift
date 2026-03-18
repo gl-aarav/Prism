@@ -39,7 +39,17 @@ class QuickToolsManager: ObservableObject {
     }
 
     func hidePanel() {
+        closePanel(usingClickOutsideSemantics: true)
+    }
+
+    func closePanel(usingClickOutsideSemantics: Bool) {
         guard let panel = panel else { return }
+
+        if usingClickOutsideSemantics
+            && !UserDefaults.standard.bool(forKey: "QuickToolsClickOutsideCloses")
+        {
+            return
+        }
 
         panel.orderOut(nil)
 
@@ -54,12 +64,20 @@ class QuickToolsManager: ObservableObject {
         }
     }
 
+    func closePanelFromShortcut() {
+        closePanel(usingClickOutsideSemantics: false)
+    }
+
+    func closePanelFromOutsideClick() {
+        closePanel(usingClickOutsideSemantics: true)
+    }
+
     func toggle() {
         guard let panel = panel else { return }
 
         // Match click-outside close behavior: if the panel is visible, always hide via hidePanel().
         if panel.isVisible {
-            hidePanel()
+            closePanelFromShortcut()
         } else {
             if !NSApp.isActive {
                 previousApp = NSWorkspace.shared.frontmostApplication
@@ -91,8 +109,6 @@ class QuickToolsPanel: NSPanel {
 
     override func resignKey() {
         super.resignKey()
-        if UserDefaults.standard.bool(forKey: "QuickToolsClickOutsideCloses") {
-            QuickToolsManager.shared.hidePanel()
-        }
+        QuickToolsManager.shared.closePanelFromOutsideClick()
     }
 }
