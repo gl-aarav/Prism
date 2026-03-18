@@ -9095,35 +9095,36 @@ struct SettingsView: View {
         .background(Color.clear)
         .ignoresSafeArea(.all)
         .toolbarBackground(.hidden, for: .windowToolbar)
-        .background(WindowAccessor { window in
-            if let window = window {
-                window.titlebarAppearsTransparent = true
-                window.titleVisibility = .hidden
-                window.styleMask.insert(.fullSizeContentView)
-                
-                // Clear the default Settings toolbar to remove the white bar
-                window.toolbar = nil
-                window.toolbar?.isVisible = false
-                
-                // Extra measures to ensure no white background
-                window.backgroundColor = .clear
-                window.isOpaque = false // crucial for removing the opaque window background
-                
-                // Naturally disable/hide green & orange buttons via stylemask
-                window.styleMask.remove(.resizable)
-                window.styleMask.remove(.miniaturizable)
-                
-                // Also explicitly hide them
-                if let zoomBtn = window.standardWindowButton(.zoomButton) {
-                    zoomBtn.isHidden = true
-                    zoomBtn.isEnabled = false
+        .background(
+            WindowAccessor { window in
+                if let window = window {
+                    window.titlebarAppearsTransparent = true
+                    window.titleVisibility = .hidden
+                    window.styleMask.insert(.fullSizeContentView)
+
+                    // Clear the default Settings toolbar to remove the white bar
+                    window.toolbar = nil
+                    window.toolbar?.isVisible = false
+
+                    // Extra measures to ensure no white background
+                    window.backgroundColor = .clear
+                    window.isOpaque = false  // crucial for removing the opaque window background
+
+                    // Naturally disable/hide green & orange buttons via stylemask
+                    window.styleMask.remove(.resizable)
+                    window.styleMask.remove(.miniaturizable)
+
+                    // Also explicitly hide them
+                    if let zoomBtn = window.standardWindowButton(.zoomButton) {
+                        zoomBtn.isHidden = true
+                        zoomBtn.isEnabled = false
+                    }
+                    if let minBtn = window.standardWindowButton(.miniaturizeButton) {
+                        minBtn.isHidden = true
+                        minBtn.isEnabled = false
+                    }
                 }
-                if let minBtn = window.standardWindowButton(.miniaturizeButton) {
-                    minBtn.isHidden = true
-                    minBtn.isEnabled = false
-                }
-            }
-        })
+            })
     }
 
     @ViewBuilder
