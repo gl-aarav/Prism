@@ -96,9 +96,9 @@ class QuickToolsManager: ObservableObject {
     func toggle() {
         guard let panel = panel else { return }
 
-        // When toggled while visible, use the exact same semantics as click-outside close.
+        // When toggled while visible, close the panel unconditionally via shortcut semantics
         if panel.isVisible {
-            closePanelFromOutsideClick()
+            closePanelFromShortcut()
         } else {
             if !NSApp.isActive {
                 previousApp = NSWorkspace.shared.frontmostApplication
