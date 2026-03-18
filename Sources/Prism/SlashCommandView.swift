@@ -358,32 +358,6 @@ struct CommandsManagementView: View {
                 .padding(.vertical, 12)
             }
         }
-        .safeAreaInset(edge: .top) {
-            HStack(spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "command")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: appTheme.colors,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    Text("Slash Commands")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .glassEffect(.regular, in: .capsule)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
-            .background(Color.clear)
-        }
     }
 
     private func addCommand() {
