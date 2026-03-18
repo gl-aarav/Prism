@@ -7,6 +7,7 @@ struct QuickToolsView: View {
 
     @AppStorage("QuickToolsBackgroundOpacity") private var backgroundOpacity: Double = 0.25
     @AppStorage("QuickToolsTintIntensity") private var tintIntensity: Double = 0.5
+    @State private var isToolMenuOpen: Bool = false
 
     private var clampedOpacity: Double {
         min(max(backgroundOpacity, 0.05), 1.0)
@@ -72,7 +73,7 @@ struct QuickToolsView: View {
                         Text(canonicalSelectedTool)
                             .font(.headline)
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                        Image(systemName: "chevron.down")
+                        Image(systemName: isToolMenuOpen ? "chevron.up" : "chevron.down")
                             .font(.caption)
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                     }
@@ -89,6 +90,17 @@ struct QuickToolsView: View {
                 .fixedSize()
                 .focusable(false)
                 .focusEffectDisabled()
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            isToolMenuOpen.toggle()
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                isToolMenuOpen = false
+                            }
+                        }
+                    })
                 Spacer()
             }
             .padding(.horizontal, 14)

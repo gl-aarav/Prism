@@ -89,6 +89,7 @@ struct ModelComparisonView: View {
     @State private var synthesizeModel: String = "gemini-2.5-flash"
     @AppStorage("ThinkingLevel") private var thinkingLevel: String = "medium"
     @State private var synthesizeTask: Task<Void, Never>?
+    @State private var isSynthesizeProviderMenuOpen: Bool = false
 
     // Ollama comparison options
     @AppStorage("OllamaAPIKey") private var ollamaAPIKey: String = ""
@@ -527,9 +528,11 @@ struct ModelComparisonView: View {
                             .font(.system(size: 11, weight: .semibold))
                         Text("\(synthesizeProvider) — \(synthesizeModel)")
                             .font(.system(size: 12, weight: .medium))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(.secondary)
+                        Image(
+                            systemName: isSynthesizeProviderMenuOpen ? "chevron.up" : "chevron.down"
+                        )
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.secondary)
                     }
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 10)
@@ -538,6 +541,17 @@ struct ModelComparisonView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            isSynthesizeProviderMenuOpen.toggle()
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                isSynthesizeProviderMenuOpen = false
+                            }
+                        }
+                    })
 
                 Spacer()
 
@@ -1420,6 +1434,7 @@ struct ComparisonCard: View {
 
     @State private var isHovered: Bool = false
     @State private var showCopied: Bool = false
+    @State private var isProviderMenuOpen: Bool = false
 
     private var accentColor: Color {
         let palette: [Color] = [.blue, .purple, .orange, .green]
@@ -1791,13 +1806,24 @@ struct ComparisonCard: View {
                 Text(slot.provider)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary.opacity(0.9))
-                Image(systemName: "chevron.down")
+                Image(systemName: isProviderMenuOpen ? "chevron.up" : "chevron.down")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
             }
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isProviderMenuOpen.toggle()
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isProviderMenuOpen = false
+                    }
+                }
+            })
     }
 
     // MARK: - Model Label

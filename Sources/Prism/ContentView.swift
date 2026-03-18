@@ -35,6 +35,7 @@ struct CustomWebView: Identifiable, Codable, Equatable {
     var id = UUID()
     var name: String
     var url: String
+    var icon: String? = nil
 }
 
 struct ChatSession: Identifiable, Codable, Equatable {
@@ -2347,17 +2348,25 @@ struct ContentView: View {
 
                                 // Floating Glass Pill in Top Right
                                 Picker("Web View", selection: $toolSelectedWebView) {
-                                    Text("ChatGPT").tag("ChatGPT Web")
-                                    Text("Claude").tag("Claude Web")
-                                    Text("Gemini").tag("Gemini Web")
-                                    Text("Perplexity").tag("Perplexity Web")
-                                    Text("Grok").tag("Grok Web")
+                                    Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
+                                        .tag("ChatGPT Web")
+                                    Label("Claude", systemImage: "brain.head.profile")
+                                        .tag("Claude Web")
+                                    Label("Gemini", systemImage: "sparkles")
+                                        .tag("Gemini Web")
+                                    Label("Perplexity", systemImage: "magnifyingglass")
+                                        .tag("Perplexity Web")
+                                    Label("Grok", systemImage: "bolt.horizontal")
+                                        .tag("Grok Web")
 
                                     Divider()
 
                                     ForEach(customWebViews()) { webView in
-                                        Text(webView.name.isEmpty ? webView.url : webView.name)
-                                            .tag("CustomWebView:\(webView.url)")
+                                        Label(
+                                            webView.name.isEmpty ? webView.url : webView.name,
+                                            systemImage: webView.icon ?? "globe"
+                                        )
+                                        .tag("CustomWebView:\(webView.url)")
                                     }
                                 }
                                 .pickerStyle(.menu)
@@ -2421,6 +2430,7 @@ struct ContentView: View {
             .onChange(of: selectedProvider) { _, newProvider in
                 updateOllamaModels()
                 if isWebViewProvider(newProvider) {
+                    toolSelectedWebView = newProvider
                     withAnimation {
                         showWebView = true
                         showPDFCreator = false
@@ -2505,7 +2515,7 @@ struct ContentView: View {
         default:
             if provider.hasPrefix("CustomWebView:") {
                 let urlStr = String(provider.dropFirst("CustomWebView:".count))
-                return URL(string: urlStr)
+                return normalizedWebURL(from: urlStr)
             }
             return nil
         }
@@ -2521,7 +2531,7 @@ struct ContentView: View {
     private func getCustomWebURL(for provider: String) -> URL? {
         if provider.hasPrefix("CustomWebView:") {
             let urlStr = String(provider.dropFirst("CustomWebView:".count))
-            return URL(string: urlStr)
+            return normalizedWebURL(from: urlStr)
         }
         return nil
     }
@@ -2531,11 +2541,25 @@ struct ContentView: View {
         guard !views.isEmpty else { return nil }
         // Use the selected one, or fall back to the first
         if !selectedCustomWebViewURL.isEmpty,
-            let url = URL(string: selectedCustomWebViewURL)
+            let url = normalizedWebURL(from: selectedCustomWebViewURL)
         {
             return url
         }
-        return URL(string: views[0].url)
+        return normalizedWebURL(from: views[0].url)
+    }
+
+    private func normalizedWebURL(from raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let withScheme = URL(string: trimmed),
+            let scheme = withScheme.scheme,
+            scheme == "http" || scheme == "https"
+        {
+            return withScheme
+        }
+
+        return URL(string: "https://\(trimmed)")
     }
 
     func handleScroll(proxy: ScrollViewProxy, newCount: Int? = nil) {
@@ -4217,6 +4241,7 @@ struct HeaderView: View {
     @ObservedObject private var accountManager = AccountManager.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
+    @State private var isProviderMenuOpen: Bool = false
 
     private var customWebViews: [CustomWebView] {
         guard let data = customWebViewsJSON.data(using: .utf8),
@@ -4336,6 +4361,37 @@ struct HeaderView: View {
                     }
                 }
 
+                Section("Web View") {
+                    Button(action: { selectedProvider = "ChatGPT Web" }) {
+                        Label("ChatGPT Web", systemImage: getProviderIcon("ChatGPT Web"))
+                    }
+                    Button(action: { selectedProvider = "Claude Web" }) {
+                        Label("Claude Web", systemImage: getProviderIcon("Claude Web"))
+                    }
+                    Button(action: { selectedProvider = "Gemini Web" }) {
+                        Label("Gemini Web", systemImage: getProviderIcon("Gemini Web"))
+                    }
+                    Button(action: { selectedProvider = "Perplexity Web" }) {
+                        Label("Perplexity Web", systemImage: getProviderIcon("Perplexity Web"))
+                    }
+                    Button(action: { selectedProvider = "Grok Web" }) {
+                        Label("Grok Web", systemImage: getProviderIcon("Grok Web"))
+                    }
+
+                    if !customWebViews.isEmpty {
+                        Divider()
+                        ForEach(customWebViews) { webView in
+                            let provider = "CustomWebView:\(webView.url)"
+                            Button(action: { selectedProvider = provider }) {
+                                Label(
+                                    webView.name.isEmpty ? webView.url : webView.name,
+                                    systemImage: getProviderIcon(provider)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Section("Shortcuts") {
                     Button(action: { selectedProvider = "Private Cloud" }) {
                         Label("Private Cloud", systemImage: getProviderIcon("Private Cloud"))
@@ -4358,7 +4414,7 @@ struct HeaderView: View {
                     Text(headerDisplayName(selectedProvider))
                         .font(.headline)
                         .foregroundStyle(.primary)
-                    Image(systemName: "chevron.down")
+                    Image(systemName: isProviderMenuOpen ? "chevron.up" : "chevron.down")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -4374,6 +4430,17 @@ struct HeaderView: View {
             .fixedSize()
             .focusEffectDisabled()
             .padding(.horizontal, 4)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isProviderMenuOpen.toggle()
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            isProviderMenuOpen = false
+                        }
+                    }
+                })
 
             Spacer()
 
@@ -4443,7 +4510,10 @@ struct HeaderView: View {
         case "Grok Web": return "bolt.horizontal"
         case "Claude Web": return "brain.head.profile"
         default:
-            if base.hasPrefix("CustomWebView:") { return "globe" }
+            if base.hasPrefix("CustomWebView:") {
+                let urlStr = String(base.dropFirst("CustomWebView:".count))
+                return customWebViews.first(where: { $0.url == urlStr })?.icon ?? "globe"
+            }
             return "cpu"
         }
     }
@@ -5143,7 +5213,7 @@ struct InputView: View {
                         Divider()
 
                         Menu("Manage Favorites") {
-                            ForEach(GeminiModelManager.shared.availableModels, id: \.self) {
+                            ForEach(geminiManager.sortedModels, id: \.self) {
                                 model in
                                 Button(action: { geminiManager.toggleFavorite(model) }) {
                                     if geminiManager.isFavorite(model) {
@@ -7321,6 +7391,7 @@ struct SettingsView: View {
     @State private var showAddCustomWebView = false
     @State private var newWebViewName = ""
     @State private var newWebViewURL = ""
+    @State private var newWebViewIcon = "globe"
 
     // MARK: - Updates Section
 
@@ -8302,6 +8373,9 @@ struct SettingsView: View {
             } else {
                 ForEach(webViews) { webView in
                     HStack {
+                        Image(systemName: webView.icon ?? "globe")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(webView.name.isEmpty ? "Untitled" : webView.name)
                                 .font(.body)
@@ -8320,20 +8394,42 @@ struct SettingsView: View {
                 }
             }
         }
-        .alert("Add Custom Web View", isPresented: $showAddCustomWebView) {
-            TextField("Name (e.g. My AI Chat)", text: $newWebViewName)
-            TextField("URL (e.g. https://example.com)", text: $newWebViewURL)
-            Button("Add") {
-                addCustomWebView(name: newWebViewName, url: newWebViewURL)
-                newWebViewName = ""
-                newWebViewURL = ""
+        .sheet(isPresented: $showAddCustomWebView) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Add Custom Web View")
+                    .font(.headline)
+
+                TextField("Name (e.g. My AI Chat)", text: $newWebViewName)
+                TextField("URL (e.g. https://example.com)", text: $newWebViewURL)
+
+                Picker("Icon", selection: $newWebViewIcon) {
+                    ForEach(customWebIconOptions, id: \.self) { icon in
+                        Label(customWebIconLabel(for: icon), systemImage: icon)
+                            .tag(icon)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                HStack {
+                    Spacer()
+                    Button("Cancel") {
+                        resetNewCustomWebViewForm()
+                        showAddCustomWebView = false
+                    }
+                    Button("Add") {
+                        addCustomWebView(
+                            name: newWebViewName,
+                            url: newWebViewURL,
+                            icon: newWebViewIcon
+                        )
+                        resetNewCustomWebViewForm()
+                        showAddCustomWebView = false
+                    }
+                    .keyboardShortcut(.defaultAction)
+                }
             }
-            Button("Cancel", role: .cancel) {
-                newWebViewName = ""
-                newWebViewURL = ""
-            }
-        } message: {
-            Text("Enter a name and URL for the web view.")
+            .padding(14)
+            .frame(width: 340)
         }
     }
 
@@ -8344,13 +8440,71 @@ struct SettingsView: View {
         return views
     }
 
-    private func addCustomWebView(name: String, url: String) {
+    private var customWebIconOptions: [String] {
+        [
+            "globe",
+            "sparkles",
+            "bubble.left.and.bubble.right",
+            "brain.head.profile",
+            "magnifyingglass",
+            "bolt.horizontal",
+            "link",
+            "network",
+        ]
+    }
+
+    private func customWebIconLabel(for icon: String) -> String {
+        switch icon {
+        case "globe": return "Globe"
+        case "sparkles": return "Gemini"
+        case "bubble.left.and.bubble.right": return "Chat"
+        case "brain.head.profile": return "Claude"
+        case "magnifyingglass": return "Search"
+        case "bolt.horizontal": return "Grok"
+        case "link": return "Link"
+        case "network": return "Network"
+        default: return "Icon"
+        }
+    }
+
+    private func resetNewCustomWebViewForm() {
+        newWebViewName = ""
+        newWebViewURL = ""
+        newWebViewIcon = "globe"
+    }
+
+    private func normalizedWebURL(from raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let withScheme = URL(string: trimmed),
+            let scheme = withScheme.scheme,
+            scheme == "http" || scheme == "https"
+        {
+            return withScheme
+        }
+
+        return URL(string: "https://\(trimmed)")
+    }
+
+    private func addCustomWebView(name: String, url: String, icon: String) {
         var views = customWebViewsList()
         let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedURL.isEmpty else { return }
+        guard let normalizedURL = normalizedWebURL(from: trimmedURL) else { return }
+        let normalizedURLString = normalizedURL.absoluteString
+
+        if views.contains(where: {
+            ($0.url.caseInsensitiveCompare(normalizedURLString) == .orderedSame)
+                || ($0.url.caseInsensitiveCompare(trimmedURL) == .orderedSame)
+        }) {
+            return
+        }
+
         views.append(
             CustomWebView(
-                name: name.trimmingCharacters(in: .whitespacesAndNewlines), url: trimmedURL))
+                name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                url: normalizedURLString,
+                icon: icon))
         if let data = try? JSONEncoder().encode(views),
             let json = String(data: data, encoding: .utf8)
         {

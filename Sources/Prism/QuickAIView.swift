@@ -39,6 +39,7 @@ struct QuickAIView: View {
     @AppStorage("ShortcutPrivateCloud") private var shortcutPrivateCloud: String = "Ask AI Private"
     @AppStorage("ShortcutOnDevice") private var shortcutOnDevice: String = "Ask AI Device"
     @AppStorage("ShortcutChatGPT") private var shortcutChatGPT: String = "Ask ChatGPT"
+    @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
     @AppStorage("QuickAIBackgroundOpacity") private var backgroundOpacity: Double = 0.18
     @AppStorage("QuickAICommandBarVibrancy") private var commandBarVibrancy: Double = 0.55
     @AppStorage("SelectedOllamaModel") private var selectedOllamaModel: String = "llama3:8b"
@@ -52,6 +53,9 @@ struct QuickAIView: View {
     @ObservedObject var copilotService = GitHubCopilotService.shared
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
+    @State private var showAddCustomGeminiModel = false
+    @State private var newCustomGeminiModelName = ""
+    @State private var activeDropdownKey: String? = nil
     private var clampedBackgroundOpacity: Double {
         min(max(backgroundOpacity, 0.05), 1.0)
     }
@@ -83,47 +87,6 @@ struct QuickAIView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
-                // Tool access banner — always visible when a tool is active
-                if !activeToolName.isEmpty {
-                    HStack(spacing: 8) {
-                        Image(systemName: "wrench.and.screwdriver")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.orange)
-                        Text("Using **\(activeToolName)**")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button(action: {
-                            activeToolName = ""
-                            chatManager.createNewSession()
-                            withAnimation(collapseAnimation) {
-                                isExpanded = false
-                            }
-                        }) {
-                            Text("New Chat")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.primary.opacity(0.8))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.secondary.opacity(0.12))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(Color.orange.opacity(0.06))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                    .stroke(Color.orange.opacity(0.15), lineWidth: 0.5)
-                            )
-                    )
-                }
-
                 if isExpanded {
                     VStack(spacing: 0) {
                         messagesSection
@@ -180,6 +143,7 @@ struct QuickAIView: View {
         .frame(width: 700)
         .onAppear {
             isFocused = true
+            resetToolAccessContextIfNeeded()
             // Auto-expand if there's chat history
             if !chatManager.getCurrentMessages().isEmpty {
                 isExpanded = true
@@ -190,6 +154,9 @@ struct QuickAIView: View {
         }
         .onChange(of: selectedProvider) { _, _ in
             updateOllamaModels()
+        }
+        .onChange(of: activeToolName) { _, _ in
+            resetToolAccessContextIfNeeded()
         }
         .onChange(of: isExpanded) { _, expanded in
             if expanded {
@@ -297,12 +264,13 @@ struct QuickAIView: View {
             targetHeight += autocompleteHeight
         }
 
-        // Add extra height for the tool banner
-        if !activeToolName.isEmpty {
-            targetHeight += 40
-        }
-
         onResize?(CGSize(width: baseWidth, height: targetHeight))
+    }
+
+    private func resetToolAccessContextIfNeeded() {
+        guard !activeToolName.isEmpty else { return }
+        activeToolName = ""
+        chatManager.createNewSession()
     }
 
     func getProviderIcon(_ provider: String) -> String {
@@ -351,6 +319,53 @@ struct QuickAIView: View {
             }
             OllamaModelManager.shared.fetchInstalledModels(endpoint: activeURL)
         }
+    }
+
+    private var customWebViews: [CustomWebView] {
+        guard let data = customWebViewsJSON.data(using: .utf8),
+            let views = try? JSONDecoder().decode([CustomWebView].self, from: data)
+        else { return [] }
+        return views
+    }
+
+    private func customWebDisplayName(_ webView: CustomWebView) -> String {
+        webView.name.isEmpty ? webView.url : webView.name
+    }
+
+    private func customWebIcon(_ webView: CustomWebView) -> String {
+        webView.icon ?? "globe"
+    }
+
+    private func dropdownChevron(_ key: String) -> String {
+        activeDropdownKey == key ? "chevron.up" : "chevron.down"
+    }
+
+    private func markDropdownInteraction(_ key: String) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            activeDropdownKey = key
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            if activeDropdownKey == key {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    activeDropdownKey = nil
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func dropdownCircleLabel(icon: String, key: String) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+            Image(systemName: dropdownChevron(key))
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+        .padding(6)
+        .background(Circle().fill(Color.primary.opacity(0.06)))
+        .glassEffect(.regular, in: .circle)
     }
 
     // MARK: - Slash Command Helpers
@@ -406,9 +421,6 @@ struct QuickAIView: View {
     }
 
     func sendMessage() {
-        // Don't send messages while a tool is active
-        guard activeToolName.isEmpty else { return }
-
         guard
             !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || !selectedAttachments.isEmpty
@@ -673,7 +685,8 @@ struct QuickAIView: View {
 
                 // Check if this is an image generation model
                 if OllamaService.isImageGenerationModel(activeModel) {
-                    let userPrompt = chatManager.getCurrentMessages().last(where: { $0.isUser })?.content ?? ""
+                    let userPrompt =
+                        chatManager.getCurrentMessages().last(where: { $0.isUser })?.content ?? ""
                     DispatchQueue.main.async {
                         self.streamBuffer[aiMsgId] = "Generating image..."
                     }
@@ -720,79 +733,81 @@ struct QuickAIView: View {
                         }
                     }
                 } else {
-                // Web search augmentation (Ollama only)
-                let searchQuery =
-                    chatManager.getCurrentMessages().last(where: { $0.isUser })?.content ?? ""
-                var ollamaSystemPrompt = systemPrompt
-                if webSearchEnabled {
+                    // Web search augmentation (Ollama only)
+                    let searchQuery =
+                        chatManager.getCurrentMessages().last(where: { $0.isUser })?.content ?? ""
+                    var ollamaSystemPrompt = systemPrompt
+                    if webSearchEnabled {
+                        do {
+                            let searchResults = try await webSearchService.search(
+                                query: searchQuery)
+                            let searchContext = webSearchService.buildSearchContext(
+                                results: searchResults)
+                            if !searchContext.isEmpty {
+                                ollamaSystemPrompt = systemPrompt + searchContext
+                            }
+                        } catch {
+                            print("Web search failed: \(error.localizedDescription)")
+                        }
+                    }
+
                     do {
-                        let searchResults = try await webSearchService.search(
-                            query: searchQuery)
-                        let searchContext = webSearchService.buildSearchContext(
-                            results: searchResults)
-                        if !searchContext.isEmpty {
-                            ollamaSystemPrompt = systemPrompt + searchContext
+                        var fullContent = ""
+                        var fullThinking = ""
+                        var lastUpdateTime = Date()
+
+                        for try await (contentChunk, thinkingChunk)
+                            in ollamaService.sendMessageStream(
+                                history: chatManager.getCurrentMessages(), endpoint: activeURL,
+                                model: activeModel, systemPrompt: ollamaSystemPrompt,
+                                thinkingLevel: thinkingLevel,
+                                webSearchEnabled: webSearchEnabled,
+                                webSearchService: webSearchEnabled ? webSearchService : nil
+                            )
+                        {
+                            fullContent += contentChunk
+                            if let thinking = thinkingChunk {
+                                fullThinking += thinking
+                            }
+
+                            if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
+                                // Update live buffers only (avoid heavy state writes)
+                                let contentSnapshot = fullContent
+                                let thinkingSnapshot = fullThinking
+                                DispatchQueue.main.async {
+                                    self.streamBuffer[aiMsgId] = contentSnapshot
+                                    if thinkingSnapshot.isEmpty {
+                                        self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                                    } else {
+                                        self.streamThinkingBuffer[aiMsgId] = thinkingSnapshot
+                                    }
+                                }
+                                lastUpdateTime = Date()
+                            }
+                        }
+
+                        DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId,
+                                content: fullContent,
+                                thinkingContent: fullThinking.isEmpty ? nil : fullThinking
+                            )
+                            if let versions = existingVersions {
+                                self.chatManager.attachVersions(versions, to: aiMsgId)
+                            }
+                            self.chatManager.finalizeMessageUpdate()
+                            self.streamBuffer.removeValue(forKey: aiMsgId)
+                            self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
+                            self.isLoading = false
                         }
                     } catch {
-                        print("Web search failed: \(error.localizedDescription)")
-                    }
-                }
-
-                do {
-                    var fullContent = ""
-                    var fullThinking = ""
-                    var lastUpdateTime = Date()
-
-                    for try await (contentChunk, thinkingChunk) in ollamaService.sendMessageStream(
-                        history: chatManager.getCurrentMessages(), endpoint: activeURL,
-                        model: activeModel, systemPrompt: ollamaSystemPrompt,
-                        thinkingLevel: thinkingLevel,
-                        webSearchEnabled: webSearchEnabled,
-                        webSearchService: webSearchEnabled ? webSearchService : nil
-                    ) {
-                        fullContent += contentChunk
-                        if let thinking = thinkingChunk {
-                            fullThinking += thinking
-                        }
-
-                        if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
-                            // Update live buffers only (avoid heavy state writes)
-                            let contentSnapshot = fullContent
-                            let thinkingSnapshot = fullThinking
-                            DispatchQueue.main.async {
-                                self.streamBuffer[aiMsgId] = contentSnapshot
-                                if thinkingSnapshot.isEmpty {
-                                    self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
-                                } else {
-                                    self.streamThinkingBuffer[aiMsgId] = thinkingSnapshot
-                                }
-                            }
-                            lastUpdateTime = Date()
+                        DispatchQueue.main.async {
+                            self.chatManager.updateMessage(
+                                id: aiMsgId, content: "Error: \(error.localizedDescription)")
+                            self.chatManager.finalizeMessageUpdate()
+                            self.isLoading = false
                         }
                     }
-
-                    DispatchQueue.main.async {
-                        self.chatManager.updateMessage(
-                            id: aiMsgId,
-                            content: fullContent,
-                            thinkingContent: fullThinking.isEmpty ? nil : fullThinking
-                        )
-                        if let versions = existingVersions {
-                            self.chatManager.attachVersions(versions, to: aiMsgId)
-                        }
-                        self.chatManager.finalizeMessageUpdate()
-                        self.streamBuffer.removeValue(forKey: aiMsgId)
-                        self.streamThinkingBuffer.removeValue(forKey: aiMsgId)
-                        self.isLoading = false
-                    }
-                } catch {
-                    DispatchQueue.main.async {
-                        self.chatManager.updateMessage(
-                            id: aiMsgId, content: "Error: \(error.localizedDescription)")
-                        self.chatManager.finalizeMessageUpdate()
-                        self.isLoading = false
-                    }
-                }
                 }
             } else if selectedProvider == "GitHub Copilot"
                 || selectedProvider.hasPrefix("GitHub Copilot|")
@@ -2031,13 +2046,16 @@ extension QuickAIView {
                         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                     Text(providerDisplayName(selectedProvider))
                         .font(.headline)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                    Image(systemName: "chevron.down")
+                    Image(systemName: dropdownChevron("qa_provider"))
                         .font(.caption)
                         .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
+                .frame(height: 34)
                 .background(
                     Capsule()
                         .fill(.ultraThinMaterial)
@@ -2045,14 +2063,18 @@ extension QuickAIView {
                 .glassEffect(.regular, in: .capsule)
             }
             .menuStyle(.borderlessButton)
-            .fixedSize()
+            .buttonStyle(.plain)
+            .focusable(false)
+            .frame(minWidth: 160, maxWidth: 260, alignment: .leading)
             .focusEffectDisabled()
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    markDropdownInteraction("qa_provider")
+                })
 
             Spacer()
 
-            // New Chat
             Button(action: {
-                activeToolName = ""
                 chatManager.createNewSession()
                 withAnimation(collapseAnimation) {
                     isExpanded = false
@@ -2060,8 +2082,9 @@ extension QuickAIView {
             }) {
                 Image(systemName: "square.and.pencil")
                     .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 10)
                     .padding(.vertical, 8)
+                    .frame(height: 34)
                     .background(
                         Capsule()
                             .fill(.ultraThinMaterial)
@@ -2071,10 +2094,10 @@ extension QuickAIView {
             .buttonStyle(.plain)
             .help("New Chat")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .opacity(expandedContentOpacity)
-        .offset(y: headerOffset)
+        .frame(height: 40)
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
     }
 
     private var messagesSection: some View {
@@ -2371,16 +2394,18 @@ extension QuickAIView {
                             Label("Add Custom Model...", systemImage: "plus")
                         }
                     } label: {
-                        Image(systemName: "server.rack")
-                            .font(.system(size: 16))
-                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                            .padding(6)
-                            .background(Circle().fill(Color.primary.opacity(0.06)))
-                            .glassEffect(.regular, in: .circle)
+                        dropdownCircleLabel(icon: "server.rack", key: "qa_ollama_model")
                     }
                     .menuStyle(.borderlessButton)
+                    .buttonStyle(.plain)
+                    .focusable(false)
                     .tint(colorScheme == .dark ? .white : .black)
                     .help("Select Ollama Model")
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            markDropdownInteraction("qa_ollama_model")
+                        }
+                    )
                     .alert("Add Custom Ollama Model", isPresented: $showAddCustomOllamaModel) {
                         TextField("Model Name (e.g., llama3:70b)", text: $newCustomModelName)
                         Button("Add") {
@@ -2432,33 +2457,36 @@ extension QuickAIView {
                                 thinkingOption(title: "High", value: "high")
                             }
                         } label: {
-                            Image(systemName: "brain")
-                                .font(.system(size: 16))
-                                .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                                .padding(6)
-                                .background(Circle().fill(Color.primary.opacity(0.06)))
-                                .glassEffect(.regular, in: .circle)
+                            dropdownCircleLabel(icon: "brain", key: "qa_ollama_thinking")
                         }
                         .menuStyle(.borderlessButton)
+                        .buttonStyle(.plain)
+                        .focusable(false)
                         .tint(colorScheme == .dark ? .white : .black)
                         .help("Reasoning Effort")
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                markDropdownInteraction("qa_ollama_thinking")
+                            })
                     }
                 } else if selectedProvider == "Gemini API"
                     || selectedProvider.hasPrefix("Gemini API|")
                 {
                     Menu {
-                        Section("Favorites") {
-                            ForEach(geminiManager.favoriteModels, id: \.self) { model in
-                                Button(action: { geminiModel = model }) {
-                                    if geminiModel == model {
-                                        Label(
-                                            geminiManager.displayName(for: model),
-                                            systemImage: "checkmark"
-                                        )
-                                        .foregroundStyle(
-                                            colorScheme == .dark ? Color.white : Color.primary)
-                                    } else {
-                                        Text(geminiManager.displayName(for: model))
+                        if !geminiManager.favoriteModels.isEmpty {
+                            Section("Favorites") {
+                                ForEach(geminiManager.favoriteModels, id: \.self) { model in
+                                    Button(action: { geminiModel = model }) {
+                                        if geminiModel == model {
+                                            Label(
+                                                geminiManager.displayName(for: model),
+                                                systemImage: "checkmark"
+                                            )
+                                            .foregroundStyle(
+                                                colorScheme == .dark ? Color.white : Color.primary)
+                                        } else {
+                                            Text(geminiManager.displayName(for: model))
+                                        }
                                     }
                                 }
                             }
@@ -2490,7 +2518,7 @@ extension QuickAIView {
                         Divider()
 
                         Menu("Manage Favorites") {
-                            ForEach(geminiManager.availableModels, id: \.self) { model in
+                            ForEach(geminiManager.sortedModels, id: \.self) { model in
                                 Button(action: { geminiManager.toggleFavorite(model) }) {
                                     if geminiManager.isFavorite(model) {
                                         Label(
@@ -2504,17 +2532,39 @@ extension QuickAIView {
                                 }
                             }
                         }
+
+                        Button(action: { showAddCustomGeminiModel = true }) {
+                            Label("Add Custom Model...", systemImage: "plus")
+                        }
                     } label: {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16))
-                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                            .padding(6)
-                            .background(Circle().fill(Color.primary.opacity(0.06)))
-                            .glassEffect(.regular, in: .circle)
+                        dropdownCircleLabel(icon: "sparkles", key: "qa_gemini_model")
                     }
                     .menuStyle(.borderlessButton)
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .focusEffectDisabled()
                     .tint(colorScheme == .dark ? .white : .black)
                     .help("Select Gemini Model")
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            markDropdownInteraction("qa_gemini_model")
+                        }
+                    )
+                    .alert("Add Custom Gemini Model", isPresented: $showAddCustomGeminiModel) {
+                        TextField(
+                            "Model Name (e.g., gemini-3.1-pro-preview)",
+                            text: $newCustomGeminiModelName)
+                        Button("Add") {
+                            geminiManager.addCustomModel(newCustomGeminiModelName)
+                            geminiModel = newCustomGeminiModelName
+                            newCustomGeminiModelName = ""
+                        }
+                        Button("Cancel", role: .cancel) {
+                            newCustomGeminiModelName = ""
+                        }
+                    } message: {
+                        Text("Enter the name of the model as it appears in the Gemini API.")
+                    }
 
                     // Gemini thinking menu
                     if geminiModel.lowercased().hasPrefix("gemini-3")
@@ -2539,16 +2589,17 @@ extension QuickAIView {
                             }
                             geminiThinkingOption(title: "High", value: "high")
                         } label: {
-                            Image(systemName: "brain")
-                                .font(.system(size: 16))
-                                .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                                .padding(6)
-                                .background(Circle().fill(Color.primary.opacity(0.06)))
-                                .glassEffect(.regular, in: .circle)
+                            dropdownCircleLabel(icon: "brain", key: "qa_gemini_thinking")
                         }
                         .menuStyle(.borderlessButton)
+                        .buttonStyle(.plain)
+                        .focusable(false)
                         .tint(colorScheme == .dark ? .white : .black)
                         .help("Reasoning Effort")
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                markDropdownInteraction("qa_gemini_thinking")
+                            })
                     }
 
                     // Image Resolution & Aspect Ratio pickers (image models)
@@ -2579,6 +2630,9 @@ extension QuickAIView {
                                     .font(.system(size: 9, weight: .medium))
                                 Text(geminiImageResolution)
                                     .font(.system(size: 9, weight: .medium))
+                                Image(systemName: dropdownChevron("qa_gemini_resolution"))
+                                    .font(.system(size: 7, weight: .semibold))
+                                    .foregroundStyle(.secondary)
                             }
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(.horizontal, 6)
@@ -2587,8 +2641,14 @@ extension QuickAIView {
                             .glassEffect(.regular, in: .capsule)
                         }
                         .menuStyle(.borderlessButton)
+                        .buttonStyle(.plain)
+                        .focusable(false)
                         .tint(colorScheme == .dark ? .white : .black)
                         .help("Output Resolution")
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                markDropdownInteraction("qa_gemini_resolution")
+                            })
 
                         Menu {
                             ForEach(
@@ -2618,6 +2678,9 @@ extension QuickAIView {
                                         ? "Ratio" : geminiImageAspectRatio
                                 )
                                 .font(.system(size: 9, weight: .medium))
+                                Image(systemName: dropdownChevron("qa_gemini_ratio"))
+                                    .font(.system(size: 7, weight: .semibold))
+                                    .foregroundStyle(.secondary)
                             }
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .padding(.horizontal, 6)
@@ -2626,9 +2689,43 @@ extension QuickAIView {
                             .glassEffect(.regular, in: .capsule)
                         }
                         .menuStyle(.borderlessButton)
+                        .buttonStyle(.plain)
+                        .focusable(false)
                         .tint(colorScheme == .dark ? .white : .black)
                         .help("Aspect Ratio")
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                markDropdownInteraction("qa_gemini_ratio")
+                            })
                     }
+                }
+
+                if !customWebViews.isEmpty {
+                    Menu {
+                        ForEach(customWebViews) { webView in
+                            Button {
+                                guard let url = URL(string: webView.url) else { return }
+                                NSWorkspace.shared.open(url)
+                            } label: {
+                                Label(
+                                    customWebDisplayName(webView),
+                                    systemImage: customWebIcon(webView)
+                                )
+                            }
+                        }
+                    } label: {
+                        dropdownCircleLabel(icon: "globe", key: "qa_custom_links")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .focusEffectDisabled()
+                    .tint(colorScheme == .dark ? .white : .black)
+                    .help("Open Custom Web Links")
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            markDropdownInteraction("qa_custom_links")
+                        })
                 }
 
                 // GitHub Copilot model picker
@@ -2662,16 +2759,20 @@ extension QuickAIView {
                             }
                         }
                     } label: {
-                        Image(systemName: "chevron.left.forwardslash.chevron.right")
-                            .font(.system(size: 16))
-                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                            .padding(6)
-                            .background(Circle().fill(Color.primary.opacity(0.06)))
-                            .glassEffect(.regular, in: .circle)
+                        dropdownCircleLabel(
+                            icon: "chevron.left.forwardslash.chevron.right",
+                            key: "qa_copilot_model"
+                        )
                     }
                     .menuStyle(.borderlessButton)
+                    .buttonStyle(.plain)
+                    .focusable(false)
                     .tint(colorScheme == .dark ? .white : .black)
                     .help("Select Copilot Model")
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            markDropdownInteraction("qa_copilot_model")
+                        })
                 }
 
                 // NVIDIA model picker
@@ -2723,16 +2824,17 @@ extension QuickAIView {
                         }
 
                     } label: {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                            .padding(6)
-                            .background(Circle().fill(Color.primary.opacity(0.06)))
-                            .glassEffect(.regular, in: .circle)
+                        dropdownCircleLabel(icon: "bolt.fill", key: "qa_nvidia_model")
                     }
                     .menuStyle(.borderlessButton)
+                    .buttonStyle(.plain)
+                    .focusable(false)
                     .tint(colorScheme == .dark ? .white : .black)
                     .help("Select NVIDIA Model")
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            markDropdownInteraction("qa_nvidia_model")
+                        })
                 }
 
                 // NVIDIA Thinking toggle
@@ -2763,16 +2865,17 @@ extension QuickAIView {
                                 }
                             }
                         } label: {
-                            Image(systemName: "brain")
-                                .font(.system(size: 16))
-                                .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                                .padding(6)
-                                .background(Circle().fill(Color.primary.opacity(0.06)))
-                                .glassEffect(.regular, in: .circle)
+                            dropdownCircleLabel(icon: "brain", key: "qa_nvidia_thinking")
                         }
                         .menuStyle(.borderlessButton)
+                        .buttonStyle(.plain)
+                        .focusable(false)
                         .tint(colorScheme == .dark ? .white : .black)
                         .help("Reasoning Effort")
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                markDropdownInteraction("qa_nvidia_thinking")
+                            })
                     }
                 }
 

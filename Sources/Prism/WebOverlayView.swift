@@ -145,7 +145,7 @@ struct WebOverlayView: View {
             .buttonStyle(.plain)
             .disabled(!manager.canGoForward)
 
-            // New chat (home) button
+            // New chat / root page button
             Button {
                 manager.navigateToHome()
             } label: {
@@ -160,6 +160,7 @@ struct WebOverlayView: View {
                     .glassEffect(.regular, in: .circle)
             }
             .buttonStyle(.plain)
+            .help("New Chat")
 
             // Close button
             Button {
@@ -184,7 +185,6 @@ struct WebOverlayView: View {
     private func serviceButton(_ service: WebOverlayService) -> some View {
         let isSelected = manager.currentService == service
         let isHovered = hoveredService == service
-        let themeColors = appTheme.colors
 
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -207,17 +207,11 @@ struct WebOverlayView: View {
                 if isSelected {
                     Capsule()
                         .fill(
-                            LinearGradient(
-                                colors: themeColors.map { $0.opacity(0.15) },
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                            Color.primary.opacity(0.08)
                         )
                         .overlay(
                             Capsule()
-                                .fill(.ultraThinMaterial)
-                                .glassEffect(.regular, in: .capsule)
-                                .opacity(0.7)
+                                .stroke(Color.primary.opacity(0.18), lineWidth: 0.8)
                         )
                 } else if isHovered {
                     Capsule()

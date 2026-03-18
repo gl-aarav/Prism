@@ -192,6 +192,7 @@ struct CommandsManagementView: View {
     @State private var editTrigger: String = ""
     @State private var editExpansion: String = ""
     @State private var editIcon: String = "command"
+    @State private var isNewIconMenuOpen: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
 
@@ -216,7 +217,7 @@ struct CommandsManagementView: View {
                                 Image(systemName: newIcon)
                                     .font(.system(size: 14))
                                     .frame(width: 20)
-                                Image(systemName: "chevron.down")
+                                Image(systemName: isNewIconMenuOpen ? "chevron.up" : "chevron.down")
                                     .font(.system(size: 8, weight: .semibold))
                                     .foregroundStyle(.secondary)
                             }
@@ -240,6 +241,17 @@ struct CommandsManagementView: View {
                         .fixedSize()
                         .focusable(false)
                         .focusEffectDisabled()
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    isNewIconMenuOpen.toggle()
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        isNewIconMenuOpen = false
+                                    }
+                                }
+                            })
                     }
 
                     // Trigger field
@@ -420,6 +432,7 @@ struct CommandListRow: View {
     let onCancel: () -> Void
     let onDelete: (() -> Void)?
     @State private var isHovered = false
+    @State private var isEditIconMenuOpen = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -438,7 +451,7 @@ struct CommandListRow: View {
                         HStack(spacing: 4) {
                             Image(systemName: editIcon)
                                 .font(.system(size: 13))
-                            Image(systemName: "chevron.down")
+                            Image(systemName: isEditIconMenuOpen ? "chevron.up" : "chevron.down")
                                 .font(.system(size: 8, weight: .semibold))
                                 .foregroundStyle(.secondary)
                         }
@@ -458,6 +471,17 @@ struct CommandListRow: View {
                     .focusable(false)
                     .focusEffectDisabled()
                     .frame(width: 44)
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                isEditIconMenuOpen.toggle()
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    isEditIconMenuOpen = false
+                                }
+                            }
+                        })
 
                     HStack(spacing: 2) {
                         Text("/")
