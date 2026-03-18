@@ -216,7 +216,7 @@ struct CommandsManagementView: View {
                                 Image(systemName: newIcon)
                                     .font(.system(size: 14))
                                     .frame(width: 20)
-                                Image(systemName: "chevron.up.chevron.down")
+                                Image(systemName: "chevron.down")
                                     .font(.system(size: 8, weight: .semibold))
                                     .foregroundStyle(.secondary)
                             }
@@ -236,6 +236,10 @@ struct CommandsManagementView: View {
                             )
                         }
                         .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .focusable(false)
+                        .focusEffectDisabled()
                     }
 
                     // Trigger field
@@ -358,6 +362,7 @@ struct CommandsManagementView: View {
                 .padding(.vertical, 12)
             }
         }
+        .padding(.top, 44)
     }
 
     private func addCommand() {
@@ -430,20 +435,29 @@ struct CommandListRow: View {
                             }
                         }
                     } label: {
-                        Image(systemName: editIcon)
-                            .font(.system(size: 13))
-                            .frame(width: 28, height: 28)
-                            .background(
-                                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(
-                                        colorScheme == .dark
-                                            ? Color.white.opacity(0.08)
-                                            : Color.black.opacity(0.04)
-                                    )
-                            )
+                        HStack(spacing: 4) {
+                            Image(systemName: editIcon)
+                                .font(.system(size: 13))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(width: 38, height: 28)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.08)
+                                        : Color.black.opacity(0.04)
+                                )
+                        )
                     }
                     .menuStyle(.borderlessButton)
-                    .frame(width: 36)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .focusable(false)
+                    .focusEffectDisabled()
+                    .frame(width: 44)
 
                     HStack(spacing: 2) {
                         Text("/")
