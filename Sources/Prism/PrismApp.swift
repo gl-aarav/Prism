@@ -157,9 +157,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         print("Prism has launched!")
 
-        // Check for updates silently on launch
+        // Check for updates on launch and show overlay if available
         Task {
             await UpdateManager.shared.checkForUpdates()
+            if UpdateManager.shared.updateAvailable {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    self.showUpdateWindow()
+                }
+            }
         }
     }
 

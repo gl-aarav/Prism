@@ -128,8 +128,8 @@ struct QuickToolsView: View {
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
                             .lineLimit(1)
                         Image(systemName: isToolMenuOpen ? "chevron.up" : "chevron.down")
-                            .font(.caption)
-                            .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.6) : Color.black.opacity(0.5))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
