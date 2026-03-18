@@ -5,10 +5,11 @@ import WebKit
 
 struct WebOverlayView: View {
     @ObservedObject var manager: WebOverlayManager
-    @State private var hoveredService: WebOverlayService?
+    @State private var hoveredItemId: String?
     @AppStorage("WebOverlayBackgroundOpacity") private var backgroundOpacity: Double = 0.25
     @AppStorage("WebOverlayTintIntensity") private var tintIntensity: Double = 0.5
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+    @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
     @Environment(\.colorScheme) private var colorScheme
 
     private var clampedOpacity: Double {
@@ -17,6 +18,10 @@ struct WebOverlayView: View {
 
     private var clampedTint: Double {
         min(max(tintIntensity, 0.0), 1.0)
+    }
+
+    private var allItems: [WebOverlayItem] {
+        manager.allItems()
     }
 
     var body: some View {
@@ -29,14 +34,14 @@ struct WebOverlayView: View {
 
             // Web content — use ZStack to keep all webviews alive, only showing the active one
             ZStack {
-                ForEach(manager.enabledServices) { service in
+                ForEach(allItems) { item in
                     OverlayWebViewWrapper(
-                        webView: manager.getWebView(for: service),
-                        coordinator: manager.coordinator(for: service),
-                        isActive: manager.currentService == service
+                        webView: manager.webViewForItem(item),
+                        coordinator: manager.coordinatorForItem(item),
+                        isActive: manager.currentItemId == item.id
                     )
-                    .opacity(manager.currentService == service ? 1 : 0)
-                    .allowsHitTesting(manager.currentService == service)
+                    .opacity(manager.currentItemId == item.id ? 1 : 0)
+                    .allowsHitTesting(manager.currentItemId == item.id)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -56,6 +61,10 @@ struct WebOverlayView: View {
                     ),
                     lineWidth: 0.5
                 )
+        }
+        .focusEffectDisabled()
+        .onChange(of: customWebViewsJSON) { _, _ in
+            manager.refreshItems()
         }
     }
 
@@ -105,11 +114,17 @@ struct WebOverlayView: View {
     @ViewBuilder
     private var serviceBar: some View {
         HStack(spacing: 4) {
-            ForEach(manager.enabledServices) { service in
-                serviceButton(service)
+            // Scrollable service/item tabs for overflow
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(allItems) { item in
+                        itemButton(item)
+                    }
+                }
             }
+            .scrollClipDisabled()
 
-            Spacer()
+            Spacer(minLength: 4)
 
             // Back button
             Button {
@@ -126,6 +141,7 @@ struct WebOverlayView: View {
                     .glassEffect(.regular, in: .circle)
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
             .disabled(!manager.canGoBack)
 
             // Forward button
@@ -143,6 +159,7 @@ struct WebOverlayView: View {
                     .glassEffect(.regular, in: .circle)
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
             .disabled(!manager.canGoForward)
 
             // New chat / root page button
@@ -160,6 +177,7 @@ struct WebOverlayView: View {
                     .glassEffect(.regular, in: .circle)
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
             .help("New Chat")
 
             // Close button
@@ -178,24 +196,25 @@ struct WebOverlayView: View {
                     .glassEffect(.regular, in: .circle)
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
         }
     }
 
     @ViewBuilder
-    private func serviceButton(_ service: WebOverlayService) -> some View {
-        let isSelected = manager.currentService == service
-        let isHovered = hoveredService == service
+    private func itemButton(_ item: WebOverlayItem) -> some View {
+        let isSelected = manager.currentItemId == item.id
+        let isHovered = hoveredItemId == item.id
 
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                manager.switchService(service)
+                manager.switchToItem(item)
             }
         } label: {
             HStack(spacing: 5) {
-                Image(systemName: service.icon)
+                Image(systemName: item.icon)
                     .font(.system(size: 11, weight: .medium))
                 if isSelected {
-                    Text(service.rawValue)
+                    Text(item.name)
                         .font(.system(size: 12, weight: .semibold))
                         .lineLimit(1)
                 }
@@ -221,8 +240,9 @@ struct WebOverlayView: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .onHover { hovering in
-            hoveredService = hovering ? service : nil
+            hoveredItemId = hovering ? item.id : nil
         }
         .animation(.easeInOut(duration: 0.2), value: isSelected)
     }

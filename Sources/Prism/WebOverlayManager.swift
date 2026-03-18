@@ -36,6 +36,33 @@ enum WebOverlayService: String, CaseIterable, Identifiable {
     var defaultsKey: String { "WebOverlayEnabled_\(rawValue)" }
 }
 
+// MARK: - Unified Web Overlay Item
+
+/// Represents either a built-in service or a custom web view in the overlay.
+struct WebOverlayItem: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let url: URL
+    let icon: String
+    let isCustom: Bool
+
+    init(service: WebOverlayService) {
+        self.id = "builtin_\(service.rawValue)"
+        self.name = service.rawValue
+        self.url = service.url
+        self.icon = service.icon
+        self.isCustom = false
+    }
+
+    init(custom: CustomWebView) {
+        self.id = "custom_\(custom.id.uuidString)"
+        self.name = custom.name.isEmpty ? custom.url : custom.name
+        self.url = URL(string: custom.url) ?? URL(string: "https://example.com")!
+        self.icon = custom.icon ?? "globe"
+        self.isCustom = true
+    }
+}
+
 // MARK: - Web Overlay Panel
 
 class WebOverlayPanel: NSPanel {
@@ -64,13 +91,16 @@ class WebOverlayManager: ObservableObject {
     var panel: WebOverlayPanel?
     var previousApp: NSRunningApplication?
     @Published var currentService: WebOverlayService = .gemini
+    @Published var currentItemId: String = "builtin_Gemini"
     @Published var canGoBack: Bool = false
     @Published var canGoForward: Bool = false
 
-    // Persistent WKWebViews per service to preserve sessions
+    // Persistent WKWebViews keyed by item id
     private var webViews: [WebOverlayService: WKWebView] = [:]
-    // Coordinator per service
+    private var customWebViews: [String: WKWebView] = [:]
+    // Coordinator per service/item
     private var coordinators: [WebOverlayService: WebOverlayCoordinator] = [:]
+    private var customCoordinators: [String: WebOverlayCoordinator] = [:]
 
     private let panelWidth: CGFloat = 420
     private let panelMinHeight: CGFloat = 500
@@ -78,13 +108,27 @@ class WebOverlayManager: ObservableObject {
     private var navigationObservers: [WebOverlayService: NSKeyValueObservation] = [:]
     private var backObservers: [WebOverlayService: NSKeyValueObservation] = [:]
     private var forwardObservers: [WebOverlayService: NSKeyValueObservation] = [:]
+    private var customBackObservers: [String: NSKeyValueObservation] = [:]
+    private var customForwardObservers: [String: NSKeyValueObservation] = [:]
 
     private init() {
         // Load last used service
-        if let saved = UserDefaults.standard.string(forKey: "WebOverlayLastService"),
+        if let savedItemId = UserDefaults.standard.string(forKey: "WebOverlayLastItemId"),
+            !savedItemId.isEmpty
+        {
+            currentItemId = savedItemId
+            // Try to resolve as built-in service
+            if savedItemId.hasPrefix("builtin_") {
+                let raw = String(savedItemId.dropFirst("builtin_".count))
+                if let service = WebOverlayService(rawValue: raw) {
+                    currentService = service
+                }
+            }
+        } else if let saved = UserDefaults.standard.string(forKey: "WebOverlayLastService"),
             let service = WebOverlayService(rawValue: saved)
         {
             currentService = service
+            currentItemId = "builtin_\(saved)"
         }
     }
 
@@ -165,30 +209,70 @@ class WebOverlayManager: ObservableObject {
 
     func switchService(_ service: WebOverlayService) {
         currentService = service
+        currentItemId = "builtin_\(service.rawValue)"
         UserDefaults.standard.set(service.rawValue, forKey: "WebOverlayLastService")
+        UserDefaults.standard.set(currentItemId, forKey: "WebOverlayLastItemId")
+        updateNavigationState()
+    }
+
+    func switchToItem(_ item: WebOverlayItem) {
+        currentItemId = item.id
+        UserDefaults.standard.set(item.id, forKey: "WebOverlayLastItemId")
+        if !item.isCustom {
+            // Resolve built-in service
+            let raw = String(item.id.dropFirst("builtin_".count))
+            if let service = WebOverlayService(rawValue: raw) {
+                currentService = service
+                UserDefaults.standard.set(service.rawValue, forKey: "WebOverlayLastService")
+            }
+        }
         updateNavigationState()
     }
 
     private func updateNavigationState() {
-        if let webView = webViews[currentService] {
-            canGoBack = webView.canGoBack
-            canGoForward = webView.canGoForward
+        if currentItemId.hasPrefix("custom_") {
+            if let webView = customWebViews[currentItemId] {
+                canGoBack = webView.canGoBack
+                canGoForward = webView.canGoForward
+            } else {
+                canGoBack = false
+                canGoForward = false
+            }
         } else {
-            canGoBack = false
-            canGoForward = false
+            if let webView = webViews[currentService] {
+                canGoBack = webView.canGoBack
+                canGoForward = webView.canGoForward
+            } else {
+                canGoBack = false
+                canGoForward = false
+            }
         }
     }
 
     func goBack() {
-        webViews[currentService]?.goBack()
+        if currentItemId.hasPrefix("custom_") {
+            customWebViews[currentItemId]?.goBack()
+        } else {
+            webViews[currentService]?.goBack()
+        }
     }
 
     func goForward() {
-        webViews[currentService]?.goForward()
+        if currentItemId.hasPrefix("custom_") {
+            customWebViews[currentItemId]?.goForward()
+        } else {
+            webViews[currentService]?.goForward()
+        }
     }
 
     func navigateToHome() {
-        webViews[currentService]?.load(URLRequest(url: currentService.url))
+        if currentItemId.hasPrefix("custom_") {
+            if let item = allItems().first(where: { $0.id == currentItemId }) {
+                customWebViews[currentItemId]?.load(URLRequest(url: item.url))
+            }
+        } else {
+            webViews[currentService]?.load(URLRequest(url: currentService.url))
+        }
     }
 
     func getWebView(for service: WebOverlayService) -> WKWebView {
@@ -232,6 +316,72 @@ class WebOverlayManager: ObservableObject {
         return webView
     }
 
+    func getCustomWebView(for item: WebOverlayItem) -> WKWebView {
+        if let existing = customWebViews[item.id] {
+            return existing
+        }
+
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.allowsBackForwardNavigationGestures = true
+        webView.allowsLinkPreview = true
+        webView.customUserAgent =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+
+        let coordinator = WebOverlayCoordinator()
+        customCoordinators[item.id] = coordinator
+        webView.uiDelegate = coordinator
+        webView.navigationDelegate = coordinator
+
+        webView.load(URLRequest(url: item.url))
+        customWebViews[item.id] = webView
+
+        customBackObservers[item.id] = webView.observe(\.canGoBack, options: [.new]) {
+            [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.updateNavigationState()
+            }
+        }
+        customForwardObservers[item.id] = webView.observe(\.canGoForward, options: [.new]) {
+            [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.updateNavigationState()
+            }
+        }
+
+        return webView
+    }
+
+    func coordinatorForItem(_ item: WebOverlayItem) -> WebOverlayCoordinator? {
+        if item.isCustom {
+            return customCoordinators[item.id]
+        } else {
+            let raw = String(item.id.dropFirst("builtin_".count))
+            if let service = WebOverlayService(rawValue: raw) {
+                return coordinators[service]
+            }
+            return nil
+        }
+    }
+
+    func webViewForItem(_ item: WebOverlayItem) -> WKWebView {
+        if item.isCustom {
+            return getCustomWebView(for: item)
+        } else {
+            let raw = String(item.id.dropFirst("builtin_".count))
+            if let service = WebOverlayService(rawValue: raw) {
+                return getWebView(for: service)
+            }
+            // Fallback
+            return getCustomWebView(for: item)
+        }
+    }
+
     func coordinator(for service: WebOverlayService) -> WebOverlayCoordinator? {
         return coordinators[service]
     }
@@ -258,6 +408,28 @@ class WebOverlayManager: ObservableObject {
 
     var enabledServices: [WebOverlayService] {
         WebOverlayService.allCases.filter { isServiceEnabled($0) }
+    }
+
+    /// Returns all items (built-in + custom) for the overlay.
+    func allItems() -> [WebOverlayItem] {
+        var items: [WebOverlayItem] = enabledServices.map { WebOverlayItem(service: $0) }
+        let customs = loadCustomWebViews()
+        items.append(contentsOf: customs.map { WebOverlayItem(custom: $0) })
+        return items
+    }
+
+    /// Load custom web views from UserDefaults.
+    private func loadCustomWebViews() -> [CustomWebView] {
+        guard let json = UserDefaults.standard.string(forKey: "CustomWebViews"),
+            let data = json.data(using: .utf8),
+            let views = try? JSONDecoder().decode([CustomWebView].self, from: data)
+        else { return [] }
+        return views
+    }
+
+    /// Notify the manager to refresh (e.g. when custom web views change in settings).
+    func refreshItems() {
+        objectWillChange.send()
     }
 
     private func positionPanel(_ panel: WebOverlayPanel) {

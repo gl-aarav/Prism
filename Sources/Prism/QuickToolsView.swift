@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 struct QuickToolsView: View {
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
@@ -7,6 +8,7 @@ struct QuickToolsView: View {
 
     @AppStorage("QuickToolsBackgroundOpacity") private var backgroundOpacity: Double = 0.25
     @AppStorage("QuickToolsTintIntensity") private var tintIntensity: Double = 0.5
+    @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
     @State private var isToolMenuOpen: Bool = false
 
     private var clampedOpacity: Double {
@@ -26,23 +28,60 @@ struct QuickToolsView: View {
         }
     }
 
+    private var customWebViewsList: [CustomWebView] {
+        guard let data = customWebViewsJSON.data(using: .utf8),
+            let views = try? JSONDecoder().decode([CustomWebView].self, from: data)
+        else { return [] }
+        return views
+    }
+
+    private var isCustomWebViewSelected: Bool {
+        selectedTool.hasPrefix("CustomWebTool:")
+    }
+
+    private var selectedCustomWebView: CustomWebView? {
+        guard isCustomWebViewSelected else { return nil }
+        let urlStr = String(selectedTool.dropFirst("CustomWebTool:".count))
+        return customWebViewsList.first(where: { $0.url == urlStr })
+    }
+
+    private func toolDisplayName() -> String {
+        if let custom = selectedCustomWebView {
+            return custom.name.isEmpty ? custom.url : custom.name
+        }
+        return canonicalSelectedTool
+    }
+
+    private func toolDisplayIcon() -> String {
+        if let custom = selectedCustomWebView {
+            return custom.icon ?? "globe"
+        }
+        return iconForTool(canonicalSelectedTool)
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             // Content Area
             Group {
-                switch canonicalSelectedTool {
-                case "Image Generation":
-                    ImageGenerationView()
-                case "File Creator":
-                    PDFCreatorView()
-                case "Compare":
-                    ModelComparisonView()
-                case "Commands":
-                    CommandsManagementView()
-                case "Quiz Me":
-                    QuizMeView()
-                default:
-                    ImageGenerationView()
+                if isCustomWebViewSelected, let custom = selectedCustomWebView,
+                    let url = URL(string: custom.url)
+                {
+                    QuickToolsWebViewContainer(url: url)
+                } else {
+                    switch canonicalSelectedTool {
+                    case "Image Generation":
+                        ImageGenerationView()
+                    case "File Creator":
+                        PDFCreatorView()
+                    case "Compare":
+                        ModelComparisonView()
+                    case "Commands":
+                        CommandsManagementView()
+                    case "Quiz Me":
+                        QuizMeView()
+                    default:
+                        ImageGenerationView()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -66,13 +105,28 @@ struct QuickToolsView: View {
                     Button(action: { selectedTool = "Quiz Me" }) {
                         Label("Quiz Me", systemImage: "questionmark.bubble")
                     }
+
+                    if !customWebViewsList.isEmpty {
+                        Divider()
+                        ForEach(customWebViewsList) { webView in
+                            Button(action: {
+                                selectedTool = "CustomWebTool:\(webView.url)"
+                            }) {
+                                Label(
+                                    webView.name.isEmpty ? webView.url : webView.name,
+                                    systemImage: webView.icon ?? "globe"
+                                )
+                            }
+                        }
+                    }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: iconForTool(canonicalSelectedTool))
+                        Image(systemName: toolDisplayIcon())
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
-                        Text(canonicalSelectedTool)
+                        Text(toolDisplayName())
                             .font(.headline)
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                            .lineLimit(1)
                         Image(systemName: isToolMenuOpen ? "chevron.up" : "chevron.down")
                             .font(.caption)
                             .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
@@ -122,7 +176,7 @@ struct QuickToolsView: View {
                 )
         )
         .onAppear {
-            if selectedTool != canonicalSelectedTool {
+            if !isCustomWebViewSelected && selectedTool != canonicalSelectedTool {
                 selectedTool = canonicalSelectedTool
             }
         }
@@ -196,5 +250,58 @@ struct QuickToolsPanelBackground: View {
                         : clampedBackgroundOpacity + 0.12
                 )
         }
+    }
+}
+
+// MARK: - Quick Tools Web View Container
+
+struct QuickToolsWebViewContainer: View {
+    let url: URL
+    @State private var webView: WKWebView?
+
+    var body: some View {
+        QuickToolsWebViewRepresentable(url: url, webView: $webView)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.top, 48)
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+    }
+}
+
+struct QuickToolsWebViewRepresentable: NSViewRepresentable {
+    let url: URL
+    @Binding var webView: WKWebView?
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+
+        let wv = WKWebView(frame: .zero, configuration: config)
+        wv.allowsBackForwardNavigationGestures = true
+        wv.allowsLinkPreview = true
+        wv.customUserAgent =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+        wv.uiDelegate = context.coordinator
+        wv.navigationDelegate = context.coordinator
+        wv.load(URLRequest(url: url))
+
+        DispatchQueue.main.async {
+            self.webView = wv
+        }
+
+        return wv
+    }
+
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        // Only reload if the URL has changed (different custom web view selected)
+        if nsView.url?.absoluteString != url.absoluteString {
+            nsView.load(URLRequest(url: url))
+        }
+    }
+
+    func makeCoordinator() -> WebOverlayCoordinator {
+        WebOverlayCoordinator()
     }
 }
