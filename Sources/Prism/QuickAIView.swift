@@ -2046,6 +2046,7 @@ extension QuickAIView {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            .focusEffectDisabled()
 
             Spacer()
 

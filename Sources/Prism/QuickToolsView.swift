@@ -82,7 +82,6 @@ struct QuickToolsView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .contentShape(Rectangle())
                     .background(
                         Capsule()
                             .fill(.ultraThinMaterial)
@@ -90,6 +89,10 @@ struct QuickToolsView: View {
                     .glassEffect(.regular, in: .capsule)
                 }
                 .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .focusable(false)
+                .focusEffectDisabled()
                 Spacer()
             }
             .padding(.horizontal, 14)
