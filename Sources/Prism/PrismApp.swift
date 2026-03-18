@@ -102,6 +102,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
+        ) { notification in
+            guard let window = notification.object as? NSWindow else { return }
+            if self.isSettingsWindow(window) {
+                self.applySettingsWindowAppearance(window)
+            }
+        }
+
         // When the main window closes via Cmd+W, just hide it instead of closing
         NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
@@ -166,6 +175,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.showUpdateWindow()
                 }
             }
+        }
+    }
+
+    private func isSettingsWindow(_ window: NSWindow) -> Bool {
+        window.title.localizedCaseInsensitiveContains("settings")
+    }
+
+    private func applySettingsWindowAppearance(_ window: NSWindow) {
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.styleMask.insert(.fullSizeContentView)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.toolbar = nil
+        if #available(macOS 11.0, *) {
+            window.titlebarSeparatorStyle = .none
         }
     }
 
