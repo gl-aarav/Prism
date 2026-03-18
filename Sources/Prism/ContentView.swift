@@ -8955,110 +8955,144 @@ struct SettingsView: View {
 
     @State private var selectedTab: SettingsTab = .general
 
+    private var settingsTintStart: Color {
+        (appTheme.colors.first ?? .blue).opacity(0.16)
+    }
+
+    private var settingsTintEnd: Color {
+        (appTheme.colors.last ?? .green).opacity(0.1)
+    }
+
+    @ViewBuilder
+    private var settingsSidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(SettingsTab.Category.allCases, id: \.rawValue) { category in
+                    if !category.rawValue.isEmpty {
+                        Text(category.rawValue)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 18)
+                            .padding(.bottom, 6)
+                    }
+
+                    ForEach(SettingsTab.tabs(for: category)) { tab in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                selectedTab = tab
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: tab.icon)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(
+                                        selectedTab == tab ? .white : tab.iconColor
+                                    )
+                                    .frame(width: 26, height: 26)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                            .fill(
+                                                selectedTab == tab
+                                                    ? tab.iconColor
+                                                    : tab.iconColor.opacity(0.15))
+                                    )
+
+                                Text(tab.rawValue)
+                                    .font(
+                                        .system(
+                                            size: 13,
+                                            weight: selectedTab == tab ? .semibold : .regular)
+                                    )
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                    .padding(.vertical, 2)
+
+                                Spacer()
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(
+                                        selectedTab == tab
+                                            ? Color(nsColor: .quaternaryLabelColor).opacity(0.2)
+                                            : Color.clear
+                                    )
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                        .focusEffectDisabled()
+                        .padding(.horizontal, 6)
+                    }
+                }
+            }
+            .padding(.vertical, 14)
+        }
+        .safeAreaPadding(.top, 8)
+        .safeAreaPadding(.bottom, 10)
+        .frame(width: 210)
+        .background(Color.white.opacity(0.05))
+    }
+
+    @ViewBuilder
+    private var settingsContentPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: selectedTab.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(selectedTab.iconColor)
+                Text(selectedTab.rawValue)
+                    .font(.system(size: 20, weight: .bold))
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 22)
+            .padding(.bottom, 10)
+
+            Form {
+                contentForTab(selectedTab)
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .safeAreaPadding(.bottom, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private var settingsContainer: some View {
+        HStack(spacing: 0) {
+            settingsSidebar
+            settingsContentPane
+        }
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.15), radius: 24, y: 10)
+        .padding(10)
+    }
+
     // MARK: - Body
 
     var body: some View {
-        HStack(spacing: 0) {
-            // MARK: Sidebar
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(SettingsTab.Category.allCases, id: \.rawValue) { category in
-                        if !category.rawValue.isEmpty {
-                            Text(category.rawValue)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 16)
-                                .padding(.top, 18)
-                                .padding(.bottom, 6)
-                        }
+        ZStack {
+            LinearGradient(
+                colors: [settingsTintStart, settingsTintEnd],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-                        ForEach(SettingsTab.tabs(for: category)) { tab in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    selectedTab = tab
-                                }
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: tab.icon)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(
-                                            selectedTab == tab ? .white : tab.iconColor
-                                        )
-                                        .frame(width: 26, height: 26)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                                .fill(
-                                                    selectedTab == tab
-                                                        ? tab.iconColor
-                                                        : tab.iconColor.opacity(0.15))
-                                        )
-
-                                    Text(tab.rawValue)
-                                        .font(
-                                            .system(
-                                                size: 13,
-                                                weight: selectedTab == tab ? .semibold : .regular)
-                                        )
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                        .padding(.vertical, 2)
-
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 8)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                        .fill(
-                                            selectedTab == tab
-                                                ? Color(nsColor: .quaternaryLabelColor).opacity(0.2)
-                                                : Color.clear
-                                        )
-                                )
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .focusable(false)
-                            .focusEffectDisabled()
-                            .padding(.horizontal, 6)
-                        }
-                    }
-                }
-                .padding(.vertical, 14)
-            }
-            .safeAreaPadding(.top, 8)
-            .safeAreaPadding(.bottom, 10)
-            .frame(width: 210)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-
-            Divider()
-
-            // MARK: Content Pane
-            VStack(alignment: .leading, spacing: 0) {
-                // Header
-                HStack(spacing: 10) {
-                    Image(systemName: selectedTab.icon)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(selectedTab.iconColor)
-                    Text(selectedTab.rawValue)
-                        .font(.system(size: 20, weight: .bold))
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 22)
-                .padding(.bottom, 10)
-
-                Form {
-                    contentForTab(selectedTab)
-                }
-                .formStyle(.grouped)
-                .scrollContentBackground(.hidden)
-                .safeAreaPadding(.bottom, 10)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            settingsContainer
         }
         .frame(minWidth: 640, idealWidth: 680, minHeight: 700, idealHeight: 760)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(Color.clear)
     }
 
     @ViewBuilder
