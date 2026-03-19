@@ -9099,7 +9099,7 @@ struct SettingsView: View {
                 Text("Prism Settings")
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary.opacity(0.85))
-                    .padding(.leading, 46)
+                    .padding(.leading, 110)
                     .padding(.top, 12)
                 Spacer(minLength: 0)
             }
@@ -9128,18 +9128,18 @@ struct SettingsView: View {
                     window.backgroundColor = .clear
                     window.isOpaque = false  // crucial for removing the opaque window background
 
-                    // Naturally disable/hide green & orange buttons via stylemask
-                    window.styleMask.remove(.resizable)
-                    window.styleMask.remove(.miniaturizable)
-
-                    // Also explicitly hide them
-                    if let zoomBtn = window.standardWindowButton(.zoomButton) {
-                        zoomBtn.isHidden = true
-                        zoomBtn.isEnabled = false
+                    // Keep all traffic-light buttons visible and enabled.
+                    if let closeBtn = window.standardWindowButton(.closeButton) {
+                        closeBtn.isHidden = false
+                        closeBtn.isEnabled = true
                     }
                     if let minBtn = window.standardWindowButton(.miniaturizeButton) {
-                        minBtn.isHidden = true
-                        minBtn.isEnabled = false
+                        minBtn.isHidden = false
+                        minBtn.isEnabled = true
+                    }
+                    if let zoomBtn = window.standardWindowButton(.zoomButton) {
+                        zoomBtn.isHidden = false
+                        zoomBtn.isEnabled = true
                     }
 
                     // Re-apply on the next runloop tick in case macOS resets title state.
