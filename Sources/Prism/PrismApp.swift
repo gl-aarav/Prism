@@ -218,8 +218,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.identifier = NSUserInterfaceItemIdentifier("PrismSettingsWindow")
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
+        window.styleMask.remove(.resizable)
+        window.styleMask.remove(.miniaturizable)
         window.isOpaque = false
         window.toolbar = nil
+
+        if let closeBtn = window.standardWindowButton(.closeButton) {
+            closeBtn.isHidden = false
+            closeBtn.isEnabled = true
+        }
+        if let minBtn = window.standardWindowButton(.miniaturizeButton) {
+            minBtn.isHidden = true
+            minBtn.isEnabled = false
+        }
+        if let zoomBtn = window.standardWindowButton(.zoomButton) {
+            zoomBtn.isHidden = true
+            zoomBtn.isEnabled = false
+        }
+
         if #available(macOS 11.0, *) {
             window.titlebarSeparatorStyle = .none
         }

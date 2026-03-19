@@ -9125,18 +9125,21 @@ struct SettingsView: View {
                     window.backgroundColor = .clear
                     window.isOpaque = false  // crucial for removing the opaque window background
 
-                    // Keep all traffic-light buttons visible and enabled.
+                    // Show only the close traffic-light button.
+                    window.styleMask.remove(.resizable)
+                    window.styleMask.remove(.miniaturizable)
+
                     if let closeBtn = window.standardWindowButton(.closeButton) {
                         closeBtn.isHidden = false
                         closeBtn.isEnabled = true
                     }
                     if let minBtn = window.standardWindowButton(.miniaturizeButton) {
-                        minBtn.isHidden = false
-                        minBtn.isEnabled = true
+                        minBtn.isHidden = true
+                        minBtn.isEnabled = false
                     }
                     if let zoomBtn = window.standardWindowButton(.zoomButton) {
-                        zoomBtn.isHidden = false
-                        zoomBtn.isEnabled = true
+                        zoomBtn.isHidden = true
+                        zoomBtn.isEnabled = false
                     }
 
                     // Re-apply on the next runloop tick in case macOS resets title state.
@@ -9144,6 +9147,8 @@ struct SettingsView: View {
                         window.titleVisibility = .hidden
                         window.title = ""
                         window.toolbar = nil
+                        window.styleMask.remove(.resizable)
+                        window.styleMask.remove(.miniaturizable)
                     }
                 }
             })
