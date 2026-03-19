@@ -9083,20 +9083,25 @@ struct SettingsView: View {
     // MARK: - Body
 
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [settingsTintStart, settingsTintEnd],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+        ZStack(alignment: .top) {
+            ZStack {
+                LinearGradient(
+                    colors: [settingsTintStart, settingsTintEnd],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
 
-            settingsContainer
+                settingsContainer
+            }
+
         }
         .frame(minWidth: 640, idealWidth: 680, minHeight: 700, idealHeight: 760)
         .background(Color.clear)
         .ignoresSafeArea(.all)
         .toolbarBackground(.hidden, for: .windowToolbar)
+        .navigationTitle("")
+
         .background(
             WindowAccessor { window in
                 if let window = window {
