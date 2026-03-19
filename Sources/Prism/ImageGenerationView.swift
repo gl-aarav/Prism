@@ -547,8 +547,11 @@ struct ImageGenerationView: View {
                         )
                 }
                 .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .frame(width: 34)
                 .help("Style: \(selectedStyle)")
+                .focusable(false)
+                .focusEffectDisabled()
 
                 // Text field — matching main chat input style
                 ZStack(alignment: .leading) {

@@ -236,7 +236,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             zoomBtn.isEnabled = false
         }
 
-        if #available(macOS 11.0, *) {
+        if #available(macOS 26.0, *) {
             window.titlebarSeparatorStyle = .none
         }
     }
