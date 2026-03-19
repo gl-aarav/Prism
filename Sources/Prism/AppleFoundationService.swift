@@ -10,9 +10,7 @@ class AppleFoundationService {
 
     init() {
         #if canImport(FoundationModels)
-            if #available(macOS 26.0, *) {
-                self._handler = InnerFoundationHandler()
-            }
+            self._handler = InnerFoundationHandler()
         #endif
     }
 
@@ -23,8 +21,7 @@ class AppleFoundationService {
         return AsyncThrowingStream { continuation in
             Task {
                 #if canImport(FoundationModels)
-                    if #available(macOS 26.0, *),
-                        let handler = self._handler as? InnerFoundationHandler
+                    if let handler = self._handler as? InnerFoundationHandler
                     {
                         do {
                             for try await text in handler.stream(
@@ -43,7 +40,7 @@ class AppleFoundationService {
                                 code: 2,
                                 userInfo: [
                                     NSLocalizedDescriptionKey:
-                                        "Apple Foundation Models are not available on this macOS version (Requires macOS 26.0+)"
+                                        "Apple Foundation Models are not available. FoundationModels framework error."
                                 ]
                             ))
                     }
@@ -63,7 +60,6 @@ class AppleFoundationService {
     }
 
     #if canImport(FoundationModels)
-        @available(macOS 26.0, *)
         private class InnerFoundationHandler: @unchecked Sendable {
             private var session: LanguageModelSession?
             private var isInitializing = true
