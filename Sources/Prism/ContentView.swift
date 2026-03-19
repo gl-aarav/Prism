@@ -6008,7 +6008,7 @@ struct KaTeXView: NSViewRepresentable {
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         config.userContentController.add(context.coordinator, name: "height")
 
-        let webView = NonScrollableWebView(frame: .zero, configuration: config)
+        let webView = NonScrollableWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 20), configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         return webView
@@ -6066,6 +6066,7 @@ struct KaTeXView: NSViewRepresentable {
 
                         document.addEventListener('DOMContentLoaded', () => {
                            window.updateLatex(String.raw`\(escapedLatex)`);
+                           new ResizeObserver(() => sendHeight()).observe(document.body);
                         });
                     </script>
                 </body>
@@ -6144,7 +6145,7 @@ struct RichTextView: NSViewRepresentable {
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         config.userContentController.add(context.coordinator, name: "height")
 
-        let webView = NonScrollableWebView(frame: .zero, configuration: config)
+        let webView = NonScrollableWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 20), configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         return webView
@@ -6212,6 +6213,7 @@ struct RichTextView: NSViewRepresentable {
                     document.addEventListener('DOMContentLoaded', function() {
                         // Wait a tiny bit for KaTeX to render
                         setTimeout(sendHeight, 50);
+                        new ResizeObserver(() => sendHeight()).observe(document.body);
                     });
                 </script>
             </body>
