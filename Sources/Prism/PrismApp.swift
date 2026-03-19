@@ -121,7 +121,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for notificationName in [
             NSWindow.didBecomeKeyNotification,
             NSWindow.didBecomeMainNotification,
-            NSWindow.didUpdateNotification,
         ] {
             NotificationCenter.default.addObserver(
                 forName: notificationName, object: nil, queue: .main
@@ -213,31 +212,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func applySettingsWindowAppearance(_ window: NSWindow) {
-        window.titleVisibility = .hidden
-        window.title = ""
-        window.identifier = NSUserInterfaceItemIdentifier("PrismSettingsWindow")
-        window.titlebarAppearsTransparent = true
-        window.styleMask.insert(.fullSizeContentView)
-        window.styleMask.remove(.resizable)
-        window.styleMask.remove(.miniaturizable)
-        window.isOpaque = false
-        window.toolbar = nil
+        if window.titleVisibility != .hidden {
+            window.titleVisibility = .hidden
+        }
+        if !window.title.isEmpty {
+            window.title = ""
+        }
+        if window.identifier != NSUserInterfaceItemIdentifier("PrismSettingsWindow") {
+            window.identifier = NSUserInterfaceItemIdentifier("PrismSettingsWindow")
+        }
+        if !window.titlebarAppearsTransparent {
+            window.titlebarAppearsTransparent = true
+        }
+        if !window.styleMask.contains(.fullSizeContentView) {
+            window.styleMask.insert(.fullSizeContentView)
+        }
+        if window.styleMask.contains(.resizable) {
+            window.styleMask.remove(.resizable)
+        }
+        if window.styleMask.contains(.miniaturizable) {
+            window.styleMask.remove(.miniaturizable)
+        }
+        if window.isOpaque {
+            window.isOpaque = false
+        }
+        if window.toolbar != nil {
+            window.toolbar = nil
+        }
 
         if let closeBtn = window.standardWindowButton(.closeButton) {
-            closeBtn.isHidden = false
-            closeBtn.isEnabled = true
+            if closeBtn.isHidden { closeBtn.isHidden = false }
+            if !closeBtn.isEnabled { closeBtn.isEnabled = true }
         }
         if let minBtn = window.standardWindowButton(.miniaturizeButton) {
-            minBtn.isHidden = false
-            minBtn.isEnabled = false
+            if minBtn.isHidden { minBtn.isHidden = false }
+            if minBtn.isEnabled { minBtn.isEnabled = false }
         }
         if let zoomBtn = window.standardWindowButton(.zoomButton) {
-            zoomBtn.isHidden = false
-            zoomBtn.isEnabled = false
+            if zoomBtn.isHidden { zoomBtn.isHidden = false }
+            if zoomBtn.isEnabled { zoomBtn.isEnabled = false }
         }
 
-        window.titlebarSeparatorStyle = .none
+        if window.titlebarSeparatorStyle != .none {
+            window.titlebarSeparatorStyle = .none
+        }
     }
+
 
     @MainActor
     func showUpdateWindow() {

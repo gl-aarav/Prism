@@ -9031,10 +9031,9 @@ struct SettingsView: View {
                     }
                 }
             }
-            .padding(.vertical, 14)
+            .padding(.top, 16)
+            .padding(.bottom, 10)
         }
-        .safeAreaPadding(.top, 16)
-        .safeAreaPadding(.bottom, 10)
         .frame(width: 210)
         .background(Color.white.opacity(0.05))
     }
@@ -9077,9 +9076,7 @@ struct SettingsView: View {
                 .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.15), radius: 24, y: 10)
-        .padding(.top, 42)
-        .padding(.horizontal, 10)
-        .padding(.bottom, 10)
+        .padding(EdgeInsets(top: 42, leading: 10, bottom: 10, trailing: 10))
     }
 
     // MARK: - Body
@@ -9113,11 +9110,22 @@ struct SettingsView: View {
         .background(
             WindowAccessor { window in
                 if let window = window {
-                    window.titlebarAppearsTransparent = true
-                    window.titleVisibility = .hidden
-                    window.title = ""
-                    window.identifier = NSUserInterfaceItemIdentifier("PrismSettingsWindow")
-                    window.styleMask.insert(.fullSizeContentView)
+                    if !window.titlebarAppearsTransparent {
+                        window.titlebarAppearsTransparent = true
+                    }
+                    if window.titleVisibility != .hidden {
+                        window.titleVisibility = .hidden
+                    }
+                    if !window.title.isEmpty {
+                        window.title = ""
+                    }
+                    let sid = NSUserInterfaceItemIdentifier("PrismSettingsWindow")
+                    if window.identifier != sid {
+                        window.identifier = sid
+                    }
+                    if !window.styleMask.contains(.fullSizeContentView) {
+                        window.styleMask.insert(.fullSizeContentView)
+                    }
 
                     // Clear the default Settings toolbar to remove the white bar
                     window.toolbar = nil
@@ -9128,29 +9136,28 @@ struct SettingsView: View {
                     window.isOpaque = false  // crucial for removing the opaque window background
 
                     // Show all traffic lights, but keep yellow/green de-colored.
-                    window.styleMask.remove(.resizable)
-                    window.styleMask.remove(.miniaturizable)
+                    if window.styleMask.contains(.resizable) {
+                        window.styleMask.remove(.resizable)
+                    }
+                    if window.styleMask.contains(.miniaturizable) {
+                        window.styleMask.remove(.miniaturizable)
+                    }
 
                     if let closeBtn = window.standardWindowButton(.closeButton) {
-                        closeBtn.isHidden = false
-                        closeBtn.isEnabled = true
+                        if closeBtn.isHidden { closeBtn.isHidden = false }
+                        if !closeBtn.isEnabled { closeBtn.isEnabled = true }
                     }
                     if let minBtn = window.standardWindowButton(.miniaturizeButton) {
-                        minBtn.isHidden = false
-                        minBtn.isEnabled = false
+                        if minBtn.isHidden { minBtn.isHidden = false }
+                        if minBtn.isEnabled { minBtn.isEnabled = false }
                     }
                     if let zoomBtn = window.standardWindowButton(.zoomButton) {
-                        zoomBtn.isHidden = false
-                        zoomBtn.isEnabled = false
+                        if zoomBtn.isHidden { zoomBtn.isHidden = false }
+                        if zoomBtn.isEnabled { zoomBtn.isEnabled = false }
                     }
 
-                    // Re-apply on the next runloop tick in case macOS resets title state.
-                    DispatchQueue.main.async {
-                        window.titleVisibility = .hidden
-                        window.title = ""
-                        window.toolbar = nil
-                        window.styleMask.remove(.resizable)
-                        window.styleMask.remove(.miniaturizable)
+                    if window.titlebarSeparatorStyle != .none {
+                        window.titlebarSeparatorStyle = .none
                     }
                 }
             })
