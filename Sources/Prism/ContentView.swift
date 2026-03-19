@@ -9095,14 +9095,11 @@ struct SettingsView: View {
                 settingsContainer
             }
 
-            HStack {
-                Text("Prism Settings")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary.opacity(0.85))
-                    .padding(.leading, 110)
-                    .padding(.top, 12)
-                Spacer(minLength: 0)
-            }
+            Text("Prism Settings")
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.85))
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, 12)
 
         }
         .frame(minWidth: 640, idealWidth: 680, minHeight: 700, idealHeight: 760)
