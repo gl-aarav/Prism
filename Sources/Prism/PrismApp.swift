@@ -14,35 +14,50 @@ struct PrismApp: App {
         .defaultSize(width: 1200, height: 800)
         .windowStyle(.hiddenTitleBar)
         .commands {
-            CommandGroup(replacing: .appInfo) {
-                Button("About Prism") {
-                    NSApplication.shared.orderFrontStandardAboutPanel(
-                        options: [
-                            NSApplication.AboutPanelOptionKey.credits: NSAttributedString(
-                                string: "Developed by Aarav Goyal",
-                                attributes: [
-                                    .font: NSFont.systemFont(ofSize: 11),
-                                    .foregroundColor: NSColor.labelColor,
-                                ]
-                            )
-                        ]
-                    )
-                }
-                Divider()
-                Button("Check for Updates…") {
-                    AppDelegate.shared?.showUpdateWindow()
-                    Task { await UpdateManager.shared.checkForUpdates() }
-                }
-            }
+            PrismAppCommands()
         }
 
-        Settings {
+        Window(" ", id: "prism-settings") {
             SettingsView()
                 .environmentObject(ChatManager.shared)
-                .navigationTitle("")
+                .navigationTitle(" ")
         }
         .defaultSize(width: 760, height: 820)
         .windowStyle(.hiddenTitleBar)
+    }
+}
+
+struct PrismAppCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") {
+                openWindow(id: "prism-settings")
+            }
+            .keyboardShortcut(",", modifiers: .command)
+        }
+
+        CommandGroup(replacing: .appInfo) {
+            Button("About Prism") {
+                NSApplication.shared.orderFrontStandardAboutPanel(
+                    options: [
+                        NSApplication.AboutPanelOptionKey.credits: NSAttributedString(
+                            string: "Developed by Aarav Goyal",
+                            attributes: [
+                                .font: NSFont.systemFont(ofSize: 11),
+                                .foregroundColor: NSColor.labelColor,
+                            ]
+                        )
+                    ]
+                )
+            }
+            Divider()
+            Button("Check for Updates…") {
+                AppDelegate.shared?.showUpdateWindow()
+                Task { await UpdateManager.shared.checkForUpdates() }
+            }
+        }
     }
 }
 
@@ -102,7 +117,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Catch settings window on multiple lifecycle events to prevent "Prism Settings" ever showing
+        // Catch settings window on multiple lifecycle events and keep title behavior consistent
         for notificationName in [
             NSWindow.didBecomeKeyNotification,
             NSWindow.didBecomeMainNotification,
@@ -204,7 +219,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
         window.isOpaque = false
-        window.backgroundColor = .clear
         window.toolbar = nil
         if #available(macOS 11.0, *) {
             window.titlebarSeparatorStyle = .none

@@ -9095,12 +9095,21 @@ struct SettingsView: View {
                 settingsContainer
             }
 
+            HStack {
+                Text("Prism Settings")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary.opacity(0.85))
+                    .padding(.leading, 46)
+                    .padding(.top, 12)
+                Spacer(minLength: 0)
+            }
+
         }
         .frame(minWidth: 640, idealWidth: 680, minHeight: 700, idealHeight: 760)
         .background(Color.clear)
         .ignoresSafeArea(.all)
         .toolbarBackground(.hidden, for: .windowToolbar)
-        .navigationTitle("")
+        .navigationTitle(" ")
 
         .background(
             WindowAccessor { window in
@@ -9133,8 +9142,8 @@ struct SettingsView: View {
                         minBtn.isEnabled = false
                     }
 
-                    // Re-apply after a short delay in case macOS resets the title
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    // Re-apply on the next runloop tick in case macOS resets title state.
+                    DispatchQueue.main.async {
                         window.titleVisibility = .hidden
                         window.title = ""
                         window.toolbar = nil
