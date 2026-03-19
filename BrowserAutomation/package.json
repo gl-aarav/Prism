@@ -4,8 +4,7 @@
     "description": "Browser automation UI for Prism AI — Puppeteer & Playwright with all Prism models",
     "main": "server.js",
     "scripts": {
-        "start": "node server.js",
-        "test": "node test-chrome.js"
+        "start": "node server.js"
     },
     "dependencies": {
         "express": "^4.21.0",
