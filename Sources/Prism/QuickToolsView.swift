@@ -142,6 +142,7 @@ struct QuickToolsView: View {
                     .glassEffect(.regular, in: .capsule)
                 }
                 .menuStyle(.borderlessButton)
+                .buttonStyle(.plain)
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .focusable(false)

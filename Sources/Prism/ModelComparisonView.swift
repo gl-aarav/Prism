@@ -540,6 +540,9 @@ struct ModelComparisonView: View {
                     .glassEffect(.regular, in: .capsule)
                 }
                 .menuStyle(.borderlessButton)
+                .buttonStyle(.plain)
+                .focusable(false)
+                .focusEffectDisabled()
                 .fixedSize()
                 .simultaneousGesture(
                     TapGesture().onEnded {
@@ -666,6 +669,9 @@ struct ModelComparisonView: View {
                             )
                         }
                         .menuStyle(.borderlessButton)
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                        .focusEffectDisabled()
                         .fixedSize()
                     }
 
@@ -1656,6 +1662,9 @@ struct ComparisonCard: View {
                             )
                     }
                     .menuStyle(.borderlessButton)
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .focusEffectDisabled()
                     .fixedSize()
                     .help("Reasoning: \(slot.thinkingLevel.capitalized)")
                 }
@@ -1812,6 +1821,9 @@ struct ComparisonCard: View {
             }
         }
         .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
+        .focusable(false)
+        .focusEffectDisabled()
         .fixedSize()
         .simultaneousGesture(
             TapGesture().onEnded {
