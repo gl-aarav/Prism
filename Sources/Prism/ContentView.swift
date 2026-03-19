@@ -9125,7 +9125,7 @@ struct SettingsView: View {
                     window.backgroundColor = .clear
                     window.isOpaque = false  // crucial for removing the opaque window background
 
-                    // Show only the close traffic-light button.
+                    // Show all traffic lights, but keep yellow/green de-colored.
                     window.styleMask.remove(.resizable)
                     window.styleMask.remove(.miniaturizable)
 
@@ -9134,11 +9134,11 @@ struct SettingsView: View {
                         closeBtn.isEnabled = true
                     }
                     if let minBtn = window.standardWindowButton(.miniaturizeButton) {
-                        minBtn.isHidden = true
+                        minBtn.isHidden = false
                         minBtn.isEnabled = false
                     }
                     if let zoomBtn = window.standardWindowButton(.zoomButton) {
-                        zoomBtn.isHidden = true
+                        zoomBtn.isHidden = false
                         zoomBtn.isEnabled = false
                     }
 

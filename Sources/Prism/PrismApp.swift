@@ -228,11 +228,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             closeBtn.isEnabled = true
         }
         if let minBtn = window.standardWindowButton(.miniaturizeButton) {
-            minBtn.isHidden = true
+            minBtn.isHidden = false
             minBtn.isEnabled = false
         }
         if let zoomBtn = window.standardWindowButton(.zoomButton) {
-            zoomBtn.isHidden = true
+            zoomBtn.isHidden = false
             zoomBtn.isEnabled = false
         }
 
