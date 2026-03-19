@@ -426,11 +426,9 @@ struct Message: Identifiable, Codable, Equatable {
                 // Check if next line is separator
                 if i + 1 < lines.count {
                     let nextLine = lines[i + 1].trimmingCharacters(in: .whitespaces)
-                    if nextLine.hasPrefix("|") && nextLine.contains("---") {
+                    if nextLine.hasPrefix("|") && isMarkdownTableSeparator(nextLine) {
                         // It is a table
-                        let headers = trimmedLine.split(separator: "|").map {
-                            String($0).trimmingCharacters(in: .whitespaces)
-                        }
+                        let headers = parseMarkdownTableRow(trimmedLine)
                         var rows: [[String]] = []
 
                         // Skip header and separator
@@ -442,9 +440,7 @@ struct Message: Identifiable, Codable, Equatable {
                                 i -= 1  // Backtrack so main loop processes this line
                                 break
                             }
-                            let cells = rowLine.split(separator: "|").map {
-                                String($0).trimmingCharacters(in: .whitespaces)
-                            }
+                            let cells = parseMarkdownTableRow(rowLine)
                             if !cells.isEmpty {
                                 rows.append(cells)
                             }
@@ -474,6 +470,63 @@ struct Message: Identifiable, Codable, Equatable {
         }
 
         return blocks
+    }
+
+    // Parses a markdown table row while preserving empty cells and escaped pipes.
+    private static func parseMarkdownTableRow(_ line: String) -> [String] {
+        var normalized = line.trimmingCharacters(in: .whitespaces)
+        if normalized.hasPrefix("|") {
+            normalized.removeFirst()
+        }
+        if normalized.hasSuffix("|") {
+            normalized.removeLast()
+        }
+
+        var cells: [String] = []
+        var current = ""
+        var escaping = false
+
+        for ch in normalized {
+            if escaping {
+                current.append(ch)
+                escaping = false
+                continue
+            }
+
+            if ch == "\\" {
+                escaping = true
+                continue
+            }
+
+            if ch == "|" {
+                cells.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
+            } else {
+                current.append(ch)
+            }
+        }
+
+        if escaping {
+            current.append("\\")
+        }
+
+        cells.append(current.trimmingCharacters(in: .whitespaces))
+        return cells
+    }
+
+    // Matches separator rows like |---|:---:|---:| used in markdown tables.
+    private static func isMarkdownTableSeparator(_ line: String) -> Bool {
+        let cells = parseMarkdownTableRow(line)
+        guard !cells.isEmpty else { return false }
+
+        for cell in cells {
+            let token = cell.replacingOccurrences(of: " ", with: "")
+            if token.isEmpty { return false }
+            if token.range(of: "^:?-{3,}:?$", options: .regularExpression) == nil {
+                return false
+            }
+        }
+        return true
     }
 
     mutating func ensureBlocksCached() {
@@ -6499,7 +6552,7 @@ struct TableCellView: View {
             RichTextView(content: text, fontSize: 14, height: $webViewHeight)
                 .textSelection(.disabled)
                 .frame(height: min(webViewHeight, 300))
-                .frame(minWidth: 300, alignment: .leading)  // Min width for math cells
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             Text(MarkdownParser.shared.parse(text))
                 .font(.system(size: 14, weight: isHeader ? .semibold : .regular))
