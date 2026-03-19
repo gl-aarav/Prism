@@ -6061,7 +6061,8 @@ struct KaTeXView: NSViewRepresentable {
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         config.userContentController.add(context.coordinator, name: "height")
 
-        let webView = NonScrollableWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 20), configuration: config)
+        let webView = NonScrollableWebView(
+            frame: NSRect(x: 0, y: 0, width: 600, height: 20), configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         return webView
@@ -6198,7 +6199,8 @@ struct RichTextView: NSViewRepresentable {
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
         config.userContentController.add(context.coordinator, name: "height")
 
-        let webView = NonScrollableWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 20), configuration: config)
+        let webView = NonScrollableWebView(
+            frame: NSRect(x: 0, y: 0, width: 600, height: 20), configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         return webView
