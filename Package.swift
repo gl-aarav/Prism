@@ -26,9 +26,6 @@ let package = Package(
                 "SwiftMath",
                 "KeyboardShortcuts",
                 .product(name: "Swifter", package: "swifter")
-            ],
-            resources: [
-                .process("Assets.xcassets")
             ])
     ]
 )
