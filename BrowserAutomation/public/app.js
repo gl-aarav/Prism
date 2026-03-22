@@ -59,6 +59,13 @@
     const contextToggleText = $('#contextToggleText');
     const btnClearChat = $('#btnClearChat');
     const btnSendToPrism = $('#btnSendToPrism');
+    const runtimeBadge = $('#runtimeBadge');
+    const runtimeTitle = $('#runtimeTitle');
+    const runtimeMeta = $('#runtimeMeta');
+    const btnRunBrowser = $('#btnRunBrowser');
+    const btnRefreshStatus = $('#btnRefreshStatus');
+    const btnLaunch = $('#btnLaunch');
+    const btnClose = $('#btnClose');
 
     // ── WebSocket ──
     function connect() {
@@ -69,11 +76,13 @@
             setConnected(true);
             log('Connected to server', 'info');
             loadModels();
+            refreshRuntimeStatus();
         };
 
         ws.onclose = () => {
             setConnected(false);
             log('Disconnected', 'error');
+            applyRuntimeStatus({ offline: true });
             setTimeout(connect, 2000);
         };
 
@@ -98,6 +107,56 @@
         text.textContent = connected ? 'Connected' : 'Disconnected';
     }
 
+    async function refreshRuntimeStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const status = await res.json();
+            applyRuntimeStatus(status);
+        } catch {
+            applyRuntimeStatus({ offline: true });
+        }
+    }
+
+    function applyRuntimeStatus(status) {
+        if (status.offline) {
+            browserOpen = false;
+            runtimeBadge.textContent = 'Offline';
+            runtimeBadge.className = 'runtime-badge offline';
+            runtimeTitle.textContent = 'Automation server unavailable';
+            runtimeMeta.textContent = 'The local Prism automation service is not responding on port 9090.';
+            btnLaunch.textContent = 'Run';
+            btnRunBrowser.textContent = 'Run';
+            btnClose.disabled = true;
+            return;
+        }
+
+        browserOpen = !!status.isOpen;
+        btnClose.disabled = !browserOpen;
+
+        if (status.isOpen) {
+            const engine = status.engine
+                ? `${status.engine[0].toUpperCase()}${status.engine.slice(1)}`
+                : 'Browser';
+            runtimeBadge.textContent = status.isAgentRunning ? 'Running' : 'Ready';
+            runtimeBadge.className = `runtime-badge ${status.isAgentRunning ? 'running' : 'ready'}`;
+            runtimeTitle.textContent = status.isAgentRunning
+                ? `${engine} agent is active`
+                : `${engine} browser is open`;
+            runtimeMeta.textContent = status.isAgentRunning
+                ? 'The agent is currently controlling the page.'
+                : 'The browser session is live and ready for manual or agent actions.';
+            btnLaunch.textContent = 'Restart';
+            btnRunBrowser.textContent = 'Restart';
+        } else {
+            runtimeBadge.textContent = 'Ready';
+            runtimeBadge.className = 'runtime-badge ready';
+            runtimeTitle.textContent = 'Browser engine not running';
+            runtimeMeta.textContent = 'Start a Puppeteer or Playwright session to begin automation.';
+            btnLaunch.textContent = 'Run';
+            btnRunBrowser.textContent = 'Run';
+        }
+    }
+
     // ── Server message handler ──
     function handleServerMsg(msg) {
         switch (msg.type) {
@@ -120,6 +179,7 @@
                     if (startUrl) send('navigate', { url: startUrl });
                 }
                 if (msg.action === 'close') stopAutoRefresh();
+                refreshRuntimeStatus();
                 break;
 
             case 'chatChunk':
@@ -156,6 +216,7 @@
                 log(`Agent done: ${msg.summary}`, 'success');
                 btnAgentStop.style.display = 'none';
                 isStreaming = false;
+                refreshRuntimeStatus();
                 break;
 
             case 'agentStopped':
@@ -163,6 +224,7 @@
                 addChatMsg('system', 'Agent stopped by user');
                 btnAgentStop.style.display = 'none';
                 isStreaming = false;
+                refreshRuntimeStatus();
                 break;
 
             case 'error':
@@ -410,8 +472,10 @@
     });
 
     // Browser controls
-    $('#btnLaunch').onclick = () => send('launch', { engine: selectedEngine });
-    $('#btnClose').onclick = () => send('close');
+    btnLaunch.onclick = () => send('launch', { engine: selectedEngine });
+    btnRunBrowser.onclick = () => send('launch', { engine: selectedEngine });
+    btnClose.onclick = () => send('close');
+    btnRefreshStatus.onclick = refreshRuntimeStatus;
     $('#btnNavigate').onclick = () => {
         const url = urlInput.value.trim();
         if (url) send('navigate', { url });
@@ -624,15 +688,18 @@
         const contentArea = screenshotPanel.parentElement;
         const rect = contentArea.getBoundingClientRect();
         const offset = e.clientY - rect.top;
-        const total = rect.height;
-        const pct = Math.min(Math.max(offset / total, 0.1), 0.9);
+        const total = rect.height - splitHandle.offsetHeight;
+        const minPanelHeight = 220;
+        const clampedHeight = Math.min(Math.max(offset, minPanelHeight), total - minPanelHeight);
 
         // Remove any maximized/hidden states
         screenshotPanel.classList.remove('hidden-panel', 'maximized-panel');
         chatPanel.classList.remove('hidden-panel', 'maximized-panel');
 
-        screenshotPanel.style.flex = `0 0 ${pct * 100}%`;
-        chatPanel.style.flex = `0 0 ${(1 - pct) * 100}%`;
+        screenshotPanel.style.flex = '0 0 auto';
+        screenshotPanel.style.height = `${clampedHeight}px`;
+        chatPanel.style.flex = '1 1 auto';
+        chatPanel.style.height = 'auto';
     });
 
     document.addEventListener('mouseup', () => {
@@ -647,6 +714,8 @@
     function resetSplitStyles() {
         screenshotPanel.style.flex = '';
         chatPanel.style.flex = '';
+        screenshotPanel.style.height = '';
+        chatPanel.style.height = '';
     }
 
     $('#btnMaxBrowser').onclick = () => {
@@ -1044,5 +1113,7 @@
 
     // ── Init ──
     fetchCommands();
+    refreshRuntimeStatus();
+    setInterval(refreshRuntimeStatus, 4000);
     connect();
 })();

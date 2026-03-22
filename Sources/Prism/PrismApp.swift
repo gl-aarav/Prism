@@ -24,6 +24,13 @@ struct PrismApp: App {
         }
         .defaultSize(width: 760, height: 820)
         .windowStyle(.hiddenTitleBar)
+
+        Window(" ", id: "browser-automation") {
+            BrowserAutomationView()
+                .navigationTitle(" ")
+        }
+        .defaultSize(width: 1320, height: 860)
+        .windowStyle(.hiddenTitleBar)
     }
 }
 
@@ -57,6 +64,13 @@ struct PrismAppCommands: Commands {
                 AppDelegate.shared?.showUpdateWindow()
                 Task { await UpdateManager.shared.checkForUpdates() }
             }
+        }
+
+        CommandMenu("Tools") {
+            Button("Browser Automation") {
+                openWindow(id: "browser-automation")
+            }
+            .keyboardShortcut("b", modifiers: [.command, .shift])
         }
     }
 }

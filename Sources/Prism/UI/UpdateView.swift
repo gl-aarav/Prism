@@ -215,6 +215,12 @@ struct UpdateView: View {
                         .padding(.top, 12)
                 }
 
+                if updateManager.browserAutomationUpdateAvailable {
+                    browserAutomationSection
+                        .opacity(contentOpacity)
+                        .padding(.top, 12)
+                }
+
                 Spacer()
 
                 // Action buttons
@@ -621,6 +627,85 @@ struct UpdateView: View {
             }
 
             if let err = updateManager.safariErrorMessage {
+                Text(err)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.red.opacity(0.7))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var browserAutomationSection: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 10) {
+                Image(systemName: "cursorarrow.motionlines.click")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(themeColors.first ?? .white)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text("Browser Automation")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.8))
+                        if !updateManager.latestBrowserAutomationVersion.isEmpty {
+                            Text("v\(updateManager.latestBrowserAutomationVersion)")
+                                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
+                    }
+
+                    if updateManager.browserAutomationUpdated {
+                        Text("Installed in Prism internal files")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.green.opacity(0.8))
+                    } else if updateManager.isDownloadingBrowserAutomation {
+                        Text("\(Int(updateManager.browserAutomationDownloadProgress * 100))%")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(themeColors.first ?? .white)
+                    } else {
+                        Text("Downloads BrowserAutomation.zip into Prism internal files")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.white.opacity(0.45))
+                    }
+                }
+
+                Spacer()
+
+                if updateManager.browserAutomationUpdated {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.system(size: 14))
+                } else if updateManager.isDownloadingBrowserAutomation {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white.opacity(0.5))
+                } else {
+                    Button {
+                        updateManager.downloadBrowserAutomation()
+                    } label: {
+                        Text("Download")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule().fill(Color.white.opacity(0.1))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(10)
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
+                    )
+            }
+
+            if let err = updateManager.browserAutomationErrorMessage {
                 Text(err)
                     .font(.system(size: 10))
                     .foregroundStyle(.red.opacity(0.7))

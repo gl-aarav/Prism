@@ -9,6 +9,7 @@ const PlaywrightEngine = require('./playwright-engine');
 const { fetchModels, streamChat } = require('./ai-bridge');
 
 const PORT = 9090;
+const HOST = '127.0.0.1';
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
@@ -479,9 +480,9 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
     console.log(`\n  🔮 Prism Browser Automation`);
     console.log(`  ──────────────────────────`);
-    console.log(`  UI:     http://localhost:${PORT}`);
+    console.log(`  UI:     http://${HOST}:${PORT}`);
     console.log(`  Prism:  http://127.0.0.1:8080 (required)\n`);
 });

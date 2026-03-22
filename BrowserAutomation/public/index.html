@@ -63,11 +63,26 @@
                     </select>
                 </section>
 
+                <section class="panel runtime-panel" id="runtimeCard">
+                    <div class="panel-title-row">
+                        <h3 class="panel-title">Runtime</h3>
+                        <span class="runtime-badge offline" id="runtimeBadge">Offline</span>
+                    </div>
+                    <div class="runtime-copy">
+                        <strong id="runtimeTitle">Browser engine not running</strong>
+                        <span id="runtimeMeta">Start a Puppeteer or Playwright session to begin automation.</span>
+                    </div>
+                    <div class="btn-row">
+                        <button id="btnRunBrowser" class="btn btn-primary btn-sm">Run</button>
+                        <button id="btnRefreshStatus" class="btn btn-secondary btn-sm">Refresh</button>
+                    </div>
+                </section>
+
                 <!-- Browser Controls -->
                 <section class="panel">
                     <h3 class="panel-title">Browser</h3>
                     <div class="btn-row">
-                        <button id="btnLaunch" class="btn btn-primary btn-sm">Launch</button>
+                        <button id="btnLaunch" class="btn btn-primary btn-sm">Run</button>
                         <button id="btnClose" class="btn btn-danger btn-sm">Close</button>
                     </div>
                     <div class="input-row">

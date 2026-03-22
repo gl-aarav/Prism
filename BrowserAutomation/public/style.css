@@ -1,24 +1,22 @@
-/* ═══════════════════════════════════════════════════════════
-   Prism Browser Automation — matches Chrome extension theme
-   ═══════════════════════════════════════════════════════════ */
+/* Prism Browser Automation */
 
 :root {
-    --bg-color: #000000;
+    --bg-color: #0b0f17;
     --panel-bg: rgba(28, 28, 30, 0.55);
     --panel-blur: blur(40px) saturate(200%);
-    --border-color: rgba(255, 255, 255, 0.06);
-    --border-highlight: rgba(255, 255, 255, 0.08);
-    --text-primary: #f5f5f7;
-    --text-secondary: #a1a1a6;
-    --text-muted: #636366;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-highlight: rgba(255, 255, 255, 0.14);
+    --text-primary: #f5f7fb;
+    --text-secondary: #a9b1c3;
+    --text-muted: #6d7587;
     --accent: #0A84FF;
-    --accent-gradient-start: #0A84FF;
-    --accent-gradient-end: #34C759;
-    --user-bubble-start: rgba(10, 132, 255, 0.18);
-    --user-bubble-end: rgba(52, 199, 89, 0.18);
-    --glass-bg: rgba(44, 44, 46, 0.45);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+    --accent-gradient-start: #4c8dff;
+    --accent-gradient-end: #43c98b;
+    --user-bubble-start: rgba(76, 141, 255, 0.2);
+    --user-bubble-end: rgba(67, 201, 139, 0.18);
+    --glass-bg: rgba(20, 24, 34, 0.54);
+    --glass-border: rgba(255, 255, 255, 0.11);
+    --glass-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
     --green: #34C759;
     --red: #FF3B30;
     --orange: #FF9F0A;
@@ -26,9 +24,9 @@
     --puppeteer: #00D8A2;
     --playwright: #45BA4B;
     --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --font: 'SF Pro Display', 'SF Pro Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     --mono: 'SF Mono', 'Fira Code', Menlo, monospace;
 }
 
@@ -49,16 +47,15 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* Floating gradient orbs background (matches extension) */
 .app-background {
     position: fixed;
     inset: 0;
     z-index: 0;
     pointer-events: none;
     background:
-        radial-gradient(ellipse at 10% 40%, rgba(10, 132, 255, 0.08), transparent 55%),
-        radial-gradient(ellipse at 90% 25%, rgba(94, 92, 230, 0.07), transparent 55%),
-        radial-gradient(ellipse at 50% 90%, rgba(52, 199, 89, 0.05), transparent 50%);
+        radial-gradient(ellipse at 12% 20%, rgba(76, 141, 255, 0.18), transparent 50%),
+        radial-gradient(ellipse at 88% 18%, rgba(67, 201, 139, 0.12), transparent 46%),
+        radial-gradient(ellipse at 50% 96%, rgba(255, 255, 255, 0.06), transparent 42%);
 }
 
 .app {
@@ -74,8 +71,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 52px;
-    padding: 0 16px;
+    height: 58px;
+    padding: 0 18px;
     background: transparent;
     backdrop-filter: blur(40px) saturate(1.8);
     -webkit-backdrop-filter: blur(40px) saturate(1.8);
@@ -97,7 +94,7 @@ body {
     gap: 8px;
     font-weight: 700;
     font-size: 15px;
-    letter-spacing: -0.3px;
+    letter-spacing: -0.35px;
     background: linear-gradient(135deg, var(--accent-gradient-start), var(--accent-gradient-end));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -106,10 +103,10 @@ body {
 /* Engine Toggle — glass capsule */
 .engine-toggle {
     display: flex;
-    background: var(--glass-bg);
-    backdrop-filter: blur(16px);
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
     border-radius: 100px;
-    padding: 3px;
+    padding: 4px;
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow), inset 0 1px 0 var(--border-highlight);
 }
@@ -195,7 +192,7 @@ body {
 
 /* ──────────────────────── SIDEBAR — glass panels ──────────────────────── */
 .sidebar {
-    width: 264px;
+    width: 292px;
     background: transparent;
     backdrop-filter: blur(20px) saturate(1.5);
     -webkit-backdrop-filter: blur(20px) saturate(1.5);
@@ -205,15 +202,15 @@ body {
     padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
 .panel {
     background: var(--glass-bg);
-    backdrop-filter: blur(16px);
+    backdrop-filter: blur(18px) saturate(1.4);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-md);
-    padding: 12px;
+    padding: 14px;
     box-shadow: var(--glass-shadow), inset 0 1px 0 var(--border-highlight);
 }
 
@@ -231,6 +228,57 @@ body {
     align-items: center;
     justify-content: space-between;
     margin-bottom: 8px;
+}
+
+.runtime-panel {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+        var(--glass-bg);
+}
+
+.runtime-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.runtime-copy strong {
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+}
+
+.runtime-copy span {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.runtime-badge {
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+}
+
+.runtime-badge.running {
+    color: #dff8ea;
+    background: rgba(52, 199, 89, 0.18);
+    border-color: rgba(52, 199, 89, 0.28);
+}
+
+.runtime-badge.ready {
+    color: #e6f0ff;
+    background: rgba(76, 141, 255, 0.18);
+    border-color: rgba(76, 141, 255, 0.28);
+}
+
+.runtime-badge.offline {
+    color: #ffe8c2;
+    background: rgba(255, 159, 10, 0.16);
+    border-color: rgba(255, 159, 10, 0.26);
 }
 
 /* ──────────────────────── INPUTS — glass style ──────────────────────── */
@@ -282,7 +330,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 4px;
-    padding: 6px 14px;
+    padding: 7px 14px;
     border: 1px solid var(--glass-border);
     border-radius: 100px;
     font-size: 12px;
@@ -303,11 +351,11 @@ body {
     background: linear-gradient(135deg, var(--accent-gradient-start), var(--accent-gradient-end));
     color: white;
     border: none;
-    box-shadow: 0 2px 12px rgba(10, 132, 255, 0.3);
+    box-shadow: 0 10px 24px rgba(76, 141, 255, 0.28);
 }
 
 .btn-primary:hover {
-    box-shadow: 0 4px 18px rgba(10, 132, 255, 0.4);
+    box-shadow: 0 14px 28px rgba(76, 141, 255, 0.32);
     transform: translateY(-1px);
 }
 
@@ -414,9 +462,10 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 0;
+    min-height: 220px;
     border-bottom: none;
-    transition: flex 0.25s ease;
+    transition: flex 0.25s ease, height 0.18s ease;
+    min-width: 0;
 }
 
 .screenshot-panel.hidden-panel {
@@ -433,7 +482,7 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 8px 16px;
+    padding: 10px 16px;
     background: transparent;
     backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border-color);
@@ -474,7 +523,9 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.4);
+    background:
+        radial-gradient(circle at top, rgba(76, 141, 255, 0.08), transparent 35%),
+        rgba(6, 9, 15, 0.55);
     position: relative;
 }
 
@@ -533,13 +584,13 @@ body {
 
 /* ──────────────────────── CHAT PANEL ──────────────────────── */
 .chat-panel {
-    min-height: 200px;
+    min-height: 220px;
     display: flex;
     flex-direction: column;
     flex: 1;
     background: transparent;
     backdrop-filter: blur(20px) saturate(1.5);
-    transition: flex 0.25s ease;
+    transition: flex 0.25s ease, height 0.18s ease;
     overflow: hidden;
 }
 

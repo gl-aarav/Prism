@@ -10,6 +10,8 @@ class UpdateManager: ObservableObject {
     private let appZipName = "Prism.zip"
     private let chromeZipName = "Chrome.zip"
     private let safariZipName = "Safari.zip"
+    private let browserAutomationZipName = "BrowserAutomation.zip"
+    private let browserAutomationVersionFileName = "version.txt"
 
     @Published var updateAvailable = false
     @Published var latestVersion: String = ""
@@ -41,6 +43,14 @@ class UpdateManager: ObservableObject {
     @Published var latestSafariVersion: String = ""
     @Published var safariUpdateAvailable = false
 
+    @Published var isDownloadingBrowserAutomation = false
+    @Published var browserAutomationDownloadProgress: Double = 0
+    @Published var browserAutomationUpdated = false
+    @Published var browserAutomationErrorMessage: String? = nil
+    @Published var latestBrowserAutomationVersion: String = ""
+    @Published var browserAutomationUpdateAvailable = false
+    @Published var browserAutomationZipDownloadURL: URL? = nil
+
     var enablePreRelease: Bool {
         UserDefaults.standard.bool(forKey: "EnablePreReleaseUpdates")
     }
@@ -50,6 +60,7 @@ class UpdateManager: ObservableObject {
     private var downloadTask: URLSessionDownloadTask? = nil
     private var chromeDownloadTask: URLSessionDownloadTask? = nil
     private var safariDownloadTask: URLSessionDownloadTask? = nil
+    private var browserAutomationDownloadTask: URLSessionDownloadTask? = nil
 
     private init() {}
 
@@ -164,6 +175,31 @@ class UpdateManager: ObservableObject {
             } else {
                 safariUpdateAvailable = false
             }
+
+            // Check Browser Automation version independently.
+            if let browserAutomationInfo = latestExtensionInfo(
+                in: candidates,
+                assetName: browserAutomationZipName,
+                marker: "browser-automation")
+            {
+                browserAutomationZipDownloadURL = browserAutomationInfo.downloadURL
+                latestBrowserAutomationVersion = browserAutomationInfo.version
+            } else {
+                browserAutomationZipDownloadURL = nil
+                latestBrowserAutomationVersion = ""
+            }
+
+            if !latestBrowserAutomationVersion.isEmpty {
+                let installedVersion = readInstalledBrowserAutomationVersion()
+                if installedVersion.isEmpty {
+                    browserAutomationUpdateAvailable = true
+                } else {
+                    browserAutomationUpdateAvailable = compareVersions(
+                        latestBrowserAutomationVersion, isNewerThan: installedVersion)
+                }
+            } else {
+                browserAutomationUpdateAvailable = false
+            }
         } catch {
             errorMessage = "Network error: \(error.localizedDescription)"
         }
@@ -191,6 +227,20 @@ class UpdateManager: ObservableObject {
             let version = json["version"] as? String
         else { return "" }
         return version
+    }
+
+    func browserAutomationInstallationDirectory() -> URL {
+        let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory, in: .userDomainMask
+        ).first!
+        return appSupport.appendingPathComponent("Prism/BrowserAutomation", isDirectory: true)
+    }
+
+    private func readInstalledBrowserAutomationVersion() -> String {
+        let versionURL = browserAutomationInstallationDirectory()
+            .appendingPathComponent(browserAutomationVersionFileName)
+        guard let version = try? String(contentsOf: versionURL, encoding: .utf8) else { return "" }
+        return version.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func downloadUpdate() {
@@ -406,12 +456,77 @@ class UpdateManager: ObservableObject {
         safariDownloadProgress = 0
     }
 
+    // MARK: - Browser Automation Update
+
+    func downloadBrowserAutomation() {
+        guard let url = browserAutomationZipDownloadURL else {
+            browserAutomationErrorMessage = "No BrowserAutomation.zip in this release."
+            return
+        }
+
+        isDownloadingBrowserAutomation = true
+        browserAutomationDownloadProgress = 0
+        browserAutomationUpdated = false
+        browserAutomationErrorMessage = nil
+
+        let delegate = DownloadDelegate { [weak self] progress in
+            Task { @MainActor in
+                self?.browserAutomationDownloadProgress = progress
+            }
+        } onComplete: { [weak self] localURL, error in
+            Task { @MainActor in
+                guard let self else { return }
+                self.isDownloadingBrowserAutomation = false
+                if let error {
+                    self.browserAutomationErrorMessage =
+                        "Download failed: \(error.localizedDescription)"
+                    return
+                }
+                guard let localURL else {
+                    self.browserAutomationErrorMessage = "Download failed."
+                    return
+                }
+
+                let installDirectory = self.browserAutomationInstallationDirectory()
+                do {
+                    try FileManager.default.createDirectory(
+                        at: installDirectory,
+                        withIntermediateDirectories: true,
+                        attributes: nil)
+                    try self.extractZip(from: localURL, to: installDirectory)
+                    let versionURL = installDirectory.appendingPathComponent(
+                        self.browserAutomationVersionFileName)
+                    try self.latestBrowserAutomationVersion.write(
+                        to: versionURL, atomically: true, encoding: .utf8)
+                    self.browserAutomationUpdated = true
+                    self.browserAutomationUpdateAvailable = false
+                } catch {
+                    self.browserAutomationErrorMessage =
+                        "Failed to install: \(error.localizedDescription)"
+                }
+
+                try? FileManager.default.removeItem(at: localURL)
+            }
+        }
+
+        let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        browserAutomationDownloadTask = session.downloadTask(with: url)
+        browserAutomationDownloadTask?.resume()
+    }
+
+    func cancelBrowserAutomationDownload() {
+        browserAutomationDownloadTask?.cancel()
+        browserAutomationDownloadTask = nil
+        isDownloadingBrowserAutomation = false
+        browserAutomationDownloadProgress = 0
+    }
+
     private func extractZip(from zipURL: URL, to destDir: URL) throws {
         let fm = FileManager.default
 
         // Create a temp directory for extraction
         let tmpDir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true, attributes: nil)
         defer { try? fm.removeItem(at: tmpDir) }
 
         // Use ditto to unzip (built-in on macOS, handles zip reliably)
@@ -463,12 +578,23 @@ class UpdateManager: ObservableObject {
         downloadProgress = 0
         chromeExtensionUpdated = false
         chromeErrorMessage = nil
+        latestChromeVersion = ""
+        chromeUpdateAvailable = false
         isDownloadingChrome = false
         chromeDownloadProgress = 0
         safariExtensionUpdated = false
         safariErrorMessage = nil
+        latestSafariVersion = ""
+        safariUpdateAvailable = false
         isDownloadingSafari = false
         safariDownloadProgress = 0
+        browserAutomationUpdated = false
+        browserAutomationErrorMessage = nil
+        latestBrowserAutomationVersion = ""
+        browserAutomationUpdateAvailable = false
+        browserAutomationZipDownloadURL = nil
+        isDownloadingBrowserAutomation = false
+        browserAutomationDownloadProgress = 0
     }
 
     func showOverlay() {
