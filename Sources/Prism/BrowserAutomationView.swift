@@ -27,14 +27,6 @@ struct BrowserAutomationView: View {
             )
             .ignoresSafeArea()
 
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-                )
-                .padding(12)
-
             VStack(spacing: 18) {
                 header
 
@@ -73,7 +65,15 @@ struct BrowserAutomationView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
-                    .background(.regularMaterial, in: Capsule())
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                    )
+                    .glassEffect(.regular, in: .capsule)
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                    )
                 }
 
                 Button("Open in Browser") {
@@ -82,7 +82,15 @@ struct BrowserAutomationView: View {
                 .buttonStyle(.plain)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(.regularMaterial, in: Capsule())
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                )
+                .glassEffect(.regular, in: .capsule)
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                )
 
                 if !manager.serverIsRunning {
                     Button {
@@ -104,6 +112,11 @@ struct BrowserAutomationView: View {
                         in: Capsule()
                     )
                     .foregroundStyle(.white)
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+                    .shadow(color: .white.opacity(0.12), radius: 10, x: 0, y: 1)
                     .disabled(manager.isStarting)
                 }
             }
@@ -120,7 +133,15 @@ struct BrowserAutomationView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: Capsule())
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+        )
+        .glassEffect(.regular, in: .capsule)
+        .overlay(
+            Capsule()
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+        )
     }
 
     private var offlineCard: some View {
@@ -219,7 +240,15 @@ struct BrowserAutomationView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 18)
                     .padding(.vertical, 12)
-                    .background(.regularMaterial, in: Capsule())
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                    )
+                    .glassEffect(.regular, in: .capsule)
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                    )
                 }
 
                 Button("Open in Browser") {
@@ -228,7 +257,15 @@ struct BrowserAutomationView: View {
                 .buttonStyle(.plain)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
-                .background(.regularMaterial, in: Capsule())
+                .background(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                )
+                .glassEffect(.regular, in: .capsule)
+                .overlay(
+                    Capsule()
+                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                )
             }
 
             if let launchError = manager.launchError {
@@ -254,10 +291,14 @@ struct BrowserAutomationView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(28)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .glassEffect(.regular, in: .rect(cornerRadius: 28))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
         )
     }
 
@@ -271,7 +312,15 @@ struct BrowserAutomationView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.16), lineWidth: 1)
+        )
     }
 
     private func chooseBrowserAutomationFolder() {
