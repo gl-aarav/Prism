@@ -1,317 +1,989 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Prism — Browser Automation</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prism — Browser Automation</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-
-<body>
-
-    <div class="app-background"></div>
-    <div class="app">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <div class="logo">
-                    <img src="AppIcon.png" alt="Prism" width="24" height="24" style="border-radius: 6px;">
-                    <span>Prism Browser</span>
+    <body>
+        <div class="app-background"></div>
+        <div class="app">
+            <!-- ── Header ── -->
+            <header class="header">
+                <div class="header-left">
+                    <div class="logo">
+                        <img
+                            src="AppIcon.png"
+                            alt="Prism"
+                            width="24"
+                            height="24"
+                            style="border-radius: 6px"
+                        />
+                        <span>Prism Browser</span>
+                    </div>
                 </div>
-            </div>
-            <div class="header-center">
-                <div class="engine-toggle">
-                    <button class="engine-btn active" data-engine="puppeteer">
-                        <span class="engine-dot puppeteer-dot"></span> Puppeteer
+
+                <div class="header-center">
+                    <!-- Engine toggle -->
+                    <div class="engine-toggle">
+                        <button
+                            class="engine-btn active"
+                            data-engine="puppeteer"
+                        >
+                            <span class="engine-dot puppeteer-dot"></span
+                            >Puppeteer
+                        </button>
+                        <button class="engine-btn" data-engine="playwright">
+                            <span class="engine-dot playwright-dot"></span
+                            >Playwright
+                        </button>
+                    </div>
+                </div>
+
+                <div class="header-right">
+                    <!-- Layout picker button + dropdown -->
+                    <div class="layout-picker-wrap" id="layoutPickerWrap">
+                        <button
+                            class="theme-toggle-btn"
+                            id="layoutPickerBtn"
+                            title="Layout"
+                        >
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                            >
+                                <rect
+                                    x="3"
+                                    y="3"
+                                    width="7"
+                                    height="18"
+                                    rx="2"
+                                />
+                                <rect
+                                    x="14"
+                                    y="3"
+                                    width="7"
+                                    height="10"
+                                    rx="2"
+                                />
+                                <rect
+                                    x="14"
+                                    y="17"
+                                    width="7"
+                                    height="4"
+                                    rx="2"
+                                />
+                            </svg>
+                        </button>
+                        <div class="layout-dropdown" id="layoutDropdown">
+                            <div class="layout-dropdown-label">Layout</div>
+                            <div class="layout-picker" id="layoutPicker">
+                                <button
+                                    class="layout-btn active"
+                                    data-layout="balanced"
+                                    title="Balanced"
+                                >
+                                    <svg
+                                        width="36"
+                                        height="26"
+                                        viewBox="0 0 36 26"
+                                        fill="none"
+                                    >
+                                        <rect
+                                            x="1"
+                                            y="1"
+                                            width="8"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".45"
+                                        />
+                                        <rect
+                                            x="11"
+                                            y="1"
+                                            width="14"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".7"
+                                        />
+                                        <rect
+                                            x="27"
+                                            y="1"
+                                            width="8"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".45"
+                                        />
+                                    </svg>
+                                    <span>Balanced</span>
+                                </button>
+                                <button
+                                    class="layout-btn"
+                                    data-layout="focus"
+                                    title="Focus — wide center"
+                                >
+                                    <svg
+                                        width="36"
+                                        height="26"
+                                        viewBox="0 0 36 26"
+                                        fill="none"
+                                    >
+                                        <rect
+                                            x="1"
+                                            y="1"
+                                            width="5"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".35"
+                                        />
+                                        <rect
+                                            x="8"
+                                            y="1"
+                                            width="20"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".8"
+                                        />
+                                        <rect
+                                            x="30"
+                                            y="1"
+                                            width="5"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".35"
+                                        />
+                                    </svg>
+                                    <span>Focus</span>
+                                </button>
+                                <button
+                                    class="layout-btn"
+                                    data-layout="sidebar"
+                                    title="Sidebar — larger controls"
+                                >
+                                    <svg
+                                        width="36"
+                                        height="26"
+                                        viewBox="0 0 36 26"
+                                        fill="none"
+                                    >
+                                        <rect
+                                            x="1"
+                                            y="1"
+                                            width="13"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".75"
+                                        />
+                                        <rect
+                                            x="16"
+                                            y="1"
+                                            width="13"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".6"
+                                        />
+                                        <rect
+                                            x="31"
+                                            y="1"
+                                            width="4"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".3"
+                                        />
+                                    </svg>
+                                    <span>Sidebar</span>
+                                </button>
+                                <button
+                                    class="layout-btn"
+                                    data-layout="log"
+                                    title="Log — larger output panel"
+                                >
+                                    <svg
+                                        width="36"
+                                        height="26"
+                                        viewBox="0 0 36 26"
+                                        fill="none"
+                                    >
+                                        <rect
+                                            x="1"
+                                            y="1"
+                                            width="4"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".3"
+                                        />
+                                        <rect
+                                            x="7"
+                                            y="1"
+                                            width="13"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".6"
+                                        />
+                                        <rect
+                                            x="22"
+                                            y="1"
+                                            width="13"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".75"
+                                        />
+                                    </svg>
+                                    <span>Log</span>
+                                </button>
+                                <button
+                                    class="layout-btn"
+                                    data-layout="minimal"
+                                    title="Minimal — hide sidebars"
+                                >
+                                    <svg
+                                        width="36"
+                                        height="26"
+                                        viewBox="0 0 36 26"
+                                        fill="none"
+                                    >
+                                        <rect
+                                            x="1"
+                                            y="1"
+                                            width="3"
+                                            height="24"
+                                            rx="2"
+                                            fill="currentColor"
+                                            opacity=".25"
+                                        />
+                                        <rect
+                                            x="6"
+                                            y="1"
+                                            width="24"
+                                            height="24"
+                                            rx="3"
+                                            fill="currentColor"
+                                            opacity=".85"
+                                        />
+                                        <rect
+                                            x="32"
+                                            y="1"
+                                            width="3"
+                                            height="24"
+                                            rx="2"
+                                            fill="currentColor"
+                                            opacity=".25"
+                                        />
+                                    </svg>
+                                    <span>Minimal</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        class="theme-toggle-btn"
+                        id="themeToggle"
+                        title="Toggle theme"
+                    >
+                        <svg
+                            class="moon-icon"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <path
+                                d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"
+                            />
+                        </svg>
+                        <svg
+                            class="sun-icon"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                        >
+                            <circle cx="12" cy="12" r="5" />
+                            <path
+                                d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"
+                            />
+                        </svg>
                     </button>
-                    <button class="engine-btn" data-engine="playwright">
-                        <span class="engine-dot playwright-dot"></span> Playwright
-                    </button>
+                    <div class="connection-status" id="connStatus">
+                        <span class="status-dot disconnected"></span>
+                        <span class="status-text">Disconnected</span>
+                    </div>
                 </div>
-            </div>
-            <div class="header-right">
-                <button class="theme-toggle-btn" id="themeToggle" title="Toggle light/dark mode">
-                    <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2">
-                        <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-                    </svg>
-                    <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                        stroke-width="2">
-                        <circle cx="12" cy="12" r="5" />
-                        <path
-                            d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-                    </svg>
-                </button>
-                <div class="connection-status" id="connStatus">
-                    <span class="status-dot disconnected"></span>
-                    <span class="status-text">Disconnected</span>
-                </div>
-            </div>
-        </header>
+            </header>
 
-        <!-- Main Content -->
-        <div class="main">
+            <!-- ── Main workspace ── -->
+            <!-- Order: sidebar | v-handle | content | v-handle | log-panel -->
+            <div class="main" id="mainWorkspace">
+                <!-- LEFT: Controls sidebar -->
+                <aside class="sidebar" id="sidebar">
+                    <section class="panel">
+                        <h3 class="panel-title">AI Model</h3>
+                        <select id="modelSelect" class="select">
+                            <option value="">Loading models…</option>
+                        </select>
+                    </section>
 
-            <!-- Left Panel: Controls -->
-            <aside class="sidebar">
-                <!-- Model Selector -->
-                <section class="panel">
-                    <h3 class="panel-title">AI Model</h3>
-                    <select id="modelSelect" class="select">
-                        <option value="">Loading models...</option>
-                    </select>
-                </section>
-
-                <section class="panel runtime-panel" id="runtimeCard">
-                    <div class="panel-title-row">
-                        <h3 class="panel-title">Runtime</h3>
-                        <span class="runtime-badge offline" id="runtimeBadge">Offline</span>
-                    </div>
-                    <div class="runtime-copy">
-                        <strong id="runtimeTitle">Browser engine not running</strong>
-                        <span id="runtimeMeta">Start a Puppeteer or Playwright session to begin automation.</span>
-                    </div>
-                    <div class="btn-row">
-                        <button id="btnRunBrowser" class="btn btn-primary btn-sm">Run</button>
-                        <button id="btnRefreshStatus" class="btn btn-secondary btn-sm">Refresh</button>
-                    </div>
-                </section>
-
-                <!-- Browser Controls -->
-                <section class="panel">
-                    <h3 class="panel-title">Browser</h3>
-                    <div class="btn-row">
-                        <button id="btnLaunch" class="btn btn-primary btn-sm">Run</button>
-                        <button id="btnClose" class="btn btn-danger btn-sm">Close</button>
-                    </div>
-                    <div class="input-row">
-                        <input type="text" id="urlInput" class="input" placeholder="https://example.com"
-                            value="https://google.com">
-                        <button id="btnNavigate" class="btn btn-secondary btn-sm">Go</button>
-                    </div>
-                </section>
-
-                <!-- Quick Actions -->
-                <section class="panel">
-                    <h3 class="panel-title">Actions</h3>
-                    <div class="action-grid">
-                        <button class="action-btn" data-action="screenshot" title="Screenshot">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="3" y="3" width="18" height="18" rx="2" />
-                                <circle cx="12" cy="12" r="3" />
-                            </svg>
-                            Capture
-                        </button>
-                        <button class="action-btn" data-action="domTree" title="DOM Tree">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M12 3v18m-7-7h14M5 8h14" />
-                            </svg>
-                            DOM
-                        </button>
-                        <button class="action-btn" data-action="scrollDown" title="Scroll Down">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M12 5v14m-7-7l7 7 7-7" />
-                            </svg>
-                            Scroll ↓
-                        </button>
-                        <button class="action-btn" data-action="scrollUp" title="Scroll Up">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M12 19V5m-7 7l7-7 7 7" />
-                            </svg>
-                            Scroll ↑
-                        </button>
-                    </div>
-                </section>
-
-                <!-- Click / Type -->
-                <section class="panel">
-                    <h3 class="panel-title">Element Control</h3>
-                    <div class="input-row">
-                        <input type="text" id="selectorInput" class="input" placeholder="CSS selector">
-                    </div>
-                    <div class="btn-row">
-                        <button id="btnClick" class="btn btn-secondary btn-sm">Click</button>
-                        <button id="btnWait" class="btn btn-secondary btn-sm">Wait</button>
-                    </div>
-                    <div class="input-row">
-                        <input type="text" id="typeInput" class="input" placeholder="Text to type">
-                        <button id="btnType" class="btn btn-secondary btn-sm">Type</button>
-                    </div>
-                    <div class="input-row">
-                        <input type="text" id="keyInput" class="input" placeholder="Key (Enter, Tab...)" value="Enter">
-                        <button id="btnKey" class="btn btn-secondary btn-sm">Press</button>
-                    </div>
-                </section>
-
-                <!-- Tabs -->
-                <section class="panel">
-                    <h3 class="panel-title">Tabs</h3>
-                    <div class="btn-row">
-                        <button id="btnNewTab" class="btn btn-secondary btn-sm">New Tab</button>
-                        <button id="btnGetTabs" class="btn btn-secondary btn-sm">List Tabs</button>
-                    </div>
-                    <div id="tabsList" class="tabs-list"></div>
-                </section>
-            </aside>
-
-            <!-- Center: Screenshot + Agent Chat -->
-            <div class="content-area">
-                <!-- Screenshot viewport -->
-                <div class="screenshot-panel" id="screenshotPanel">
-                    <div class="screenshot-header">
-                        <span id="pageTitle">No browser open</span>
-                        <span id="pageUrl" class="page-url"></span>
-                        <span class="header-spacer"></span>
-                        <button class="btn-icon split-btn" id="btnMaxBrowser" title="Maximize browser view">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path
-                                    d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
-                            </svg>
-                        </button>
-                        <button class="btn-icon split-btn" id="btnHideBrowser" title="Hide browser view">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M5 12h14" />
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="screenshot-viewport" id="screenshotView">
-                        <div class="placeholder-text">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="1.5" opacity="0.3">
-                                <rect x="2" y="3" width="20" height="14" rx="2" />
-                                <path d="M8 21h8m-4-4v4" />
-                            </svg>
-                            <p>Launch a browser to get started</p>
+                    <section class="panel runtime-panel" id="runtimeCard">
+                        <div class="panel-title-row">
+                            <h3 class="panel-title">Runtime</h3>
+                            <span
+                                class="runtime-badge offline"
+                                id="runtimeBadge"
+                                >Offline</span
+                            >
                         </div>
-                        <img id="screenshotImg" class="screenshot-img" style="display:none" alt="Browser screenshot">
-                    </div>
+                        <div class="runtime-copy">
+                            <strong id="runtimeTitle"
+                                >Browser engine not running</strong
+                            >
+                            <span id="runtimeMeta"
+                                >Start a session to begin automation.</span
+                            >
+                        </div>
+                        <div class="btn-row">
+                            <button
+                                id="btnRunBrowser"
+                                class="btn btn-primary btn-sm"
+                            >
+                                Run
+                            </button>
+                            <button
+                                id="btnRefreshStatus"
+                                class="btn btn-secondary btn-sm"
+                            >
+                                Refresh
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <h3 class="panel-title">Browser</h3>
+                        <div class="btn-row">
+                            <button
+                                id="btnLaunch"
+                                class="btn btn-primary btn-sm"
+                            >
+                                Run
+                            </button>
+                            <button id="btnClose" class="btn btn-danger btn-sm">
+                                Close
+                            </button>
+                        </div>
+                        <div class="input-row" style="margin-top: 8px">
+                            <input
+                                type="text"
+                                id="urlInput"
+                                class="input"
+                                placeholder="https://example.com"
+                                value="https://google.com"
+                            />
+                            <button
+                                id="btnNavigate"
+                                class="btn btn-secondary btn-sm"
+                            >
+                                Go
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <h3 class="panel-title">Quick Actions</h3>
+                        <div class="action-grid">
+                            <button
+                                class="action-btn"
+                                data-action="screenshot"
+                                title="Screenshot"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <rect
+                                        x="3"
+                                        y="3"
+                                        width="18"
+                                        height="18"
+                                        rx="2"
+                                    />
+                                    <circle cx="12" cy="12" r="3" /></svg
+                                >Capture
+                            </button>
+                            <button
+                                class="action-btn"
+                                data-action="domTree"
+                                title="DOM Tree"
+                            >
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path d="M12 3v18m-7-7h14M5 8h14" /></svg
+                                >DOM
+                            </button>
+                            <button class="action-btn" data-action="scrollDown">
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path d="M12 5v14m-7-7l7 7 7-7" /></svg
+                                >Scroll ↓
+                            </button>
+                            <button class="action-btn" data-action="scrollUp">
+                                <svg
+                                    width="14"
+                                    height="14"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path d="M12 19V5m-7 7l7-7 7 7" /></svg
+                                >Scroll ↑
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <h3 class="panel-title">Element Control</h3>
+                        <input
+                            type="text"
+                            id="selectorInput"
+                            class="input"
+                            placeholder="CSS selector"
+                            style="margin-bottom: 6px"
+                        />
+                        <div class="btn-row">
+                            <button
+                                id="btnClick"
+                                class="btn btn-secondary btn-sm"
+                            >
+                                Click
+                            </button>
+                            <button
+                                id="btnWait"
+                                class="btn btn-secondary btn-sm"
+                            >
+                                Wait
+                            </button>
+                        </div>
+                        <div class="input-row" style="margin-top: 6px">
+                            <input
+                                type="text"
+                                id="typeInput"
+                                class="input"
+                                placeholder="Text to type"
+                            />
+                            <button
+                                id="btnType"
+                                class="btn btn-secondary btn-sm"
+                            >
+                                Type
+                            </button>
+                        </div>
+                        <div class="input-row" style="margin-top: 6px">
+                            <input
+                                type="text"
+                                id="keyInput"
+                                class="input"
+                                placeholder="Key (Enter, Tab…)"
+                                value="Enter"
+                            />
+                            <button
+                                id="btnKey"
+                                class="btn btn-secondary btn-sm"
+                            >
+                                Press
+                            </button>
+                        </div>
+                    </section>
+
+                    <section class="panel">
+                        <h3 class="panel-title">Tabs</h3>
+                        <div class="btn-row">
+                            <button
+                                id="btnNewTab"
+                                class="btn btn-secondary btn-sm"
+                            >
+                                New Tab
+                            </button>
+                            <button
+                                id="btnGetTabs"
+                                class="btn btn-secondary btn-sm"
+                            >
+                                List
+                            </button>
+                        </div>
+                        <div id="tabsList" class="tabs-list"></div>
+                    </section>
+                </aside>
+
+                <!-- HANDLE: sidebar ↔ content -->
+                <div class="v-handle" id="sidebarHandle" title="Drag to resize">
+                    <div class="v-handle-grip"></div>
                 </div>
 
-                <!-- Drag handle for resizing -->
-                <div class="split-handle" id="splitHandle">
-                    <div class="split-handle-bar"></div>
-                </div>
-
-                <!-- Agent / Chat area -->
-                <div class="chat-panel" id="chatPanel">
-                    <div class="chat-tabs">
-                        <button class="chat-tab active" data-tab="agent">Agent Mode</button>
-                        <button class="chat-tab" data-tab="chat">Chat</button>
-                        <span class="header-spacer"></span>
-                        <button class="btn-icon chat-header-btn" id="btnClearChat" title="Clear chat">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M3 6h18M8 6V4h8v2m-7 5v6m4-6v6M5 6l1 14h12l1-14" />
-                            </svg>
-                        </button>
-                        <button class="btn-icon chat-header-btn" id="btnSendToPrism" title="Send chat to Prism App">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M7 17l9.2-9.2M17 17V7H7" />
-                            </svg>
-                        </button>
-                        <button class="btn-icon split-btn" id="btnMaxChat" title="Maximize chat">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path
-                                    d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
-                            </svg>
-                        </button>
-                        <button class="btn-icon split-btn" id="btnHideChat" title="Hide chat">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <path d="M5 12h14" />
-                            </svg>
-                        </button>
-                    </div>
-
-                    <div class="chat-messages" id="chatMessages">
-                        <div class="welcome-msg">
-                            <p>Use <strong>Agent Mode</strong> to give a natural language task — the AI will control the
-                                browser step by step.</p>
-                            <p>Use <strong>Chat</strong> to ask questions or get help while the browser is open.</p>
+                <!-- CENTER: Screenshot + Chat -->
+                <div class="content-area" id="contentPanel">
+                    <!-- Browser viewport -->
+                    <div class="screenshot-panel" id="screenshotPanel">
+                        <div class="panel-bar">
+                            <span id="pageTitle" class="bar-title"
+                                >No browser open</span
+                            >
+                            <span id="pageUrl" class="bar-url"></span>
+                            <div class="bar-actions">
+                                <button
+                                    class="btn-icon"
+                                    id="btnMaxBrowser"
+                                    title="Maximize viewport"
+                                >
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                    >
+                                        <path
+                                            d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"
+                                        />
+                                    </svg>
+                                </button>
+                                <button
+                                    class="btn-icon"
+                                    id="btnHideBrowser"
+                                    title="Collapse viewport"
+                                >
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                    >
+                                        <path d="M5 12h14" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="chat-input-area">
-                        <div class="agent-controls" id="agentControls">
-                            <button id="btnAgentStop" class="btn btn-danger btn-sm" style="display:none">Stop
-                                Agent</button>
-                        </div>
-                        <div id="mentionPreview" class="mention-preview" style="display:none"></div>
-                        <div id="contextToggle" class="context-toggle-wrapper">
-                            <span class="context-toggle-icon">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                                    <polyline points="14 2 14 8 20 8" />
-                                    <line x1="16" y1="13" x2="8" y2="13" />
-                                    <line x1="16" y1="17" x2="8" y2="17" />
-                                    <polyline points="10 9 9 9 8 9" />
+                        <div class="screenshot-viewport" id="screenshotView">
+                            <div
+                                class="placeholder-text"
+                                id="screenshotPlaceholder"
+                            >
+                                <svg
+                                    width="44"
+                                    height="44"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.4"
+                                    opacity=".25"
+                                >
+                                    <rect
+                                        x="2"
+                                        y="3"
+                                        width="20"
+                                        height="14"
+                                        rx="2"
+                                    />
+                                    <path d="M8 21h8m-4-4v4" />
                                 </svg>
-                            </span>
-                            <span id="contextToggleText">Include page context</span>
-                            <button id="contextCloseBtn" class="context-close-btn" title="Toggle context">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2">
-                                    <path d="M18 6L6 18M6 6l12 12" />
+                                <p>Launch a browser to get started</p>
+                            </div>
+                            <img
+                                id="screenshotImg"
+                                class="screenshot-img"
+                                style="display: none"
+                                alt="Browser screenshot"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Horizontal resize handle between browser and chat -->
+                    <div class="h-handle" id="centerHandle">
+                        <div class="h-handle-grip"></div>
+                    </div>
+
+                    <!-- Agent / Chat -->
+                    <div class="chat-panel" id="chatPanel">
+                        <div class="chat-tabs">
+                            <button class="chat-tab active" data-tab="agent">
+                                Agent
+                            </button>
+                            <button class="chat-tab" data-tab="chat">
+                                Chat
+                            </button>
+                            <div class="bar-actions" style="margin-left: auto">
+                                <button
+                                    class="btn-icon chat-header-btn"
+                                    id="btnClearChat"
+                                    title="Clear chat"
+                                >
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                    >
+                                        <path
+                                            d="M3 6h18M8 6V4h8v2m-7 5v6m4-6v6M5 6l1 14h12l1-14"
+                                        />
+                                    </svg>
+                                </button>
+                                <button
+                                    class="btn-icon chat-header-btn"
+                                    id="btnSendToPrism"
+                                    title="Send to Prism App"
+                                >
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    >
+                                        <path d="M7 17l9.2-9.2M17 17V7H7" />
+                                    </svg>
+                                </button>
+                                <button
+                                    class="btn-icon"
+                                    id="btnMaxChat"
+                                    title="Maximize chat"
+                                >
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                    >
+                                        <path
+                                            d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"
+                                        />
+                                    </svg>
+                                </button>
+                                <button
+                                    class="btn-icon"
+                                    id="btnHideChat"
+                                    title="Collapse chat"
+                                >
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                    >
+                                        <path d="M5 12h14" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="welcome-msg">
+                                <p>
+                                    Use <strong>Agent</strong> to give a
+                                    natural-language task — the AI controls the
+                                    browser step by step.
+                                </p>
+                                <p>
+                                    Use <strong>Chat</strong> to ask questions
+                                    while the browser is open.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="chat-input-area">
+                            <div class="agent-controls">
+                                <button
+                                    id="btnAgentStop"
+                                    class="btn btn-danger btn-sm"
+                                    style="display: none"
+                                >
+                                    Stop Agent
+                                </button>
+                            </div>
+                            <div
+                                id="mentionPreview"
+                                class="mention-preview"
+                                style="display: none"
+                            ></div>
+                            <div
+                                id="contextToggle"
+                                class="context-toggle-wrapper"
+                            >
+                                <span class="context-toggle-icon">
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    >
+                                        <path
+                                            d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"
+                                        />
+                                        <polyline points="14 2 14 8 20 8" />
+                                        <line x1="16" y1="13" x2="8" y2="13" />
+                                        <line x1="16" y1="17" x2="8" y2="17" />
+                                    </svg>
+                                </span>
+                                <span id="contextToggleText"
+                                    >Include page context</span
+                                >
+                                <button
+                                    id="contextCloseBtn"
+                                    class="context-close-btn"
+                                    title="Toggle"
+                                >
+                                    <svg
+                                        width="11"
+                                        height="11"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                    >
+                                        <path d="M18 6L6 18M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="chat-input-wrapper">
+                                <div
+                                    id="cmdDropdown"
+                                    class="command-dropdown"
+                                    style="display: none"
+                                ></div>
+                                <div
+                                    id="tabDropdown"
+                                    class="command-dropdown tab-mention-dropdown"
+                                    style="display: none"
+                                ></div>
+                                <div class="chat-input-row">
+                                    <textarea
+                                        id="chatInput"
+                                        class="chat-input"
+                                        placeholder="Describe a task for the agent or ask a question…"
+                                        rows="2"
+                                    ></textarea>
+                                    <button
+                                        class="thinking-btn"
+                                        id="thinkingBtn"
+                                        title="Reasoning Effort"
+                                    >
+                                        <svg
+                                            width="15"
+                                            height="15"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        >
+                                            <path
+                                                d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17a2 2 0 002 2h4a2 2 0 002-2v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z"
+                                            />
+                                            <line
+                                                x1="9"
+                                                y1="21"
+                                                x2="15"
+                                                y2="21"
+                                            />
+                                        </svg>
+                                        <div
+                                            id="thinkingDropdown"
+                                            class="thinking-dropdown"
+                                        ></div>
+                                    </button>
+                                    <button
+                                        id="btnSend"
+                                        class="btn btn-primary btn-send"
+                                    >
+                                        <svg
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="2"
+                                        >
+                                            <path d="M22 2L11 13" />
+                                            <path
+                                                d="M22 2L15 22l-4-9-9-4L22 2z"
+                                            />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- /content-area -->
+
+                <!-- HANDLE: content ↔ log-panel -->
+                <div class="v-handle" id="logHandle" title="Drag to resize">
+                    <div class="v-handle-grip"></div>
+                </div>
+
+                <!-- RIGHT: Log + Terminal -->
+                <aside class="log-panel" id="logPanel">
+                    <!-- Action Log card -->
+                    <div class="log-card" id="logCard">
+                        <div class="log-card-header">
+                            <h3 class="panel-title">Action Log</h3>
+                            <button
+                                id="btnClearLog"
+                                class="btn-icon"
+                                title="Clear log"
+                            >
+                                <svg
+                                    width="13"
+                                    height="13"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                >
+                                    <path
+                                        d="M3 6h18M8 6V4h8v2m-7 5v6m4-6v6M5 6l1 14h12l1-14"
+                                    />
                                 </svg>
                             </button>
                         </div>
-                        <div class="chat-input-wrapper">
-                            <div id="cmdDropdown" class="command-dropdown" style="display:none"></div>
-                            <div id="tabDropdown" class="command-dropdown tab-mention-dropdown" style="display:none">
+                        <div class="log-entries" id="logEntries"></div>
+                    </div>
+
+                    <!-- Resize handle between log and terminal -->
+                    <div class="h-handle" id="logSplitHandle">
+                        <div class="h-handle-grip"></div>
+                    </div>
+
+                    <!-- Terminal Output card -->
+                    <div class="log-card terminal-card" id="terminalCard">
+                        <div class="log-card-header">
+                            <div class="terminal-chrome-dots">
+                                <span></span><span></span><span></span>
                             </div>
-                            <div class="chat-input-row">
-                                <textarea id="chatInput" class="chat-input"
-                                    placeholder="Describe a task for the agent or ask a question..."
-                                    rows="2"></textarea>
-                                <button class="thinking-btn" id="thinkingBtn" title="Reasoning Effort">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path
-                                            d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17a2 2 0 002 2h4a2 2 0 002-2v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" />
-                                        <line x1="9" y1="21" x2="15" y2="21" />
+                            <h3 class="panel-title" style="margin-bottom: 0">
+                                Terminal
+                            </h3>
+                            <div class="terminal-live-badge">
+                                <span class="terminal-live-dot"></span>live
+                            </div>
+                            <div
+                                style="
+                                    margin-left: auto;
+                                    display: flex;
+                                    gap: 2px;
+                                "
+                            >
+                                <button
+                                    id="btnPauseTerminal"
+                                    class="btn-icon"
+                                    title="Pause stream"
+                                >
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="currentColor"
+                                        stroke="none"
+                                    >
+                                        <rect
+                                            x="6"
+                                            y="5"
+                                            width="4"
+                                            height="14"
+                                            rx="1.2"
+                                        />
+                                        <rect
+                                            x="14"
+                                            y="5"
+                                            width="4"
+                                            height="14"
+                                            rx="1.2"
+                                        />
                                     </svg>
-                                    <div id="thinkingDropdown" class="thinking-dropdown"></div>
                                 </button>
-                                <button id="btnSend" class="btn btn-primary btn-send">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <path d="M22 2L11 13" />
-                                        <path d="M22 2L15 22l-4-9-9-4L22 2z" />
+                                <button
+                                    id="btnClearTerminal"
+                                    class="btn-icon"
+                                    title="Clear terminal"
+                                >
+                                    <svg
+                                        width="13"
+                                        height="13"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                    >
+                                        <path
+                                            d="M3 6h18M8 6V4h8v2m-7 5v6m4-6v6M5 6l1 14h12l1-14"
+                                        />
                                     </svg>
                                 </button>
                             </div>
                         </div>
+                        <div class="terminal-output" id="terminalEntries"></div>
                     </div>
-                </div>
+                </aside>
             </div>
-
-            <!-- Right Panel: Action Log -->
-            <aside class="log-panel">
-                <div class="panel-title-row">
-                    <h3 class="panel-title">Action Log</h3>
-                    <button id="btnClearLog" class="btn-icon" title="Clear log">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2">
-                            <path d="M3 6h18M8 6V4h8v2m-7 5v6m4-6v6M5 6l1 14h12l1-14" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="log-entries" id="logEntries"></div>
-            </aside>
+            <!-- /main -->
         </div>
-    </div>
+        <!-- /app -->
 
-    <script src="app.js"></script>
-</body>
-
+        <script src="app.js"></script>
+    </body>
 </html>
