@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 @MainActor
 final class BrowserAutomationManager: ObservableObject {
@@ -18,8 +19,10 @@ final class BrowserAutomationManager: ObservableObject {
     @Published private(set) var isStarting = false
     @Published var launchError: String?
     @Published private(set) var lastLogLine: String?
+    @AppStorage("BrowserAutomationPath") private var browserAutomationPath: String = ""
 
     private let serverURL = URL(string: "http://127.0.0.1:9090")!
+    private let githubURL = URL(string: "https://github.com/gl-aarav/PrismApp/releases")!
     private var process: Process?
     private var pollTask: Task<Void, Never>?
     private var outputPipe: Pipe?
@@ -39,6 +42,21 @@ final class BrowserAutomationManager: ObservableObject {
 
     func openInBrowser() {
         NSWorkspace.shared.open(appURL)
+    }
+
+    func openOnGitHub() {
+        NSWorkspace.shared.open(githubURL)
+    }
+
+    func stopServer() {
+        startupTask?.cancel()
+        process?.terminate()
+        process = nil
+        isStarting = false
+    }
+
+    func setBrowserAutomationPath(_ path: String) {
+        browserAutomationPath = path
     }
 
     func startServerIfNeeded() {
@@ -147,6 +165,13 @@ final class BrowserAutomationManager: ObservableObject {
 
     private func browserAutomationDirectory() -> URL? {
         let fm = FileManager.default
+        if !browserAutomationPath.isEmpty {
+            let savedDirectory = URL(fileURLWithPath: browserAutomationPath, isDirectory: true)
+            if fm.fileExists(atPath: savedDirectory.appendingPathComponent("server.js").path) {
+                return savedDirectory
+            }
+        }
+
         let internalDirectory = UpdateManager.shared.browserAutomationInstallationDirectory()
         if fm.fileExists(atPath: internalDirectory.appendingPathComponent("server.js").path) {
             return internalDirectory

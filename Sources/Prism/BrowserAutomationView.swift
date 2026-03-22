@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import WebKit
 
@@ -5,6 +6,7 @@ struct BrowserAutomationView: View {
     @StateObject private var manager = BrowserAutomationManager.shared
     @StateObject private var updateManager = UpdateManager.shared
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
+    @AppStorage("BrowserAutomationPath") private var browserAutomationPath: String = ""
 
     private var tintStart: Color {
         (appTheme.colors.first ?? .blue).opacity(0.15)
@@ -57,19 +59,20 @@ struct BrowserAutomationView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Browser Automation")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-
-                Text(subtitleText)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-
             Spacer()
 
             HStack(spacing: 10) {
                 statusPill
+
+                if manager.serverIsRunning {
+                    Button("Stop") {
+                        manager.stopServer()
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(.regularMaterial, in: Capsule())
+                }
 
                 Button("Open in Browser") {
                     manager.openInBrowser()
@@ -122,13 +125,13 @@ struct BrowserAutomationView: View {
                 Text(
                     manager.hasLaunchableFiles
                         ? "Run the local automation server"
-                        : "Download Browser Automation files"
+                        : "Browser Automation files not installed"
                 )
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                 Text(
                     manager.hasLaunchableFiles
                         ? "This native tool wraps the existing website version and launches it locally on port 9090."
-                        : "The local automation bundle is missing. Download BrowserAutomation.zip into Prism's internal files to enable the tool."
+                        : "Open the release on GitHub, choose the BrowserAutomation folder on disk, and Prism will save that path in settings."
                 )
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
@@ -145,6 +148,10 @@ struct BrowserAutomationView: View {
                     title: "Version",
                     value: updateManager.latestBrowserAutomationVersion.isEmpty
                         ? "Unknown" : updateManager.latestBrowserAutomationVersion)
+            }
+
+            if !browserAutomationPath.isEmpty {
+                actionBadge(title: "Path", value: URL(fileURLWithPath: browserAutomationPath).lastPathComponent)
             }
 
             HStack(spacing: 12) {
@@ -171,17 +178,9 @@ struct BrowserAutomationView: View {
                     .disabled(manager.isStarting)
                 } else {
                     Button {
-                        Task {
-                            if updateManager.browserAutomationZipDownloadURL == nil {
-                                await updateManager.checkForUpdates()
-                            }
-                            updateManager.downloadBrowserAutomation()
-                        }
+                        manager.openOnGitHub()
                     } label: {
-                        Label(
-                            updateManager.isDownloadingBrowserAutomation
-                                ? "Downloading…" : "Download Files",
-                            systemImage: "arrow.down.circle.fill")
+                        Label("Open on GitHub", systemImage: "arrow.up.right.square")
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal, 18)
@@ -195,7 +194,18 @@ struct BrowserAutomationView: View {
                         in: Capsule()
                     )
                     .foregroundStyle(.white)
-                    .disabled(updateManager.isDownloadingBrowserAutomation)
+                }
+
+                if !manager.hasLaunchableFiles {
+                    Button {
+                        chooseBrowserAutomationFolder()
+                    } label: {
+                        Label("Choose Folder", systemImage: "folder")
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(.regularMaterial, in: Capsule())
                 }
 
                 Button("Open in Browser") {
@@ -218,17 +228,8 @@ struct BrowserAutomationView: View {
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
             }
-
-            if updateManager.isDownloadingBrowserAutomation {
-                Text(
-                    "Downloading BrowserAutomation.zip: \(Int(updateManager.browserAutomationDownloadProgress * 100))%"
-                )
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-            }
-
-            if let installError = updateManager.browserAutomationErrorMessage {
-                Text(installError)
+            if !browserAutomationPath.isEmpty && !manager.hasLaunchableFiles {
+                Text("Saved path does not contain `server.js`. Choose the BrowserAutomation folder itself.")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.red)
             }
@@ -257,15 +258,16 @@ struct BrowserAutomationView: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    private var subtitleText: String {
-        if !manager.serverIsRunning {
-            return "Native shell for the local Prism automation site"
+    private func chooseBrowserAutomationFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose the BrowserAutomation folder containing server.js"
+        if panel.runModal() == .OK, let url = panel.url {
+            browserAutomationPath = url.path
+            manager.setBrowserAutomationPath(url.path)
         }
-        if manager.browserIsOpen {
-            let engine = manager.activeEngine?.capitalized ?? "Browser"
-            return manager.isAgentRunning ? "\(engine) agent is active" : "\(engine) browser is ready"
-        }
-        return "Server is ready. Launch a browser from the control surface."
     }
 }
 
