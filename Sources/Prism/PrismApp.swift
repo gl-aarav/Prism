@@ -258,7 +258,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-
     @MainActor
     func showUpdateWindow() {
         showOrCreateMainWindow()
@@ -294,11 +293,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
-        let isRightClick = event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
-        
+        let isRightClick =
+            event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
+
         let actionKey = isRightClick ? "MenuBarRightClickAction" : "MenuBarClickAction"
-        let action = UserDefaults.standard.string(forKey: actionKey) ?? (isRightClick ? "off" : "quickAI")
-        
+        let action =
+            UserDefaults.standard.string(forKey: actionKey) ?? (isRightClick ? "off" : "quickAI")
+
         switch action {
         case "quickAI":
             QuickAIManager.shared.toggle()

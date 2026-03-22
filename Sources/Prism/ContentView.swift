@@ -7754,7 +7754,7 @@ struct SettingsView: View {
                 Label("Show Menu Bar Icon", systemImage: "menubar.rectangle")
             }
             .toggleStyle(.switch)
-            
+
             if showMenuBar {
                 Picker("Menu Bar Click Action", selection: $menuBarClickAction) {
                     Text("Toggle Quick AI").tag("quickAI")
@@ -7949,7 +7949,7 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
             }
         }
-        
+
         Section(header: Label("Quick AI Appearance", systemImage: "window.shade.open")) {
             LabeledContent {
                 HStack {
