@@ -23,10 +23,12 @@ final class BrowserAutomationManager: ObservableObject {
 
     private let serverURL = URL(string: "http://127.0.0.1:9090")!
     private let githubURL = URL(string: "https://github.com/gl-aarav/PrismApp/releases")!
+    private let nodejsURL = URL(string: "https://nodejs.org/en/download")!
     private var process: Process?
     private var pollTask: Task<Void, Never>?
     private var outputPipe: Pipe?
     private var startupTask: Task<Void, Never>?
+    private var isShowingNodeInstallPrompt = false
 
     private init() {
         startPolling()
@@ -46,6 +48,36 @@ final class BrowserAutomationManager: ObservableObject {
 
     func openOnGitHub() {
         NSWorkspace.shared.open(githubURL)
+    }
+
+    func openNodejsWebsite() {
+        NSWorkspace.shared.open(nodejsURL)
+    }
+
+    private func promptToInstallNodejs() {
+        guard !isShowingNodeInstallPrompt else { return }
+        isShowingNodeInstallPrompt = true
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Node.js Required"
+        alert.informativeText = "Browser Automation needs Node.js installed to start the local server."
+        alert.addButton(withTitle: "Open Node.js")
+        alert.addButton(withTitle: "Cancel")
+
+        let finish: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard let self else { return }
+            self.isShowingNodeInstallPrompt = false
+            if response == .alertFirstButtonReturn {
+                self.openNodejsWebsite()
+            }
+        }
+
+        if let window = NSApp.keyWindow {
+            alert.beginSheetModal(for: window, completionHandler: finish)
+        } else {
+            finish(alert.runModal())
+        }
     }
 
     func stopServer() {
@@ -143,6 +175,11 @@ final class BrowserAutomationManager: ObservableObject {
             guard let last = lines.last else { return }
             Task { @MainActor in
                 self?.lastLogLine = last
+                if last.localizedCaseInsensitiveContains("command not found: node") {
+                    self?.promptToInstallNodejs()
+                    self?.launchError = "Node.js is not installed. Install it to run Browser Automation."
+                    return
+                }
                 if last.localizedCaseInsensitiveContains("error")
                     || last.localizedCaseInsensitiveContains("cannot")
                     || last.localizedCaseInsensitiveContains("not permitted")
