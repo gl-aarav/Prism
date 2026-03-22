@@ -1,6 +1,6 @@
 {
     "name": "prism-browser-automation",
-    "version": "15.0.0",
+    "version": "15.1.0",
     "description": "Browser automation UI for Prism AI — Puppeteer & Playwright with all Prism models",
     "main": "server.js",
     "scripts": {
