@@ -11,7 +11,6 @@ class UpdateManager: ObservableObject {
     private let chromeZipName = "Chrome.zip"
     private let safariZipName = "Safari.zip"
     private let browserAutomationZipName = "BrowserAutomation.zip"
-    private let browserAutomationPackageFileName = "package.json"
 
     @Published var updateAvailable = false
     @Published var latestVersion: String = ""
@@ -56,6 +55,7 @@ class UpdateManager: ObservableObject {
     }
     @AppStorage("ChromeExtensionPath") var chromeExtensionPath: String = ""
     @AppStorage("SafariExtensionPath") var safariExtensionPath: String = ""
+    @AppStorage("BrowserAutomationPath") var browserAutomationPath: String = ""
 
     private var downloadTask: URLSessionDownloadTask? = nil
     private var chromeDownloadTask: URLSessionDownloadTask? = nil
@@ -190,7 +190,7 @@ class UpdateManager: ObservableObject {
             }
 
             if !latestBrowserAutomationVersion.isEmpty {
-                let installedVersion = readInstalledBrowserAutomationVersion()
+                let installedVersion = installedBrowserAutomationVersion()
                 if installedVersion.isEmpty {
                     browserAutomationUpdateAvailable = true
                 } else {
@@ -236,14 +236,12 @@ class UpdateManager: ObservableObject {
         return appSupport.appendingPathComponent("Prism/BrowserAutomation", isDirectory: true)
     }
 
-    private func readInstalledBrowserAutomationVersion() -> String {
-        let packageURL = browserAutomationInstallationDirectory()
-            .appendingPathComponent(browserAutomationPackageFileName)
-        guard
-            let data = try? Data(contentsOf: packageURL),
-            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let version = json["version"] as? String
-        else { return "" }
+    func installedBrowserAutomationVersion() -> String {
+        let directoryURL = browserAutomationPath.isEmpty ? browserAutomationInstallationDirectory() : URL(fileURLWithPath: browserAutomationPath)
+        let packageURL = directoryURL.appendingPathComponent("package.json")
+        guard let data = try? Data(contentsOf: packageURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let version = json["version"] as? String else { return "" }
         return version.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -498,23 +496,6 @@ class UpdateManager: ObservableObject {
                         withIntermediateDirectories: true,
                         attributes: nil)
                     try self.extractZip(from: localURL, to: installDirectory)
-
-                    let packageURL = installDirectory.appendingPathComponent(
-                        self.browserAutomationPackageFileName)
-                    if let data = try? Data(contentsOf: packageURL),
-                        var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-                    {
-                        json["version"] = self.latestBrowserAutomationVersion
-                        if let updatedData = try? JSONSerialization.data(
-                            withJSONObject: json,
-                            options: [.prettyPrinted, .sortedKeys]),
-                            let updatedText = String(data: updatedData, encoding: .utf8)
-                        {
-                            try updatedText.write(
-                                to: packageURL, atomically: true, encoding: .utf8)
-                        }
-                    }
-
                     self.browserAutomationUpdated = true
                     self.browserAutomationUpdateAvailable = false
                 } catch {

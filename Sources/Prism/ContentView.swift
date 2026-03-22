@@ -7268,6 +7268,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case systemPrompt = "System Prompt"
     case autocomplete = "Autocomplete"
     case downloads = "Downloads"
+    case browserAutomation = "Browser Automation"
     case shortcuts = "Shortcuts"
     case updates = "Updates"
     case dataPrivacy = "Data & Privacy"
@@ -7290,6 +7291,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .systemPrompt: return "text.quote"
         case .autocomplete: return "text.cursor"
         case .downloads: return "arrow.down.doc"
+        case .browserAutomation: return "play.desktopcomputer"
         case .shortcuts: return "command"
         case .updates: return "arrow.triangle.2.circlepath"
         case .dataPrivacy: return "externaldrive"
@@ -7312,6 +7314,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .systemPrompt: return .yellow
         case .autocomplete: return .mint
         case .downloads: return .blue
+        case .browserAutomation: return .orange
         case .shortcuts: return .gray
         case .updates: return .green
         case .dataPrivacy: return .red
@@ -7330,7 +7333,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general, .sidebarTools, .appearance: return .app
         case .quickAI, .quickTools, .webOverlay: return .overlays
         case .gemini, .ollama, .nvidia, .copilot, .customWebViews: return .providers
-        case .systemPrompt, .autocomplete, .downloads, .shortcuts, .updates, .dataPrivacy:
+        case .systemPrompt, .autocomplete, .downloads, .browserAutomation, .shortcuts, .updates, .dataPrivacy:
             return .advanced
         }
     }
@@ -7365,6 +7368,7 @@ struct SettingsView: View {
     @AppStorage("SelectedNvidiaModel") private var selectedNvidiaModel: String =
         "llama-3.1-70b-instruct"
     @AppStorage("ImageDownloadPath") private var imageDownloadPath: String = ""
+    @AppStorage("BrowserAutomationPath") private var browserAutomationPath: String = ""
 
     // AI Autocomplete settings
     @AppStorage("EnableAIAutocomplete") private var enableAutocomplete: Bool = false
@@ -9022,6 +9026,46 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Browser Automation Section
+
+    @ViewBuilder
+    private var browserAutomationSettingsSection: some View {
+        Section(header: Label("Browser Automation", systemImage: "play.desktopcomputer")) {
+            LabeledContent {
+                HStack {
+                    TextField("", text: $browserAutomationPath)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Browse") {
+                        let panel = NSOpenPanel()
+                        panel.canChooseFiles = false
+                        panel.canChooseDirectories = true
+                        panel.allowsMultipleSelection = false
+                        panel.message = "Choose the BrowserAutomation folder containing server.js"
+                        if panel.runModal() == .OK {
+                            browserAutomationPath = panel.url?.path ?? ""
+                            BrowserAutomationManager.shared.setBrowserAutomationPath(browserAutomationPath)
+                        }
+                    }
+                    if !browserAutomationPath.isEmpty {
+                        Button(action: { 
+                            browserAutomationPath = ""
+                            BrowserAutomationManager.shared.setBrowserAutomationPath("")
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } label: {
+                Label("Path", systemImage: "folder")
+            }
+            Text("Set a custom path for the Browser Automation server files if you prefer to use your own clone.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     // MARK: - Apple Shortcuts Section
 
     @ViewBuilder
@@ -9313,6 +9357,8 @@ struct SettingsView: View {
             autocompleteSections
         case .downloads:
             fileDownloadsSection
+        case .browserAutomation:
+            browserAutomationSettingsSection
         case .shortcuts:
             shortcutsSection
         case .updates:

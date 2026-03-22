@@ -144,10 +144,14 @@ struct BrowserAutomationView: View {
                     value: manager.hasLaunchableFiles
                         ? (manager.isStarting ? "Starting" : "Stopped")
                         : "Files Missing")
+                let installedVersion = updateManager.installedBrowserAutomationVersion()
                 actionBadge(
                     title: "Version",
-                    value: updateManager.latestBrowserAutomationVersion.isEmpty
-                        ? "Unknown" : updateManager.latestBrowserAutomationVersion)
+                    value: installedVersion.isEmpty
+                        ? (updateManager.latestBrowserAutomationVersion.isEmpty
+                            ? "Unknown"
+                            : updateManager.latestBrowserAutomationVersion)
+                        : installedVersion)
             }
 
             if !browserAutomationPath.isEmpty {
