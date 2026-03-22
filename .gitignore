@@ -23,3 +23,4 @@ tmp/
 create_app.sh
 create_dmg.sh
 .chrome-profile-puppeteer
+create_release.sh
