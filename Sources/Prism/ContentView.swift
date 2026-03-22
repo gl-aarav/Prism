@@ -2468,7 +2468,9 @@ struct ContentView: View {
                                         )
                                         .padding(webViewPillSnapPoint.edgeInsets(base: 16))
                                         .offset(webViewPillDragOffset)
-                                        .simultaneousGesture(webViewPillDragGesture(in: webGeometry.size))
+                                        .simultaneousGesture(
+                                            webViewPillDragGesture(in: webGeometry.size)
+                                        )
                                         .zIndex(10)
                                 }
                                 .coordinateSpace(name: "WebViewToolSpace")
@@ -2643,7 +2645,8 @@ struct ContentView: View {
                 state = value.translation
             }
             .onEnded { value in
-                let snappedPoint = nearestWebViewPillSnapPoint(to: value.location, in: containerSize)
+                let snappedPoint = nearestWebViewPillSnapPoint(
+                    to: value.location, in: containerSize)
                 withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
                     webViewPillSnapPoint = snappedPoint
                 }
@@ -2661,10 +2664,12 @@ struct ContentView: View {
         )
 
         let topY = verticalInset + (resolvedPillSize.height / 2)
-        let bottomY = max(topY, containerSize.height - verticalInset - (resolvedPillSize.height / 2))
+        let bottomY = max(
+            topY, containerSize.height - verticalInset - (resolvedPillSize.height / 2))
         let leftX = horizontalInset + (resolvedPillSize.width / 2)
         let midX = containerSize.width / 2
-        let rightX = max(leftX, containerSize.width - horizontalInset - (resolvedPillSize.width / 2))
+        let rightX = max(
+            leftX, containerSize.width - horizontalInset - (resolvedPillSize.width / 2))
 
         let candidates: [(WebViewPillSnapPoint, CGPoint)] = [
             (.topLeading, CGPoint(x: leftX, y: topY)),
