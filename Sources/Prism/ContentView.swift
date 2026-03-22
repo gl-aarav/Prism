@@ -2033,6 +2033,49 @@ enum ThinkingMode {
     case geminiFlash  // Auto/Low/Med/High (Gemini 3 Flash, 2.5)
 }
 
+private enum WebViewPillSnapPoint: String, CaseIterable {
+    case topLeading
+    case top
+    case topTrailing
+    case bottomLeading
+    case bottom
+    case bottomTrailing
+
+    var alignment: Alignment {
+        switch self {
+        case .topLeading:
+            return .topLeading
+        case .top:
+            return .top
+        case .topTrailing:
+            return .topTrailing
+        case .bottomLeading:
+            return .bottomLeading
+        case .bottom:
+            return .bottom
+        case .bottomTrailing:
+            return .bottomTrailing
+        }
+    }
+
+    func edgeInsets(base: CGFloat) -> EdgeInsets {
+        switch self {
+        case .topLeading:
+            return EdgeInsets(top: base, leading: base, bottom: 0, trailing: 0)
+        case .top:
+            return EdgeInsets(top: base, leading: 0, bottom: 0, trailing: 0)
+        case .topTrailing:
+            return EdgeInsets(top: base, leading: 0, bottom: 0, trailing: base)
+        case .bottomLeading:
+            return EdgeInsets(top: 0, leading: base, bottom: base, trailing: 0)
+        case .bottom:
+            return EdgeInsets(top: 0, leading: 0, bottom: base, trailing: 0)
+        case .bottomTrailing:
+            return EdgeInsets(top: 0, leading: 0, bottom: base, trailing: base)
+        }
+    }
+}
+
 struct ContentView: View {
     @ObservedObject private var chatManager = ChatManager.shared
     @ObservedObject private var updateManager = UpdateManager.shared
@@ -2081,9 +2124,13 @@ struct ContentView: View {
     @State private var showWebView: Bool = false
     @State private var showBrowserAutomation: Bool = false
     @AppStorage("ToolSelectedWebView") private var toolSelectedWebView: String = "ChatGPT Web"
+    @AppStorage("WebViewPillSnapPoint") private var webViewPillSnapPointRaw: String =
+        WebViewPillSnapPoint.topTrailing.rawValue
     @AppStorage("ActiveToolName") private var activeToolName: String = ""
     @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
     @AppStorage("SelectedCustomWebViewURL") private var selectedCustomWebViewURL: String = ""
+    @State private var webViewPillSize: CGSize = .zero
+    @GestureState private var webViewPillDragOffset: CGSize = .zero
     @State private var streamBuffer: [UUID: String] = [:]  // live text per message
     @State private var streamThinkingBuffer: [UUID: String] = [:]  // live reasoning per message
     @State private var streamingMessageId: UUID? = nil  // currently streaming message for scroll tracking
@@ -2141,6 +2188,15 @@ struct ContentView: View {
             return $geminiThinkingLevel
         } else {
             return $thinkingLevel
+        }
+    }
+
+    private var webViewPillSnapPoint: WebViewPillSnapPoint {
+        get {
+            WebViewPillSnapPoint(rawValue: webViewPillSnapPointRaw) ?? .topTrailing
+        }
+        nonmutating set {
+            webViewPillSnapPointRaw = newValue.rawValue
         }
     }
 
@@ -2383,66 +2439,39 @@ struct ContentView: View {
                             .transition(.opacity)
                         }
                         if showWebView {
-                            ZStack(alignment: .topTrailing) {
-                                // Web content fills underneath
-                                ZStack(alignment: .top) {
-                                    if let url = getWebURL(for: toolSelectedWebView) {
-                                        WebView(url: url)
+                            GeometryReader { webGeometry in
+                                ZStack {
+                                    // Web content fills underneath
+                                    ZStack(alignment: .top) {
+                                        if let url = getWebURL(for: toolSelectedWebView) {
+                                            WebView(url: url)
+                                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        } else {
+                                            VStack(spacing: 16) {
+                                                Image(systemName: "globe")
+                                                    .font(.system(size: 48))
+                                                    .foregroundStyle(.secondary.opacity(0.3))
+                                                Text(
+                                                    "Valid Web View URL not found"
+                                                )
+                                                .font(.system(size: 14))
+                                                .foregroundStyle(.secondary)
+                                            }
                                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    } else {
-                                        VStack(spacing: 16) {
-                                            Image(systemName: "globe")
-                                                .font(.system(size: 48))
-                                                .foregroundStyle(.secondary.opacity(0.3))
-                                            Text(
-                                                "Valid Web View URL not found"
-                                            )
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(.secondary)
                                         }
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                                     }
-                                }
-
-                                // Floating Glass Pill in Top Right
-                                Picker("Web View", selection: $toolSelectedWebView) {
-                                    Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
-                                        .tag("ChatGPT Web")
-                                    Label("Claude", systemImage: "brain.head.profile")
-                                        .tag("Claude Web")
-                                    Label("Gemini", systemImage: "sparkles")
-                                        .tag("Gemini Web")
-                                    Label("Perplexity", systemImage: "magnifyingglass")
-                                        .tag("Perplexity Web")
-                                    Label("Grok", systemImage: "bolt.horizontal")
-                                        .tag("Grok Web")
-
-                                    Divider()
-
-                                    ForEach(customWebViews()) { webView in
-                                        Label(
-                                            webView.name.isEmpty ? webView.url : webView.name,
-                                            systemImage: webView.icon ?? "globe"
+                                    webViewPickerPill
+                                        .frame(
+                                            maxWidth: .infinity,
+                                            maxHeight: .infinity,
+                                            alignment: webViewPillSnapPoint.alignment
                                         )
-                                        .tag("CustomWebView:\(webView.url)")
-                                    }
+                                        .padding(webViewPillSnapPoint.edgeInsets(base: 16))
+                                        .offset(webViewPillDragOffset)
+                                        .simultaneousGesture(webViewPillDragGesture(in: webGeometry.size))
+                                        .zIndex(10)
                                 }
-                                .pickerStyle(.menu)
-                                .fixedSize()
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(.ultraThinMaterial)
-                                )
-                                .glassEffect(.regular, in: .capsule)
-                                .overlay(
-                                    Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                )
-                                .padding(.trailing, 16)
-                                .padding(.top, 16)
-                                .zIndex(10)
-
+                                .coordinateSpace(name: "WebViewToolSpace")
                             }
                             .transition(.opacity)
                         }
@@ -2558,6 +2587,99 @@ struct ContentView: View {
             }
             OllamaModelManager.shared.fetchInstalledModels(endpoint: activeURL)
         }
+    }
+
+    private var webViewPickerPill: some View {
+        Picker("Web View", selection: $toolSelectedWebView) {
+            Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
+                .tag("ChatGPT Web")
+            Label("Claude", systemImage: "brain.head.profile")
+                .tag("Claude Web")
+            Label("Gemini", systemImage: "sparkles")
+                .tag("Gemini Web")
+            Label("Perplexity", systemImage: "magnifyingglass")
+                .tag("Perplexity Web")
+            Label("Grok", systemImage: "bolt.horizontal")
+                .tag("Grok Web")
+
+            Divider()
+
+            ForEach(customWebViews()) { webView in
+                Label(
+                    webView.name.isEmpty ? webView.url : webView.name,
+                    systemImage: webView.icon ?? "globe"
+                )
+                .tag("CustomWebView:\(webView.url)")
+            }
+        }
+        .pickerStyle(.menu)
+        .fixedSize()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+        )
+        .glassEffect(.regular, in: .capsule)
+        .overlay(
+            Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 1)
+        )
+        .background {
+            GeometryReader { pillGeometry in
+                Color.clear
+                    .onAppear {
+                        webViewPillSize = pillGeometry.size
+                    }
+                    .onChange(of: pillGeometry.size) { _, newSize in
+                        webViewPillSize = newSize
+                    }
+            }
+        }
+    }
+
+    private func webViewPillDragGesture(in containerSize: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 3, coordinateSpace: .named("WebViewToolSpace"))
+            .updating($webViewPillDragOffset) { value, state, _ in
+                state = value.translation
+            }
+            .onEnded { value in
+                let snappedPoint = nearestWebViewPillSnapPoint(to: value.location, in: containerSize)
+                withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+                    webViewPillSnapPoint = snappedPoint
+                }
+            }
+    }
+
+    private func nearestWebViewPillSnapPoint(to location: CGPoint, in containerSize: CGSize)
+        -> WebViewPillSnapPoint
+    {
+        let horizontalInset: CGFloat = 16
+        let verticalInset: CGFloat = 16
+        let resolvedPillSize = CGSize(
+            width: max(webViewPillSize.width, 150),
+            height: max(webViewPillSize.height, 32)
+        )
+
+        let topY = verticalInset + (resolvedPillSize.height / 2)
+        let bottomY = max(topY, containerSize.height - verticalInset - (resolvedPillSize.height / 2))
+        let leftX = horizontalInset + (resolvedPillSize.width / 2)
+        let midX = containerSize.width / 2
+        let rightX = max(leftX, containerSize.width - horizontalInset - (resolvedPillSize.width / 2))
+
+        let candidates: [(WebViewPillSnapPoint, CGPoint)] = [
+            (.topLeading, CGPoint(x: leftX, y: topY)),
+            (.top, CGPoint(x: midX, y: topY)),
+            (.topTrailing, CGPoint(x: rightX, y: topY)),
+            (.bottomLeading, CGPoint(x: leftX, y: bottomY)),
+            (.bottom, CGPoint(x: midX, y: bottomY)),
+            (.bottomTrailing, CGPoint(x: rightX, y: bottomY)),
+        ]
+
+        return candidates.min(by: { lhs, rhs in
+            let lhsDistance = hypot(lhs.1.x - location.x, lhs.1.y - location.y)
+            let rhsDistance = hypot(rhs.1.x - location.x, rhs.1.y - location.y)
+            return lhsDistance < rhsDistance
+        })?.0 ?? .topTrailing
     }
 
     func isWebViewProvider(_ provider: String) -> Bool {
