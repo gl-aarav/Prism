@@ -9122,7 +9122,7 @@ struct SettingsView: View {
         }
     }
 
-    @State private var selectedTab: SettingsTab = .general
+    @AppStorage("SelectedSettingsTab") private var selectedTab: SettingsTab = .general
 
     private var settingsTintStart: Color {
         (appTheme.colors.first ?? .blue).opacity(0.16)

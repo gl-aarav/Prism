@@ -3,10 +3,12 @@ import SwiftUI
 import WebKit
 
 struct BrowserAutomationView: View {
+    @Environment(\.openWindow) var openWindow
     @StateObject private var manager = BrowserAutomationManager.shared
     @StateObject private var updateManager = UpdateManager.shared
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("BrowserAutomationPath") private var browserAutomationPath: String = ""
+    @AppStorage("SelectedSettingsTab") private var selectedSettingsTab: SettingsTab = .general
 
     private var tintStart: Color {
         (appTheme.colors.first ?? .blue).opacity(0.15)
@@ -273,15 +275,9 @@ struct BrowserAutomationView: View {
     }
 
     private func chooseBrowserAutomationFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.message = "Choose the BrowserAutomation folder containing server.js"
-        if panel.runModal() == .OK, let url = panel.url {
-            browserAutomationPath = url.path
-            manager.setBrowserAutomationPath(url.path)
-        }
+        selectedSettingsTab = .browserAutomation
+        openWindow(id: "prism-settings")
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
