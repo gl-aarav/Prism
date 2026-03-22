@@ -237,11 +237,14 @@ class UpdateManager: ObservableObject {
     }
 
     func installedBrowserAutomationVersion() -> String {
-        let directoryURL = browserAutomationPath.isEmpty ? browserAutomationInstallationDirectory() : URL(fileURLWithPath: browserAutomationPath)
+        let directoryURL =
+            browserAutomationPath.isEmpty
+            ? browserAutomationInstallationDirectory() : URL(fileURLWithPath: browserAutomationPath)
         let packageURL = directoryURL.appendingPathComponent("package.json")
         guard let data = try? Data(contentsOf: packageURL),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let version = json["version"] as? String else { return "" }
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let version = json["version"] as? String
+        else { return "" }
         return version.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 

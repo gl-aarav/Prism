@@ -93,7 +93,9 @@ struct BrowserAutomationView: View {
                     .padding(.vertical, 9)
                     .background(
                         LinearGradient(
-                            colors: [appTheme.colors.first ?? .blue, appTheme.colors.last ?? .green],
+                            colors: [
+                                appTheme.colors.first ?? .blue, appTheme.colors.last ?? .green,
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -127,14 +129,14 @@ struct BrowserAutomationView: View {
                         ? "Run the local automation server"
                         : "Browser Automation files not installed"
                 )
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
                 Text(
                     manager.hasLaunchableFiles
                         ? "This native tool wraps the existing website version and launches it locally on port 9090."
                         : "Open the release on GitHub, choose the BrowserAutomation folder on disk, and Prism will save that path in settings."
                 )
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
             }
 
             HStack(spacing: 12) {
@@ -155,7 +157,9 @@ struct BrowserAutomationView: View {
             }
 
             if !browserAutomationPath.isEmpty {
-                actionBadge(title: "Path", value: URL(fileURLWithPath: browserAutomationPath).lastPathComponent)
+                actionBadge(
+                    title: "Path",
+                    value: URL(fileURLWithPath: browserAutomationPath).lastPathComponent)
             }
 
             HStack(spacing: 12) {
@@ -172,7 +176,9 @@ struct BrowserAutomationView: View {
                     .padding(.vertical, 12)
                     .background(
                         LinearGradient(
-                            colors: [appTheme.colors.first ?? .blue, appTheme.colors.last ?? .green],
+                            colors: [
+                                appTheme.colors.first ?? .blue, appTheme.colors.last ?? .green,
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -191,7 +197,9 @@ struct BrowserAutomationView: View {
                     .padding(.vertical, 12)
                     .background(
                         LinearGradient(
-                            colors: [appTheme.colors.first ?? .blue, appTheme.colors.last ?? .green],
+                            colors: [
+                                appTheme.colors.first ?? .blue, appTheme.colors.last ?? .green,
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -233,9 +241,11 @@ struct BrowserAutomationView: View {
                     .foregroundStyle(.secondary)
             }
             if !browserAutomationPath.isEmpty && !manager.hasLaunchableFiles {
-                Text("Saved path does not contain `server.js`. Choose the BrowserAutomation folder itself.")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.red)
+                Text(
+                    "Saved path does not contain `server.js`. Choose the BrowserAutomation folder itself."
+                )
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.red)
             }
 
             Spacer(minLength: 0)

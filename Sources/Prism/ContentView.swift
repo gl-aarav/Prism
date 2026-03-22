@@ -7333,7 +7333,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .general, .sidebarTools, .appearance: return .app
         case .quickAI, .quickTools, .webOverlay: return .overlays
         case .gemini, .ollama, .nvidia, .copilot, .customWebViews: return .providers
-        case .systemPrompt, .autocomplete, .downloads, .browserAutomation, .shortcuts, .updates, .dataPrivacy:
+        case .systemPrompt, .autocomplete, .downloads, .browserAutomation, .shortcuts, .updates,
+            .dataPrivacy:
             return .advanced
         }
     }
@@ -9043,11 +9044,12 @@ struct SettingsView: View {
                         panel.message = "Choose the BrowserAutomation folder containing server.js"
                         if panel.runModal() == .OK {
                             browserAutomationPath = panel.url?.path ?? ""
-                            BrowserAutomationManager.shared.setBrowserAutomationPath(browserAutomationPath)
+                            BrowserAutomationManager.shared.setBrowserAutomationPath(
+                                browserAutomationPath)
                         }
                     }
                     if !browserAutomationPath.isEmpty {
-                        Button(action: { 
+                        Button(action: {
                             browserAutomationPath = ""
                             BrowserAutomationManager.shared.setBrowserAutomationPath("")
                         }) {
@@ -9060,9 +9062,11 @@ struct SettingsView: View {
             } label: {
                 Label("Path", systemImage: "folder")
             }
-            Text("Set a custom path for the Browser Automation server files if you prefer to use your own clone.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Text(
+                "Set a custom path for the Browser Automation server files if you prefer to use your own clone."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 
