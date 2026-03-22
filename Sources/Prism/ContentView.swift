@@ -7489,6 +7489,8 @@ struct SettingsView: View {
         "Generate Image ChatGPT"
     @AppStorage("SystemPrompt") private var systemPrompt: String = ""
     @AppStorage("ShowMenuBar") private var showMenuBar = true
+    @AppStorage("MenuBarClickAction") private var menuBarClickAction: String = "quickAI"
+    @AppStorage("MenuBarRightClickAction") private var menuBarRightClickAction: String = "off"
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("EnableQuickAI") private var enableQuickAI = true
     @AppStorage("QuickAIBackgroundOpacity") private var quickAIBackgroundOpacity: Double = 0.18
@@ -7752,23 +7754,22 @@ struct SettingsView: View {
                 Label("Show Menu Bar Icon", systemImage: "menubar.rectangle")
             }
             .toggleStyle(.switch)
-
-            Toggle(isOn: $enableQuickAI) {
-                Label("Enable Quick AI Hotkey", systemImage: "bolt.fill")
-            }
-            .toggleStyle(.switch)
-
-            if enableQuickAI {
-                LabeledContent {
-                    KeyboardShortcuts.Recorder(for: .toggleQuickAI)
-                } label: {
-                    Label("Global Shortcut", systemImage: "command")
+            
+            if showMenuBar {
+                Picker("Menu Bar Click Action", selection: $menuBarClickAction) {
+                    Text("Toggle Quick AI").tag("quickAI")
+                    Text("Toggle Quick Tools").tag("quickTools")
+                    Text("Toggle Web Overlay").tag("webOverlay")
                 }
+                .pickerStyle(.menu)
 
-                Toggle(isOn: $quickAIClickOutsideCloses) {
-                    Label("Click Outside Closes Quick AI", systemImage: "cursorarrow.click")
+                Picker("Menu Bar Right Click", selection: $menuBarRightClickAction) {
+                    Text("Off").tag("off")
+                    Text("Toggle Quick AI").tag("quickAI")
+                    Text("Toggle Quick Tools").tag("quickTools")
+                    Text("Toggle Web Overlay").tag("webOverlay")
                 }
-                .toggleStyle(.switch)
+                .pickerStyle(.menu)
             }
         }
     }
@@ -7929,6 +7930,26 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var quickAISection: some View {
+        Section(header: Label("Quick AI Settings", systemImage: "bolt.fill")) {
+            Toggle(isOn: $enableQuickAI) {
+                Label("Enable Quick AI Hotkey", systemImage: "bolt.fill")
+            }
+            .toggleStyle(.switch)
+
+            if enableQuickAI {
+                LabeledContent {
+                    KeyboardShortcuts.Recorder(for: .toggleQuickAI)
+                } label: {
+                    Label("Global Shortcut", systemImage: "command")
+                }
+
+                Toggle(isOn: $quickAIClickOutsideCloses) {
+                    Label("Click Outside Closes Quick AI", systemImage: "cursorarrow.click")
+                }
+                .toggleStyle(.switch)
+            }
+        }
+        
         Section(header: Label("Quick AI Appearance", systemImage: "window.shade.open")) {
             LabeledContent {
                 HStack {

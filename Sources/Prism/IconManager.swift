@@ -176,7 +176,7 @@ struct PrismIconView: View {
                 }
                 .stroke(
                     Color(nsColor: isDark ? .black : .white),
-                    style: StrokeStyle(lineWidth: w * 0.04, lineCap: .round, lineJoin: .round))
+                    style: StrokeStyle(lineWidth: w * 0.04, lineCap: .square, lineJoin: .miter))
 
                 // Shine
                 Path { path in
@@ -185,7 +185,7 @@ struct PrismIconView: View {
                 }
                 .stroke(
                     Color(nsColor: isDark ? .black : .white).opacity(isDark ? 0.5 : 0.4),
-                    style: StrokeStyle(lineWidth: w * 0.01, lineCap: .round))
+                    style: StrokeStyle(lineWidth: w * 0.01, lineCap: .square))
             }
             .frame(width: iconSize, height: iconSize)
         }

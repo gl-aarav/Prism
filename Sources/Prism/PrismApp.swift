@@ -279,7 +279,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = NSImage(
                 systemSymbolName: "triangle.inset.filled", accessibilityDescription: "Prism")
             button.image?.isTemplate = true
-            button.action = #selector(statusItemClicked)
+            button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.target = self
         }
     }
@@ -291,8 +292,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func statusItemClicked() {
-        QuickAIManager.shared.toggle()
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        let event = NSApp.currentEvent
+        let isRightClick = event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
+        
+        let actionKey = isRightClick ? "MenuBarRightClickAction" : "MenuBarClickAction"
+        let action = UserDefaults.standard.string(forKey: actionKey) ?? (isRightClick ? "off" : "quickAI")
+        
+        switch action {
+        case "quickAI":
+            QuickAIManager.shared.toggle()
+        case "quickTools":
+            QuickToolsManager.shared.toggle()
+        case "webOverlay":
+            WebOverlayManager.shared.toggle()
+        case "off":
+            break
+        default:
+            if !isRightClick {
+                QuickAIManager.shared.toggle()
+            }
+        }
     }
 
     func applicationShouldTerminate(_ application: NSApplication) -> NSApplication.TerminateReply {
