@@ -7255,6 +7255,7 @@ struct MessageView: View, Equatable {
 
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general = "General"
+    case sidebarTools = "Sidebar Tools"
     case appearance = "Appearance"
     case quickAI = "Quick AI"
     case quickTools = "Quick Tools"
@@ -7276,6 +7277,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "gear"
+        case .sidebarTools: return "slider.horizontal.3"
         case .appearance: return "paintbrush"
         case .quickAI: return "window.shade.open"
         case .quickTools: return "briefcase"
@@ -7297,6 +7299,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var iconColor: Color {
         switch self {
         case .general: return .gray
+        case .sidebarTools: return .gray
         case .appearance: return .pink
         case .quickAI: return .blue
         case .quickTools: return .orange
@@ -7324,7 +7327,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var category: Category {
         switch self {
-        case .general, .appearance: return .app
+        case .general, .sidebarTools, .appearance: return .app
         case .quickAI, .quickTools, .webOverlay: return .overlays
         case .gemini, .ollama, .nvidia, .copilot, .customWebViews: return .providers
         case .systemPrompt, .autocomplete, .downloads, .shortcuts, .updates, .dataPrivacy:
@@ -7396,6 +7399,7 @@ struct SettingsView: View {
     @AppStorage("ShowBrowserAutomation") private var showBrowserAutomationTool: Bool = true
     @AppStorage("ToolOrder") private var toolOrderRaw: String =
         "compare,commands,quizme,imagegen,pdfcreator,webview,browserautomation"
+    @State private var draggedTool: String? = nil
 
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
@@ -7641,7 +7645,10 @@ struct SettingsView: View {
                 .pickerStyle(.menu)
             }
         }
+    }
 
+    @ViewBuilder
+    private var sidebarToolsSection: some View {
         Section(header: Label("Sidebar Tools", systemImage: "slider.horizontal.3")) {
             Toggle(isOn: $showCompareTool) {
                 Label("Compare", systemImage: "square.split.2x1")
@@ -7680,11 +7687,15 @@ struct SettingsView: View {
 
             Divider()
 
-            Text("Tool Order")
+            Text("Drag To Reorder")
                 .font(.callout.weight(.semibold))
 
             ForEach(toolOrder, id: \.self) { toolId in
                 HStack(spacing: 10) {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+
                     Image(systemName: toolIcon(for: toolId))
                         .font(.system(size: 12))
                         .frame(width: 16)
@@ -7694,22 +7705,26 @@ struct SettingsView: View {
                         .font(.callout)
 
                     Spacer()
-
-                    if let idx = toolOrder.firstIndex(of: toolId), idx > 0 {
-                        Button(action: { moveToolUp(toolId) }) {
-                            Image(systemName: "chevron.up")
-                        }
-                        .buttonStyle(.borderless)
-                    }
-
-                    if let idx = toolOrder.firstIndex(of: toolId), idx < toolOrder.count - 1 {
-                        Button(action: { moveToolDown(toolId) }) {
-                            Image(systemName: "chevron.down")
-                        }
-                        .buttonStyle(.borderless)
-                    }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.secondary.opacity(0.08))
+                )
+                .opacity(draggedTool == toolId ? 0.45 : 1.0)
+                .onDrag {
+                    draggedTool = toolId
+                    return NSItemProvider(object: toolId as NSString)
+                }
+                .onDrop(
+                    of: [.text],
+                    delegate: SettingsToolDropDelegate(
+                        item: toolId,
+                        draggedItem: $draggedTool,
+                        toolOrderRaw: $toolOrderRaw,
+                        toolOrder: toolOrder
+                    ))
             }
         }
     }
@@ -7767,6 +7782,39 @@ struct SettingsView: View {
         guard let idx = order.firstIndex(of: toolId), idx < order.count - 1 else { return }
         order.swapAt(idx, idx + 1)
         toolOrderRaw = order.joined(separator: ",")
+    }
+
+    // MARK: - Sidebar Tools Drag & Drop
+
+    struct SettingsToolDropDelegate: DropDelegate {
+        let item: String
+        @Binding var draggedItem: String?
+        @Binding var toolOrderRaw: String
+        let toolOrder: [String]
+
+        func performDrop(info: DropInfo) -> Bool {
+            draggedItem = nil
+            return true
+        }
+
+        func dropEntered(info: DropInfo) {
+            guard let dragged = draggedItem, dragged != item else { return }
+            var order = toolOrder
+            guard let fromIndex = order.firstIndex(of: dragged),
+                let toIndex = order.firstIndex(of: item)
+            else { return }
+
+            withAnimation(.easeInOut(duration: 0.18)) {
+                order.move(
+                    fromOffsets: IndexSet(integer: fromIndex),
+                    toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+                toolOrderRaw = order.joined(separator: ",")
+            }
+        }
+
+        func dropUpdated(info: DropInfo) -> DropProposal? {
+            DropProposal(operation: .move)
+        }
     }
 
     // MARK: - Web Overlay Section
@@ -9239,6 +9287,8 @@ struct SettingsView: View {
         switch tab {
         case .general:
             generalSection
+        case .sidebarTools:
+            sidebarToolsSection
         case .appearance:
             appearanceSection
         case .quickAI:
