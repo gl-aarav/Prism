@@ -3485,8 +3485,6 @@ struct SidebarView: View {
     @AppStorage("ShowBrowserAutomation") private var showBrowserAutomationTool: Bool = true
     @AppStorage("ToolOrder") private var toolOrderRaw: String =
         "compare,commands,quizme,imagegen,pdfcreator,webview,browserautomation"
-    @State private var showCustomizeTools: Bool = false
-    @State private var draggedTool: String? = nil
 
     @State private var searchText: String = ""
     @State private var isSearchVisible: Bool = false
@@ -3818,128 +3816,6 @@ struct SidebarView: View {
                     }
                 }
             }
-
-            // Customize Tools button
-            Button(action: { showCustomizeTools.toggle() }) {
-                HStack(spacing: 5) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 10, weight: .medium))
-                    Text("Customize")
-                        .font(.system(size: 10, weight: .medium))
-                }
-                .foregroundStyle(.secondary.opacity(0.5))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showCustomizeTools, arrowEdge: .trailing) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Visible Tools")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Toggle(isOn: $showCompareTool) {
-                        Label("Compare", systemImage: "square.split.2x1")
-                            .font(.system(size: 12))
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    Toggle(isOn: $showCommandsTool) {
-                        Label("Commands", systemImage: "command")
-                            .font(.system(size: 12))
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    Toggle(isOn: $showQuizMeTool) {
-                        Label("Quiz Me", systemImage: "questionmark.bubble")
-                            .font(.system(size: 12))
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    Toggle(isOn: $showImageGenTool) {
-                        Label("Image Generation", systemImage: "paintbrush")
-                            .font(.system(size: 12))
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    Toggle(isOn: $showPDFCreatorTool) {
-                        Label("File Creator", systemImage: "doc.richtext")
-                            .font(.system(size: 12))
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    Toggle(isOn: $showWebViewTool) {
-                        Label("Web View", systemImage: "globe")
-                            .font(.system(size: 12))
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    Toggle(isOn: $showBrowserAutomationTool) {
-                        Label("Browser Automation", systemImage: "cursorarrow.motionlines.click")
-                            .font(.system(size: 12))
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-
-                    Divider()
-
-                    Text("Drag to reorder")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-
-                    ForEach(toolOrder, id: \.self) { toolId in
-                        HStack(spacing: 8) {
-                            Image(systemName: "line.3.horizontal")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
-                            Image(systemName: toolIcon(for: toolId))
-                                .font(.system(size: 11))
-                                .frame(width: 16)
-                            Text(toolLabel(for: toolId))
-                                .font(.system(size: 12))
-                            Spacer()
-                            // Move up/down buttons
-                            if let idx = toolOrder.firstIndex(of: toolId), idx > 0 {
-                                Button(action: { moveToolUp(toolId) }) {
-                                    Image(systemName: "chevron.up")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            if let idx = toolOrder.firstIndex(of: toolId), idx < toolOrder.count - 1
-                            {
-                                Button(action: { moveToolDown(toolId) }) {
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(Color.secondary.opacity(0.06))
-                        )
-                        .opacity(draggedTool == toolId ? 0.4 : 1.0)
-                        .onDrag {
-                            draggedTool = toolId
-                            return NSItemProvider(object: toolId as NSString)
-                        }
-                        .onDrop(
-                            of: [.text],
-                            delegate: ToolDropDelegate(
-                                item: toolId,
-                                draggedItem: $draggedTool,
-                                toolOrderRaw: $toolOrderRaw,
-                                toolOrder: toolOrder
-                            ))
-                    }
-                }
-                .padding(12)
-                .frame(width: 220)
-            }
         }
     }
 
@@ -3957,78 +3833,6 @@ struct SidebarView: View {
             order.append(tool)
         }
         return order
-    }
-
-    private func toolIcon(for id: String) -> String {
-        switch id {
-        case "compare": return "square.split.2x1"
-        case "commands": return "command"
-        case "quizme": return "questionmark.bubble"
-        case "imagegen": return "paintbrush"
-        case "pdfcreator": return "doc.richtext"
-        case "webview": return "globe"
-        case "browserautomation": return "cursorarrow.motionlines.click"
-        default: return "questionmark"
-        }
-    }
-
-    private func toolLabel(for id: String) -> String {
-        switch id {
-        case "compare": return "Compare"
-        case "commands": return "Commands"
-        case "quizme": return "Quiz Me"
-        case "imagegen": return "Image Generation"
-        case "pdfcreator": return "File Creator"
-        case "webview": return "Web View"
-        case "browserautomation": return "Browser Automation"
-        default: return id
-        }
-    }
-
-    private func moveToolUp(_ toolId: String) {
-        var order = toolOrder
-        guard let idx = order.firstIndex(of: toolId), idx > 0 else { return }
-        order.swapAt(idx, idx - 1)
-        toolOrderRaw = order.joined(separator: ",")
-    }
-
-    private func moveToolDown(_ toolId: String) {
-        var order = toolOrder
-        guard let idx = order.firstIndex(of: toolId), idx < order.count - 1 else { return }
-        order.swapAt(idx, idx + 1)
-        toolOrderRaw = order.joined(separator: ",")
-    }
-
-    // MARK: - Tool Drag & Drop
-
-    struct ToolDropDelegate: DropDelegate {
-        let item: String
-        @Binding var draggedItem: String?
-        @Binding var toolOrderRaw: String
-        let toolOrder: [String]
-
-        func performDrop(info: DropInfo) -> Bool {
-            draggedItem = nil
-            return true
-        }
-
-        func dropEntered(info: DropInfo) {
-            guard let dragged = draggedItem, dragged != item else { return }
-            var order = toolOrder
-            guard let fromIndex = order.firstIndex(of: dragged),
-                let toIndex = order.firstIndex(of: item)
-            else { return }
-            withAnimation(.easeInOut(duration: 0.2)) {
-                order.move(
-                    fromOffsets: IndexSet(integer: fromIndex),
-                    toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
-                toolOrderRaw = order.joined(separator: ",")
-            }
-        }
-
-        func dropUpdated(info: DropInfo) -> DropProposal? {
-            return DropProposal(operation: .move)
-        }
     }
 
     var sectionHeader: some View {
@@ -7583,6 +7387,15 @@ struct SettingsView: View {
     @AppStorage("WebOverlayBackgroundOpacity") private var webOverlayBackgroundOpacity: Double =
         0.25
     @AppStorage("WebOverlayTintIntensity") private var webOverlayTintIntensity: Double = 0.5
+    @AppStorage("ShowCompare") private var showCompareTool: Bool = true
+    @AppStorage("ShowCommands") private var showCommandsTool: Bool = true
+    @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
+    @AppStorage("ShowImageGen") private var showImageGenTool: Bool = true
+    @AppStorage("ShowPDFCreator") private var showPDFCreatorTool: Bool = true
+    @AppStorage("ShowWebView") private var showWebViewTool: Bool = true
+    @AppStorage("ShowBrowserAutomation") private var showBrowserAutomationTool: Bool = true
+    @AppStorage("ToolOrder") private var toolOrderRaw: String =
+        "compare,commands,quizme,imagegen,pdfcreator,webview,browserautomation"
 
     @EnvironmentObject var chatManager: ChatManager
     @ObservedObject var ollamaManager = OllamaModelManager.shared
@@ -7828,6 +7641,132 @@ struct SettingsView: View {
                 .pickerStyle(.menu)
             }
         }
+
+        Section(header: Label("Sidebar Tools", systemImage: "slider.horizontal.3")) {
+            Toggle(isOn: $showCompareTool) {
+                Label("Compare", systemImage: "square.split.2x1")
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: $showCommandsTool) {
+                Label("Commands", systemImage: "command")
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: $showQuizMeTool) {
+                Label("Quiz Me", systemImage: "questionmark.bubble")
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: $showImageGenTool) {
+                Label("Image Generation", systemImage: "paintbrush")
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: $showPDFCreatorTool) {
+                Label("File Creator", systemImage: "doc.richtext")
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: $showWebViewTool) {
+                Label("Web View", systemImage: "globe")
+            }
+            .toggleStyle(.switch)
+
+            Toggle(isOn: $showBrowserAutomationTool) {
+                Label("Browser Automation", systemImage: "cursorarrow.motionlines.click")
+            }
+            .toggleStyle(.switch)
+
+            Divider()
+
+            Text("Tool Order")
+                .font(.callout.weight(.semibold))
+
+            ForEach(toolOrder, id: \.self) { toolId in
+                HStack(spacing: 10) {
+                    Image(systemName: toolIcon(for: toolId))
+                        .font(.system(size: 12))
+                        .frame(width: 16)
+                        .foregroundStyle(.secondary)
+
+                    Text(toolLabel(for: toolId))
+                        .font(.callout)
+
+                    Spacer()
+
+                    if let idx = toolOrder.firstIndex(of: toolId), idx > 0 {
+                        Button(action: { moveToolUp(toolId) }) {
+                            Image(systemName: "chevron.up")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+
+                    if let idx = toolOrder.firstIndex(of: toolId), idx < toolOrder.count - 1 {
+                        Button(action: { moveToolDown(toolId) }) {
+                            Image(systemName: "chevron.down")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    // MARK: - Sidebar Tools Preferences
+
+    private var toolOrder: [String] {
+        let raw = toolOrderRaw.split(separator: ",").map(String.init)
+        let allTools = [
+            "compare", "commands", "quizme", "imagegen", "pdfcreator", "webview",
+            "browserautomation",
+        ]
+        var order = raw.filter { allTools.contains($0) }
+        for tool in allTools where !order.contains(tool) {
+            order.append(tool)
+        }
+        return order
+    }
+
+    private func toolIcon(for id: String) -> String {
+        switch id {
+        case "compare": return "square.split.2x1"
+        case "commands": return "command"
+        case "quizme": return "questionmark.bubble"
+        case "imagegen": return "paintbrush"
+        case "pdfcreator": return "doc.richtext"
+        case "webview": return "globe"
+        case "browserautomation": return "cursorarrow.motionlines.click"
+        default: return "questionmark"
+        }
+    }
+
+    private func toolLabel(for id: String) -> String {
+        switch id {
+        case "compare": return "Compare"
+        case "commands": return "Commands"
+        case "quizme": return "Quiz Me"
+        case "imagegen": return "Image Generation"
+        case "pdfcreator": return "File Creator"
+        case "webview": return "Web View"
+        case "browserautomation": return "Browser Automation"
+        default: return id
+        }
+    }
+
+    private func moveToolUp(_ toolId: String) {
+        var order = toolOrder
+        guard let idx = order.firstIndex(of: toolId), idx > 0 else { return }
+        order.swapAt(idx, idx - 1)
+        toolOrderRaw = order.joined(separator: ",")
+    }
+
+    private func moveToolDown(_ toolId: String) {
+        var order = toolOrder
+        guard let idx = order.firstIndex(of: toolId), idx < order.count - 1 else { return }
+        order.swapAt(idx, idx + 1)
+        toolOrderRaw = order.joined(separator: ",")
     }
 
     // MARK: - Web Overlay Section
