@@ -11,7 +11,7 @@ class UpdateManager: ObservableObject {
     private let chromeZipName = "Chrome.zip"
     private let safariZipName = "Safari.zip"
     private let browserAutomationZipName = "BrowserAutomation.zip"
-    private let browserAutomationVersionFileName = "version.txt"
+    private let browserAutomationPackageFileName = "package.json"
 
     @Published var updateAvailable = false
     @Published var latestVersion: String = ""
@@ -237,9 +237,13 @@ class UpdateManager: ObservableObject {
     }
 
     private func readInstalledBrowserAutomationVersion() -> String {
-        let versionURL = browserAutomationInstallationDirectory()
-            .appendingPathComponent(browserAutomationVersionFileName)
-        guard let version = try? String(contentsOf: versionURL, encoding: .utf8) else { return "" }
+        let packageURL = browserAutomationInstallationDirectory()
+            .appendingPathComponent(browserAutomationPackageFileName)
+        guard
+            let data = try? Data(contentsOf: packageURL),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let version = json["version"] as? String
+        else { return "" }
         return version.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -494,10 +498,23 @@ class UpdateManager: ObservableObject {
                         withIntermediateDirectories: true,
                         attributes: nil)
                     try self.extractZip(from: localURL, to: installDirectory)
-                    let versionURL = installDirectory.appendingPathComponent(
-                        self.browserAutomationVersionFileName)
-                    try self.latestBrowserAutomationVersion.write(
-                        to: versionURL, atomically: true, encoding: .utf8)
+
+                    let packageURL = installDirectory.appendingPathComponent(
+                        self.browserAutomationPackageFileName)
+                    if let data = try? Data(contentsOf: packageURL),
+                        var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                    {
+                        json["version"] = self.latestBrowserAutomationVersion
+                        if let updatedData = try? JSONSerialization.data(
+                            withJSONObject: json,
+                            options: [.prettyPrinted, .sortedKeys]),
+                            let updatedText = String(data: updatedData, encoding: .utf8)
+                        {
+                            try updatedText.write(
+                                to: packageURL, atomically: true, encoding: .utf8)
+                        }
+                    }
+
                     self.browserAutomationUpdated = true
                     self.browserAutomationUpdateAvailable = false
                 } catch {
