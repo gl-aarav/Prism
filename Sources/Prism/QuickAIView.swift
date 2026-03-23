@@ -273,21 +273,6 @@ struct QuickAIView: View {
         chatManager.createNewSession()
     }
 
-    func getProviderIcon(_ provider: String) -> String {
-        let base = provider.split(separator: "|").first.map(String.init) ?? provider
-        switch base {
-        case "Apple Foundation": return "apple.logo"
-        case "On-Device": return "iphone"
-        case "Private Cloud": return "lock.icloud"
-        case "Gemini API": return "sparkles"
-        case "Ollama": return "laptopcomputer"
-        case "ChatGPT": return "message"
-        case "GitHub Copilot": return "chevron.left.forwardslash.chevron.right"
-        case "NVIDIA API": return "bolt.fill"
-        default: return "cpu"
-        }
-    }
-
     func providerDisplayName(_ provider: String) -> String {
         if provider.contains("|") {
             let parts = provider.split(separator: "|")
@@ -334,6 +319,29 @@ struct QuickAIView: View {
 
     private func customWebIcon(_ webView: CustomWebView) -> String {
         webView.icon ?? "globe"
+    }
+
+    @ViewBuilder
+    private func providerMenuLabel(_ title: String, provider: String) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            ProviderIconView(provider: provider, size: 15, darkModeWhite: true)
+        }
+    }
+
+    @ViewBuilder
+    private func dropdownCircleLabel(provider: String, key: String) -> some View {
+        HStack(spacing: 2) {
+            ProviderIconView(provider: provider, size: 14, darkModeWhite: true)
+            Image(systemName: dropdownChevron(key))
+                .font(.system(size: 8, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+        .padding(6)
+        .background(Circle().fill(Color.primary.opacity(0.06)))
+        .glassEffect(.regular, in: .circle)
     }
 
     private func dropdownChevron(_ key: String) -> String {
@@ -1911,9 +1919,7 @@ extension QuickAIView {
             Menu {
                 Section("Apple Intelligence") {
                     Button(action: { selectedProvider = "Apple Foundation" }) {
-                        Label(
-                            "Apple Foundation",
-                            systemImage: getProviderIcon("Apple Foundation"))
+                        providerMenuLabel("Apple Foundation", provider: "Apple Foundation")
                     }
                 }
 
@@ -1925,9 +1931,7 @@ extension QuickAIView {
                     Section("Gemini API") {
                         if geminiAccounts.count == 1 {
                             Button(action: { selectedProvider = "Gemini API" }) {
-                                Label(
-                                    geminiAccounts[0].displayName,
-                                    systemImage: getProviderIcon("Gemini API"))
+                                providerMenuLabel(geminiAccounts[0].displayName, provider: "Gemini API")
                             }
                         } else {
                             ForEach(Array(geminiAccounts.enumerated()), id: \.element.id) {
@@ -1935,9 +1939,7 @@ extension QuickAIView {
                                 Button(action: {
                                     selectedProvider = "Gemini API|\(account.id.uuidString)"
                                 }) {
-                                    Label(
-                                        account.displayName,
-                                        systemImage: getProviderIcon("Gemini API"))
+                                    providerMenuLabel(account.displayName, provider: "Gemini API")
                                 }
                             }
                         }
@@ -1950,9 +1952,7 @@ extension QuickAIView {
                     Section("Ollama") {
                         if ollamaAccounts.count == 1 {
                             Button(action: { selectedProvider = "Ollama" }) {
-                                Label(
-                                    ollamaAccounts[0].displayName,
-                                    systemImage: getProviderIcon("Ollama"))
+                                providerMenuLabel(ollamaAccounts[0].displayName, provider: "Ollama")
                             }
                         } else {
                             ForEach(Array(ollamaAccounts.enumerated()), id: \.element.id) {
@@ -1960,9 +1960,7 @@ extension QuickAIView {
                                 Button(action: {
                                     selectedProvider = "Ollama|\(account.id.uuidString)"
                                 }) {
-                                    Label(
-                                        account.displayName,
-                                        systemImage: getProviderIcon("Ollama"))
+                                    providerMenuLabel(account.displayName, provider: "Ollama")
                                 }
                             }
                         }
@@ -1977,9 +1975,7 @@ extension QuickAIView {
                     Section("NVIDIA API") {
                         if nvidiaAccounts.count == 1 {
                             Button(action: { selectedProvider = "NVIDIA API" }) {
-                                Label(
-                                    nvidiaAccounts[0].displayName,
-                                    systemImage: getProviderIcon("NVIDIA API"))
+                                providerMenuLabel(nvidiaAccounts[0].displayName, provider: "NVIDIA API")
                             }
                         } else {
                             ForEach(Array(nvidiaAccounts.enumerated()), id: \.element.id) {
@@ -1987,9 +1983,7 @@ extension QuickAIView {
                                 Button(action: {
                                     selectedProvider = "NVIDIA API|\(account.id.uuidString)"
                                 }) {
-                                    Label(
-                                        account.displayName,
-                                        systemImage: getProviderIcon("NVIDIA API"))
+                                    providerMenuLabel(account.displayName, provider: "NVIDIA API")
                                 }
                             }
                         }
@@ -2002,9 +1996,7 @@ extension QuickAIView {
                     Section("GitHub Copilot") {
                         if copilotAccounts.count <= 1 {
                             Button(action: { selectedProvider = "GitHub Copilot" }) {
-                                Label(
-                                    "GitHub Copilot",
-                                    systemImage: getProviderIcon("GitHub Copilot"))
+                                providerMenuLabel("GitHub Copilot", provider: "GitHub Copilot")
                             }
                         } else {
                             ForEach(copilotAccounts) { account in
@@ -2017,9 +2009,7 @@ extension QuickAIView {
                                     selectedProvider =
                                         "GitHub Copilot|\(account.id.uuidString)"
                                 }) {
-                                    Label(
-                                        label,
-                                        systemImage: getProviderIcon("GitHub Copilot"))
+                                    providerMenuLabel(label, provider: "GitHub Copilot")
                                 }
                             }
                         }
@@ -2028,22 +2018,18 @@ extension QuickAIView {
 
                 Section("Shortcuts") {
                     Button(action: { selectedProvider = "Private Cloud" }) {
-                        Label(
-                            "Private Cloud",
-                            systemImage: getProviderIcon("Private Cloud"))
+                        providerMenuLabel("Private Cloud", provider: "Private Cloud")
                     }
                     Button(action: { selectedProvider = "On-Device" }) {
-                        Label(
-                            "On-Device", systemImage: getProviderIcon("On-Device"))
+                        providerMenuLabel("On-Device", provider: "On-Device")
                     }
                     Button(action: { selectedProvider = "ChatGPT" }) {
-                        Label("ChatGPT", systemImage: getProviderIcon("ChatGPT"))
+                        providerMenuLabel("ChatGPT", provider: "ChatGPT")
                     }
                 }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: getProviderIcon(selectedProvider))
-                        .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)
+                    ProviderIconView(provider: selectedProvider, size: 16, darkModeWhite: true)
                     Text(providerDisplayName(selectedProvider))
                         .font(.headline)
                         .lineLimit(1)
@@ -2394,7 +2380,7 @@ extension QuickAIView {
                             Label("Add Custom Model...", systemImage: "plus")
                         }
                     } label: {
-                        dropdownCircleLabel(icon: "server.rack", key: "qa_ollama_model")
+                        dropdownCircleLabel(provider: "Ollama", key: "qa_ollama_model")
                     }
                     .menuStyle(.borderlessButton)
                     .buttonStyle(.plain)
@@ -2537,7 +2523,7 @@ extension QuickAIView {
                             Label("Add Custom Model...", systemImage: "plus")
                         }
                     } label: {
-                        dropdownCircleLabel(icon: "sparkles", key: "qa_gemini_model")
+                        dropdownCircleLabel(provider: "Gemini API", key: "qa_gemini_model")
                     }
                     .menuStyle(.borderlessButton)
                     .buttonStyle(.plain)
@@ -2744,14 +2730,14 @@ extension QuickAIView {
                                         Button(action: { selectedCopilotModel = model }) {
                                             if selectedCopilotModel == model {
                                                 Label(
-                                                    copilotModelManager.displayName(for: model),
+                                                    copilotModelManager.displayNameWithUsage(for: model),
                                                     systemImage: "checkmark"
                                                 )
                                                 .foregroundStyle(
                                                     colorScheme == .dark
                                                         ? Color.white : Color.primary)
                                             } else {
-                                                Text(copilotModelManager.displayName(for: model))
+                                                Text(copilotModelManager.displayNameWithUsage(for: model))
                                             }
                                         }
                                     }
@@ -2759,10 +2745,7 @@ extension QuickAIView {
                             }
                         }
                     } label: {
-                        dropdownCircleLabel(
-                            icon: "chevron.left.forwardslash.chevron.right",
-                            key: "qa_copilot_model"
-                        )
+                        dropdownCircleLabel(provider: "GitHub Copilot", key: "qa_copilot_model")
                     }
                     .menuStyle(.borderlessButton)
                     .buttonStyle(.plain)
@@ -2824,7 +2807,7 @@ extension QuickAIView {
                         }
 
                     } label: {
-                        dropdownCircleLabel(icon: "bolt.fill", key: "qa_nvidia_model")
+                        dropdownCircleLabel(provider: "NVIDIA API", key: "qa_nvidia_model")
                     }
                     .menuStyle(.borderlessButton)
                     .buttonStyle(.plain)

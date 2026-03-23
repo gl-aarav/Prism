@@ -1285,7 +1285,7 @@ struct PDFCreatorView: View {
 
             // Provider pill
             HStack(spacing: 4) {
-                Image(systemName: providerIcon)
+                Image(providerIcon: pdfProvider)
                     .font(.system(size: 10))
                 Text(pdfModel.count > 20 ? String(pdfModel.prefix(18)) + "…" : pdfModel)
                     .font(.system(size: 11, weight: .medium))
@@ -1831,13 +1831,13 @@ struct PDFCreatorView: View {
                                     pdfProvider = "GitHub Copilot"
                                     pdfModel = model
                                 }) {
-                                    Text(copilotModelManager.displayName(for: model))
+                                    Text(copilotModelManager.displayNameWithUsage(for: model))
                                 }
                             }
                         }
                     }
                 } label: {
-                    Image(systemName: providerIcon)
+                    Image(providerIcon: pdfProvider)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary)
                         .frame(width: 34, height: 34)

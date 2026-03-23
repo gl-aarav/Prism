@@ -582,8 +582,14 @@ class GitHubCopilotModelManager: ObservableObject {
         "claude-sonnet-4.5",
         "claude-sonnet-4",
         "claude-haiku-4.5",
-        // GPT-5 Series
+        // GPT-5 / Codex Series
+        "gpt-5.4-mini",
+        "gpt-5.3-codex",
+        "gpt-5.2-codex",
         "gpt-5.2",
+        "gpt-5.1-codex-max",
+        "gpt-5.1-codex",
+        "gpt-5.1-codex-mini",
         "gpt-5.1",
         "gpt-5-mini",
         "gpt-5",
@@ -626,7 +632,13 @@ class GitHubCopilotModelManager: ObservableObject {
         "claude-sonnet-4.5": "Claude Sonnet 4.5",
         "claude-sonnet-4": "Claude Sonnet 4",
         "claude-haiku-4.5": "Claude Haiku 4.5",
+        "gpt-5.4-mini": "GPT-5.4 Mini",
+        "gpt-5.3-codex": "GPT-5.3 Codex",
+        "gpt-5.2-codex": "GPT-5.2 Codex",
         "gpt-5.2": "GPT-5.2",
+        "gpt-5.1-codex-max": "GPT-5.1 Codex Max",
+        "gpt-5.1-codex": "GPT-5.1 Codex",
+        "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini",
         "gpt-5.1": "GPT-5.1",
         "gpt-5-mini": "GPT-5 Mini",
         "gpt-5": "GPT-5",
@@ -663,6 +675,10 @@ class GitHubCopilotModelManager: ObservableObject {
         return GitHubCopilotModelManager.displayNames[model] ?? model
     }
 
+    func displayNameWithUsage(for model: String) -> String {
+        "\(displayName(for: model)) (\(usageMultiplierLabel(for: model)))"
+    }
+
     func getProvider(for model: String) -> String {
         if model.hasPrefix("claude") { return "Anthropic" }
         if model.hasPrefix("gpt") { return "OpenAI" }
@@ -670,5 +686,77 @@ class GitHubCopilotModelManager: ObservableObject {
         if model.hasPrefix("grok") { return "xAI" }
         if model.hasPrefix("oswe") { return "OpenAI" }
         return "Other"
+    }
+
+    func usageMultiplier(for model: String) -> Double {
+        let lower = model.lowercased()
+
+        switch lower {
+        case "gpt-5-mini":
+            return 0
+        case "gpt-5.4-mini", "gpt-5.1-codex-mini":
+            return 0.33
+        case "claude-haiku-4.5":
+            return 0.33
+        case "grok-code-fast-1":
+            return 0.25
+        case "gpt-4.1", "gpt-4o", "gpt-4o-mini":
+            return 0
+        case let value where value.contains("opus") && value.contains("fast"):
+            return 30
+        case let value where value.contains("opus"):
+            return 3
+        case let value where value.contains("haiku"):
+            return 0.33
+        case let value where value.contains("flash-lite") || value.contains("flash-image")
+            || value.contains("flash")
+        :
+            return 0.33
+        case let value where value.contains("gemini-3.1-pro")
+            || value.contains("gemini-3-pro")
+            || value.contains("gemini-2.5-pro")
+        :
+            return 1
+        case let value where value.hasPrefix("gpt-5.3-codex"):
+            return 1
+        case let value where value.hasPrefix("gpt-5.2-codex"):
+            return 1
+        case let value where value.hasPrefix("gpt-5.1-codex-max"):
+            return 1
+        case let value where value.hasPrefix("gpt-5.1-codex"):
+            return 1
+        case let value where value.hasPrefix("gpt-5.2"):
+            return 1
+        case let value where value.hasPrefix("gpt-5.1"):
+            return 1
+        case "gpt-5":
+            return 1
+        default:
+            return 1
+        }
+    }
+
+    func usageMultiplierLabel(for model: String) -> String {
+        GitHubCopilotModelManager.formatUsageMultiplier(usageMultiplier(for: model))
+    }
+
+    private static let usageMultiplierFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        formatter.usesGroupingSeparator = false
+        return formatter
+    }()
+
+    static func formatUsageMultiplier(_ multiplier: Double) -> String {
+        if multiplier.rounded(.towardZero) == multiplier {
+            return "\(Int(multiplier))×"
+        }
+        let number = NSNumber(value: multiplier)
+        let formatted =
+            usageMultiplierFormatter.string(from: number) ?? String(format: "%.2f", multiplier)
+        return "\(formatted)×"
     }
 }
