@@ -162,6 +162,24 @@ struct WebOverlayView: View {
             .focusEffectDisabled()
             .disabled(!manager.canGoForward)
 
+            // Reload current page
+            Button {
+                manager.reloadCurrentPage()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24, height: 24)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                    )
+                    .glassEffect(.regular, in: .circle)
+            }
+            .buttonStyle(.plain)
+            .focusEffectDisabled()
+            .help("Reload")
+
             // New chat / root page button
             Button {
                 manager.navigateToHome()

@@ -265,6 +265,14 @@ class WebOverlayManager: ObservableObject {
         }
     }
 
+    func reloadCurrentPage() {
+        if currentItemId.hasPrefix("custom_") {
+            customWebViews[currentItemId]?.reload()
+        } else {
+            webViews[currentService]?.reload()
+        }
+    }
+
     func navigateToHome() {
         if currentItemId.hasPrefix("custom_") {
             if let item = allItems().first(where: { $0.id == currentItemId }) {
