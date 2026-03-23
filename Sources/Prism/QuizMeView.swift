@@ -307,7 +307,7 @@ struct QuizMeView: View {
 
             // Provider pill
             HStack(spacing: 4) {
-                Image(providerIcon: quizProvider)
+                Image(systemName: providerIcon)
                     .font(.system(size: 10))
                 Text(quizModel.count > 20 ? String(quizModel.prefix(18)) + "…" : quizModel)
                     .font(.system(size: 11, weight: .medium))
@@ -1299,13 +1299,13 @@ struct QuizMeView: View {
                                     quizProvider = "GitHub Copilot"
                                     quizModel = model
                                 }) {
-                                    Text(copilotModelManager.displayNameWithUsage(for: model))
+                                    Text(copilotModelManager.displayName(for: model))
                                 }
                             }
                         }
                     }
                 } label: {
-                    Image(providerIcon: quizProvider)
+                    Image(systemName: providerIcon)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary)
                         .frame(width: 34, height: 34)

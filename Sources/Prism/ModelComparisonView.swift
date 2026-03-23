@@ -490,10 +490,10 @@ struct ModelComparisonView: View {
                                         && synthesizeModel == model
                                     {
                                         Label(
-                                            copilotModelManager.displayNameWithUsage(for: model),
+                                            copilotModelManager.displayName(for: model),
                                             systemImage: "checkmark")
                                     } else {
-                                        Text(copilotModelManager.displayNameWithUsage(for: model))
+                                        Text(copilotModelManager.displayName(for: model))
                                     }
                                 }
                             }
@@ -524,7 +524,7 @@ struct ModelComparisonView: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(providerIcon: synthesizeProvider)
+                        Image(systemName: synthesizeProviderIcon)
                             .font(.system(size: 11, weight: .semibold))
                         Text("\(synthesizeProvider) — \(synthesizeModel)")
                             .font(.system(size: 12, weight: .medium))
@@ -1520,7 +1520,7 @@ struct ComparisonCard: View {
                 Circle()
                     .fill(accentColor.opacity(0.15))
                     .frame(width: 32, height: 32)
-                Image(providerIcon: slot.provider)
+                Image(systemName: providerIcon)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(accentColor)
             }
@@ -1784,10 +1784,10 @@ struct ComparisonCard: View {
                         Button(action: { onChangeProvider("GitHub Copilot", model) }) {
                             if slot.provider == "GitHub Copilot" && slot.model == model {
                                 Label(
-                                    copilotModelManager.displayNameWithUsage(for: model),
+                                    copilotModelManager.displayName(for: model),
                                     systemImage: "checkmark")
                             } else {
-                                Text(copilotModelManager.displayNameWithUsage(for: model))
+                                Text(copilotModelManager.displayName(for: model))
                             }
                         }
                     }

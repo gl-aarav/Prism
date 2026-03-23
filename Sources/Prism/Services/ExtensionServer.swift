@@ -77,7 +77,7 @@ class ExtensionServer {
                         allModels.append([
                             "id": "copilot:\(model)",
                             "name":
-                                "Copilot: \(GitHubCopilotModelManager.shared.displayNameWithUsage(for: model))",
+                                "Copilot: \(GitHubCopilotModelManager.shared.displayName(for: model))",
                         ])
                     }
                 } else {
@@ -90,7 +90,7 @@ class ExtensionServer {
                             allModels.append([
                                 "id": "copilot:\(model)|\(account.id.uuidString)",
                                 "name":
-                                    "\(prefix): \(GitHubCopilotModelManager.shared.displayNameWithUsage(for: model))",
+                                    "\(prefix): \(GitHubCopilotModelManager.shared.displayName(for: model))",
                             ])
                         }
                     }

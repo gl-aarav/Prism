@@ -2591,34 +2591,25 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
-    private func providerMenuLabel(_ title: String, provider: String) -> some View {
-        Label {
-            Text(title)
-        } icon: {
-            ProviderIconView(provider: provider, size: 15, darkModeWhite: true)
-        }
-    }
-
     private var webViewPickerPill: some View {
         Picker("Web View", selection: $toolSelectedWebView) {
-            providerMenuLabel("ChatGPT", provider: "ChatGPT Web")
+            Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
                 .tag("ChatGPT Web")
-            providerMenuLabel("Claude", provider: "Claude Web")
+            Label("Claude", systemImage: "brain.head.profile")
                 .tag("Claude Web")
-            providerMenuLabel("Gemini", provider: "Gemini Web")
+            Label("Gemini", systemImage: "sparkles")
                 .tag("Gemini Web")
-            providerMenuLabel("Perplexity", provider: "Perplexity Web")
+            Label("Perplexity", systemImage: "magnifyingglass")
                 .tag("Perplexity Web")
-            providerMenuLabel("Grok", provider: "Grok Web")
+            Label("Grok", systemImage: "bolt.horizontal")
                 .tag("Grok Web")
 
             Divider()
 
             ForEach(customWebViews()) { webView in
-                providerMenuLabel(
+                Label(
                     webView.name.isEmpty ? webView.url : webView.name,
-                    provider: "CustomWebView:\(webView.url)"
+                    systemImage: webView.icon ?? "globe"
                 )
                 .tag("CustomWebView:\(webView.url)")
             }
@@ -4305,15 +4296,6 @@ struct HeaderView: View {
     @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
     @State private var isProviderMenuOpen: Bool = false
 
-    @ViewBuilder
-    private func providerMenuLabel(_ title: String, provider: String) -> some View {
-        Label {
-            Text(title)
-        } icon: {
-            ProviderIconView(provider: provider, size: 15, darkModeWhite: true)
-        }
-    }
-
     private var customWebViews: [CustomWebView] {
         guard let data = customWebViewsJSON.data(using: .utf8),
             let views = try? JSONDecoder().decode([CustomWebView].self, from: data)
@@ -4326,7 +4308,7 @@ struct HeaderView: View {
             Menu {
                 Section("Apple Intelligence") {
                     Button(action: { selectedProvider = "Apple Foundation" }) {
-                        providerMenuLabel("Apple Foundation", provider: "Apple Foundation")
+                        Label("Apple Foundation", systemImage: getProviderIcon("Apple Foundation"))
                     }
                 }
 
@@ -4336,7 +4318,9 @@ struct HeaderView: View {
                     Section("Gemini API") {
                         if geminiAccounts.count == 1 {
                             Button(action: { selectedProvider = "Gemini API" }) {
-                                providerMenuLabel(geminiAccounts[0].displayName, provider: "Gemini API")
+                                Label(
+                                    geminiAccounts[0].displayName,
+                                    systemImage: getProviderIcon("Gemini API"))
                             }
                         } else {
                             ForEach(Array(geminiAccounts.enumerated()), id: \.element.id) {
@@ -4344,7 +4328,9 @@ struct HeaderView: View {
                                 Button(action: {
                                     selectedProvider = "Gemini API|\(account.id.uuidString)"
                                 }) {
-                                    providerMenuLabel(account.displayName, provider: "Gemini API")
+                                    Label(
+                                        account.displayName,
+                                        systemImage: getProviderIcon("Gemini API"))
                                 }
                             }
                         }
@@ -4357,7 +4343,9 @@ struct HeaderView: View {
                     Section("Ollama") {
                         if ollamaAccounts.count == 1 {
                             Button(action: { selectedProvider = "Ollama" }) {
-                                providerMenuLabel(ollamaAccounts[0].displayName, provider: "Ollama")
+                                Label(
+                                    ollamaAccounts[0].displayName,
+                                    systemImage: getProviderIcon("Ollama"))
                             }
                         } else {
                             ForEach(Array(ollamaAccounts.enumerated()), id: \.element.id) {
@@ -4365,7 +4353,8 @@ struct HeaderView: View {
                                 Button(action: {
                                     selectedProvider = "Ollama|\(account.id.uuidString)"
                                 }) {
-                                    providerMenuLabel(account.displayName, provider: "Ollama")
+                                    Label(
+                                        account.displayName, systemImage: getProviderIcon("Ollama"))
                                 }
                             }
                         }
@@ -4378,7 +4367,9 @@ struct HeaderView: View {
                     Section("NVIDIA API") {
                         if nvidiaAccounts.count == 1 {
                             Button(action: { selectedProvider = "NVIDIA API" }) {
-                                providerMenuLabel(nvidiaAccounts[0].displayName, provider: "NVIDIA API")
+                                Label(
+                                    nvidiaAccounts[0].displayName,
+                                    systemImage: getProviderIcon("NVIDIA API"))
                             }
                         } else {
                             ForEach(Array(nvidiaAccounts.enumerated()), id: \.element.id) {
@@ -4386,7 +4377,9 @@ struct HeaderView: View {
                                 Button(action: {
                                     selectedProvider = "NVIDIA API|\(account.id.uuidString)"
                                 }) {
-                                    providerMenuLabel(account.displayName, provider: "NVIDIA API")
+                                    Label(
+                                        account.displayName,
+                                        systemImage: getProviderIcon("NVIDIA API"))
                                 }
                             }
                         }
@@ -4399,7 +4392,9 @@ struct HeaderView: View {
                     Section("GitHub Copilot") {
                         if copilotAccounts.count <= 1 {
                             Button(action: { selectedProvider = "GitHub Copilot" }) {
-                                providerMenuLabel("GitHub Copilot", provider: "GitHub Copilot")
+                                Label(
+                                    "GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot")
+                                )
                             }
                         } else {
                             ForEach(copilotAccounts) { account in
@@ -4410,7 +4405,9 @@ struct HeaderView: View {
                                 Button(action: {
                                     selectedProvider = "GitHub Copilot|\(account.id.uuidString)"
                                 }) {
-                                    providerMenuLabel(label, provider: "GitHub Copilot")
+                                    Label(
+                                        label,
+                                        systemImage: getProviderIcon("GitHub Copilot"))
                                 }
                             }
                         }
@@ -4419,19 +4416,19 @@ struct HeaderView: View {
 
                 Section("Web View") {
                     Button(action: { selectedProvider = "ChatGPT Web" }) {
-                        providerMenuLabel("ChatGPT Web", provider: "ChatGPT Web")
+                        Label("ChatGPT Web", systemImage: getProviderIcon("ChatGPT Web"))
                     }
                     Button(action: { selectedProvider = "Claude Web" }) {
-                        providerMenuLabel("Claude Web", provider: "Claude Web")
+                        Label("Claude Web", systemImage: getProviderIcon("Claude Web"))
                     }
                     Button(action: { selectedProvider = "Gemini Web" }) {
-                        providerMenuLabel("Gemini Web", provider: "Gemini Web")
+                        Label("Gemini Web", systemImage: getProviderIcon("Gemini Web"))
                     }
                     Button(action: { selectedProvider = "Perplexity Web" }) {
-                        providerMenuLabel("Perplexity Web", provider: "Perplexity Web")
+                        Label("Perplexity Web", systemImage: getProviderIcon("Perplexity Web"))
                     }
                     Button(action: { selectedProvider = "Grok Web" }) {
-                        providerMenuLabel("Grok Web", provider: "Grok Web")
+                        Label("Grok Web", systemImage: getProviderIcon("Grok Web"))
                     }
 
                     if !customWebViews.isEmpty {
@@ -4439,7 +4436,10 @@ struct HeaderView: View {
                         ForEach(customWebViews) { webView in
                             let provider = "CustomWebView:\(webView.url)"
                             Button(action: { selectedProvider = provider }) {
-                                providerMenuLabel(webView.name.isEmpty ? webView.url : webView.name, provider: provider)
+                                Label(
+                                    webView.name.isEmpty ? webView.url : webView.name,
+                                    systemImage: getProviderIcon(provider)
+                                )
                             }
                         }
                     }
@@ -4447,19 +4447,23 @@ struct HeaderView: View {
 
                 Section("Shortcuts") {
                     Button(action: { selectedProvider = "Private Cloud" }) {
-                        providerMenuLabel("Private Cloud", provider: "Private Cloud")
+                        Label("Private Cloud", systemImage: getProviderIcon("Private Cloud"))
                     }
                     Button(action: { selectedProvider = "On-Device" }) {
-                        providerMenuLabel("On-Device", provider: "On-Device")
+                        Label("On-Device", systemImage: getProviderIcon("On-Device"))
                     }
                     Button(action: { selectedProvider = "ChatGPT" }) {
-                        providerMenuLabel("ChatGPT", provider: "ChatGPT")
+                        Label("ChatGPT", systemImage: getProviderIcon("ChatGPT"))
                     }
                 }
 
             } label: {
                 HStack(spacing: 6) {
-                    ProviderIconView(provider: selectedProvider, size: 16, darkModeWhite: true)
+                    Image(systemName: getProviderIcon(selectedProvider))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue, .green], startPoint: .topLeading,
+                                endPoint: .bottomTrailing))
                     Text(headerDisplayName(selectedProvider))
                         .font(.headline)
                         .foregroundStyle(.primary)
@@ -5326,10 +5330,10 @@ struct InputView: View {
                                         Button(action: { selectedCopilotModel = model }) {
                                             if selectedCopilotModel == model {
                                                 Label(
-                                                    copilotModelManager.displayNameWithUsage(for: model),
+                                                    copilotModelManager.displayName(for: model),
                                                     systemImage: "checkmark")
                                             } else {
-                                                Text(copilotModelManager.displayNameWithUsage(for: model))
+                                                Text(copilotModelManager.displayName(for: model))
                                             }
                                         }
                                     }
