@@ -708,14 +708,14 @@ class GitHubCopilotModelManager: ObservableObject {
             return 3
         case let value where value.contains("haiku"):
             return 0.33
-        case let value
-        where value.contains("flash-lite") || value.contains("flash-image")
-            || value.contains("flash"):
+        case let value where value.contains("flash-lite") || value.contains("flash-image")
+            || value.contains("flash")
+        :
             return 0.33
-        case let value
-        where value.contains("gemini-3.1-pro")
+        case let value where value.contains("gemini-3.1-pro")
             || value.contains("gemini-3-pro")
-            || value.contains("gemini-2.5-pro"):
+            || value.contains("gemini-2.5-pro")
+        :
             return 1
         case let value where value.hasPrefix("gpt-5.3-codex"):
             return 1
