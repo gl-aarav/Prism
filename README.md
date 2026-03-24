@@ -1,6 +1,6 @@
 # Prism - Your Ultimate Native AI Companion for macOS
 
-![Prism App Icon](AppIcon.png)
+![Window](Window.png)
 
 **Prism** is a powerful, native macOS application that brings modern AI directly to your desktop. Built with SwiftUI and designed with a stunning "Liquid Glass" and macOS Tahoe aesthetic, Prism integrates seamlessly into your Mac workflow. It offers a unified interface for Google Gemini, local Ollama models, Apple Foundation Models, and comprehensive system-wide AI writing assistance.
 
