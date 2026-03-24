@@ -8,39 +8,41 @@
 
 ## 🚀 Key Features
 
-### 🧠 Multi-Model Intelligence
-*   **Google Gemini**: Harness the power of Google's latest cloud models (Gemini 1.5 Pro/Flash) for complex reasoning, coding, and multimodal analysis.
-*   **GitHub Copilot Integration**: Seamlessly connect your GitHub Copilot subscription to access a wide range of top-tier models from OpenAI, Anthropic, and more directly within Prism.
-*   **NVIDIA NIM**: Access ultra-fast, high-performance models (Llama 3, Mistral) through NVIDIA's optimized infrastructure.
-*   **Ollama Integration**: Run privacy-focused local models (like Llama 3, DeepSeek, Mistral) directly on your machine. Zero data leaves your device.
-*   **Apple Foundation Models**: Access Apple's on-device foundation models (Apple Intelligence) for private, lightning-fast AI responses.
-*   **Apple Shortcuts**: Integrated system-wide triggers to invoke AI actions via the Shortcuts app.
+### 🧠 Multi-Model Intelligence (APIs)
+*   **Google Gemini**: Integrate your API key or use Gemini CLI. Includes support for Gemini 1.5 Pro, 1.5 Flash, and multimodal inputs (images, PDFs).
+*   **GitHub Copilot Integration**: Access industry-leading models like GPT-4, Claude 3.5 Sonnet, and others directly using your existing Copilot subscription.
+*   **NVIDIA NIM**: Connect your NVIDIA API key for high-performance cloud inference of Llama 3, Mistral, and more.
+*   **Ollama Integration**: Run strictly private local models on your machine (gemma, llama3, qwen, deepseek, mistral). Zero data leaves your device.
+*   **Apple Foundation Models**: Native on-device AI inference powered by Apple Intelligence directly on compatible Macs. Fast, private, and seamlessly integrated.
 
 ### ✍️ System-Wide AI Writing Layer
 Transform any text field on your Mac into an AI-powered workspace using macOS Accessibility APIs:
-*   **Inline AI Autocomplete**: Get intelligent, contextual text predictions and continuations directly at your cursor as you type in any application.
-*   **Global Command Bar (IntelliBar)**: Instantly summon a floating command bar to perform quick actions on selected text anywhere on your system.
-*   **Personalized Writing Style (Memory)**: Prism learns your unique writing style over time, adapting its suggestions to match your tone and vocabulary for truly personalized assistance.
-*   **Refinement Panel**: A dedicated interface for powerful text manipulations:
-    *   Rewrite and improve clarity
-    *   Summarize long content
-    *   Fix grammar and spelling
-    *   Translate between languages
-    *   Match specific writing styles
-    *   Generate new content or edit code
+*   **Inline AI Autocomplete**: Get intelligent, contextual text predictions directly at your cursor as you type in any application.
+*   **Global Command Bar (IntelliBar)**: Summon a floating command bar to perform quick actions on selected text anywhere on your system.
+*   **Personalized Writing Style**: Prism learns your unique writing style over time.
+*   **Refinement Panel**: Rewrite, summarize, fix grammar, translate, and more.
 
-### 🌐 Prism Browser Automation (Agentic Control)
-Navigate and control the web using AI agents. Prism includes a powerful browser automation engine (Playwright/Puppeteer) that allows you to:
-*   **Task-Based Browsing**: Give the AI a goal (e.g., "Find the cheapest flights to NYC") and watch it navigate, search, and extract information for you.
-*   **Real-time Interaction**: See exactly what the agent sees with live screenshots and a synchronized DOM tree view.
-*   **Multi-Tab Support**: The AI can manage multiple tabs and complex workflows across different websites.
+### 🌐 Prism Browser Automation (Playwright & Puppeteer)
+Prism includes a localized Node.js web automation server to control browsers agentically. Navigate, scrape, and interact with the web directly from the AI.
 
-**How to run it:**
-1. Ensure the main **Prism app** is running (it powers the local AI API).
-2. Open your terminal and navigate to the `BrowserAutomation` directory within the project folder.
-3. Run `npm install` to install the required dependencies (Playwright, Puppeteer, etc.).
-4. Run `npm start` to launch the automation server.
-5. Open your web browser and navigate to `http://localhost:9090` to access the Browser Automation UI.
+**How to set it up:**
+1. Ensure Prism is running (it provides the local REST API on `localhost:8080`).
+2. Open terminal: `cd BrowserAutomation`
+3. Install dependencies: `npm install`
+4. Start the automation server: `npm start`
+5. Open your web browser and navigate to `http://localhost:9090` to access the Browser Automation dashboard and WebSocket stream.
+6. Toggle between the **Playwright** and **Puppeteer** engines based on website compatibility.
+
+### 🧩 Browser Extensions (Chrome & Safari)
+Bring Prism's intelligence directly into your browser to enhance pages, extract context, and enable seamless agentic browser control.
+*   **Chrome Extension**: Located in `Extensions/Chrome/`. Go to `chrome://extensions/`, enable "Developer mode", and click "Load unpacked" pointing to the folder.
+*   **Safari Extension**: Located in `Extensions/Safari/`. Built seamlessly alongside the codebase with support for macOS native extension features.
+
+### ⚡ Apple Shortcuts Integration
+Automate your workflows! Prism embeds Shortcuts actions directly into macOS.
+*   Find pre-configured Shortcuts in the `Shortcuts/` directory.
+*   Includes `Ask AI Device`, `Ask AI Private`, `Ask ChatGPT`, `Generate Image ChatGPT`, and `Generate Image`.
+*   Double-click any `.shortcut` file to add it to your Shortcuts app, then assign to global hotkeys or Siri.
 
 ### 🖥️ Versatile Interfaces
 Prism adapts to how you work with multiple entry points, all **synchronized** in real-time:
