@@ -243,7 +243,8 @@ struct QuickToolsPanelBackground: View {
         return ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(Color.clear)
-                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+                .glassEffect(
+                    .regular, in: .rect(cornerRadius: cornerRadius, style: .continuous))
                 .opacity(
                     colorScheme == .dark
                         ? clampedBackgroundOpacity + 0.16

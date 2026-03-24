@@ -23,6 +23,8 @@ class QuickToolsManager: ObservableObject {
         panel.hasShadow = false
         panel.isReleasedWhenClosed = false
         panel.isMovableByWindowBackground = true
+        panel.minSize = NSSize(width: 600, height: 500)
+        panel.maxSize = NSSize(width: 1200, height: 900)
 
         let rootView = QuickToolsView()
             .edgesIgnoringSafeArea(.all)
