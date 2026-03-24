@@ -1347,130 +1347,132 @@ struct PDFCreatorView: View {
                 .offset(x: 80, y: 40)
                 .blur(radius: 35)
 
-            VStack(spacing: 24) {
-                Spacer()
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 24) {
+                    Spacer(minLength: 20)
 
-                ZStack {
-                    Circle()
-                        .fill(Color.clear)
-                        .frame(width: 82, height: 82)
-                        .glassEffect(.regular, in: .circle)
-                        .shadow(color: startColor.opacity(0.12), radius: 16, x: 0, y: 8)
+                    ZStack {
+                        Circle()
+                            .fill(Color.clear)
+                            .frame(width: 82, height: 82)
+                            .glassEffect(.regular, in: .circle)
+                            .shadow(color: startColor.opacity(0.12), radius: 16, x: 0, y: 8)
 
-                    Image(systemName: "doc.richtext.fill")
-                        .font(.system(size: 32, weight: .light))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [startColor, endColor],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                        Image(systemName: "doc.richtext.fill")
+                            .font(.system(size: 32, weight: .light))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [startColor, endColor],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                }
-
-                VStack(spacing: 8) {
-                    Text("AI File Creator")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [startColor, endColor],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    Text(
-                        "Describe what you need and AI will generate a formatted file"
-                    )
-                    .font(.system(size: 15, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary.opacity(0.7))
-                }
-
-                HStack(spacing: 8) {
-                    ForEach(["Markdown", "LaTeX", "Code", "Tables"], id: \.self) { feature in
-                        Text(feature)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary.opacity(0.6))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .glassEffect(.regular, in: .capsule)
                     }
-                }
-                .padding(.top, 2)
 
-                // Template suggestions
-                VStack(spacing: 8) {
-                    Text("Quick Start")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.secondary.opacity(0.5))
-                        .padding(.top, 8)
+                    VStack(spacing: 8) {
+                        Text("AI File Creator")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [startColor, endColor],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                        Text(
+                            "Describe what you need and AI will generate a formatted file"
+                        )
+                        .font(.system(size: 15, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary.opacity(0.7))
+                    }
 
-                    let templates: [(String, String, String)] = [
-                        ("doc.text", "Essay", "Write a well-structured essay about"),
-                        ("list.bullet", "Study Guide", "Create a comprehensive study guide for"),
-                        ("chart.bar", "Report", "Generate a professional report with data on"),
-                        (
-                            "chevron.left.forwardslash.chevron.right", "Code File",
-                            "Write clean, well-documented code for"
-                        ),
-                        ("globe", "Web Page", "Create an HTML page with CSS for"),
-                        ("tablecells", "CSV Data", "Generate a CSV dataset with sample data for"),
-                    ]
-
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8)], spacing: 8)
-                    {
-                        ForEach(templates, id: \.1) { icon, label, promptPrefix in
-                            Button(action: {
-                                prompt = promptPrefix + " "
-                                // Auto-set format based on template
-                                switch label {
-                                case "Code File": selectedFormat = "swift"
-                                case "Web Page": selectedFormat = "html"
-                                case "CSV Data": selectedFormat = "csv"
-                                default: selectedFormat = "pdf"
-                                }
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                                    isInputExpanded = true
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    isPromptFocused = true
-                                }
-                            }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: icon)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(startColor)
-                                    Text(label)
-                                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                                        .foregroundStyle(.primary.opacity(0.7))
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: 8) {
+                        ForEach(["Markdown", "LaTeX", "Code", "Tables"], id: \.self) { feature in
+                            Text(feature)
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary.opacity(0.6))
                                 .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .glassEffect(.regular, in: .rect(cornerRadius: 10))
-                            }
-                            .buttonStyle(.plain)
+                                .padding(.vertical, 6)
+                                .glassEffect(.regular, in: .capsule)
                         }
                     }
-                    .frame(maxWidth: 400)
-                }
-                .padding(.top, 4)
+                    .padding(.top, 2)
 
-                if let error = generationError {
-                    Text(error)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.red)
-                        .padding(10)
-                        .background(Color.red.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    // Template suggestions
+                    VStack(spacing: 8) {
+                        Text("Quick Start")
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.secondary.opacity(0.5))
+                            .padding(.top, 8)
+
+                        let templates: [(String, String, String)] = [
+                            ("doc.text", "Essay", "Write a well-structured essay about"),
+                            ("list.bullet", "Study Guide", "Create a comprehensive study guide for"),
+                            ("chart.bar", "Report", "Generate a professional report with data on"),
+                            (
+                                "chevron.left.forwardslash.chevron.right", "Code File",
+                                "Write clean, well-documented code for"
+                            ),
+                            ("globe", "Web Page", "Create an HTML page with CSS for"),
+                            ("tablecells", "CSV Data", "Generate a CSV dataset with sample data for"),
+                        ]
+
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8)], spacing: 8)
+                        {
+                            ForEach(templates, id: \.1) { icon, label, promptPrefix in
+                                Button(action: {
+                                    prompt = promptPrefix + " "
+                                    // Auto-set format based on template
+                                    switch label {
+                                    case "Code File": selectedFormat = "swift"
+                                    case "Web Page": selectedFormat = "html"
+                                    case "CSV Data": selectedFormat = "csv"
+                                    default: selectedFormat = "pdf"
+                                    }
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                                        isInputExpanded = true
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        isPromptFocused = true
+                                    }
+                                }) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: icon)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(startColor)
+                                        Text(label)
+                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .foregroundStyle(.primary.opacity(0.7))
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .glassEffect(.regular, in: .rect(cornerRadius: 10))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                         .frame(maxWidth: 400)
-                        .transition(.opacity)
-                }
+                    }
+                    .padding(.top, 4)
 
-                Spacer()
+                    if let error = generationError {
+                        Text(error)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.red)
+                            .padding(10)
+                            .background(Color.red.opacity(0.08))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .frame(maxWidth: 400)
+                            .transition(.opacity)
+                    }
+
+                    Spacer(minLength: 80)
+                }
+                .frame(maxWidth: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 60)
     }
 
     // MARK: - Generating View
