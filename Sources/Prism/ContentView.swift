@@ -7446,7 +7446,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case app = ""
         case overlays = "Overlays"
         case providers = "Providers"
-        case cli = "CLI"
         case web = "Web"
         case advanced = "Advanced"
     }
@@ -7455,8 +7454,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general, .sidebarTools, .appearance: return .app
         case .quickAI, .quickTools, .webOverlay: return .overlays
-        case .apis: return .providers
-        case .cli: return .cli
+        case .apis, .cli: return .providers
         case .customWebViews: return .web
         case .systemPrompt, .autocomplete, .downloads, .browserAutomation, .shortcuts, .updates,
             .dataPrivacy:
@@ -7569,7 +7567,13 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var updatesSection: some View {
-        Section(header: Label("Software Update", systemImage: "arrow.triangle.2.circlepath")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Software Update",
+                systemImage: "arrow.triangle.2.circlepath",
+                tint: .green,
+                description: "Version checks, release channel, and extension update paths."
+            ) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Current Version")
@@ -7675,6 +7679,10 @@ struct SettingsView: View {
                     .foregroundStyle(.red)
             }
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     // MARK: - Appearance Section
@@ -7683,7 +7691,13 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var appearanceSection: some View {
-        Section(header: Label("Appearance", systemImage: "paintbrush")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Appearance",
+                systemImage: "paintbrush",
+                tint: .pink,
+                description: "Theme, launch visuals, and background image."
+            ) {
             Toggle(isOn: $showSplashScreen) {
                 Label("Show Splash Screen on Launch", systemImage: "sparkles.rectangle.stack")
             }
@@ -7757,13 +7771,23 @@ struct SettingsView: View {
                 Label("Background Image", systemImage: "photo")
             }
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     // MARK: - General Section
 
     @ViewBuilder
     private var generalSection: some View {
-        Section(header: Label("General", systemImage: "gear")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "General",
+                systemImage: "gear",
+                tint: .gray,
+                description: "Menu bar presence and click behavior."
+            ) {
             Toggle(isOn: $showMenuBar) {
                 Label("Show Menu Bar Icon", systemImage: "menubar.rectangle")
             }
@@ -7786,11 +7810,21 @@ struct SettingsView: View {
                 .pickerStyle(.menu)
             }
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     @ViewBuilder
     private var sidebarToolsSection: some View {
-        Section(header: Label("Sidebar Tools", systemImage: "slider.horizontal.3")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Sidebar Tools",
+                systemImage: "slider.horizontal.3",
+                tint: .orange,
+                description: "Choose which tools appear in the app sidebar and reorder them."
+            ) {
             Toggle(isOn: $showCompareTool) {
                 Label("Compare", systemImage: "square.split.2x1")
             }
@@ -7868,6 +7902,10 @@ struct SettingsView: View {
                     ))
             }
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     // MARK: - Sidebar Tools Preferences
@@ -7962,7 +8000,13 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var webOverlaySection: some View {
-        Section(header: Label("Web Overlay", systemImage: "macwindow.on.rectangle")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Web Overlay",
+                systemImage: "macwindow.on.rectangle",
+                tint: .purple,
+                description: "Floating browser panel behavior, shortcut, and enabled services."
+            ) {
             Toggle(isOn: $enableWebOverlay) {
                 Label("Enable Web Overlay Hotkey", systemImage: "globe")
             }
@@ -8004,10 +8048,15 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
-        }
+            }
 
-        if enableWebOverlay {
-            Section(header: Label("Web Overlay Appearance", systemImage: "paintbrush")) {
+            if enableWebOverlay {
+                settingsCard(
+                    "Web Overlay Appearance",
+                    systemImage: "paintbrush",
+                    tint: .indigo,
+                    description: "Control the glass treatment and theme tint strength."
+                ) {
                 LabeledContent {
                     HStack {
                         Slider(
@@ -8044,14 +8093,24 @@ struct SettingsView: View {
                     Label("Theme Tint", systemImage: "paintbrush.pointed")
                 }
             }
+            }
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     // MARK: - Quick AI Section
 
     @ViewBuilder
     private var quickToolsSection: some View {
-        Section(header: Label("Quick Tools", systemImage: "briefcase")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Quick Tools",
+                systemImage: "briefcase",
+                tint: .orange,
+                description: "Global shortcut and dismissal behavior for the tools launcher."
+            ) {
             Toggle(isOn: $enableQuickTools) {
                 Label("Enable Quick Tools Hotkey", systemImage: "hammer")
             }
@@ -8069,10 +8128,15 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
             }
-        }
+            }
 
-        if enableQuickTools {
-            Section(header: Label("Quick Tools Appearance", systemImage: "paintbrush")) {
+            if enableQuickTools {
+                settingsCard(
+                    "Quick Tools Appearance",
+                    systemImage: "paintbrush",
+                    tint: .yellow,
+                    description: "Adjust the glass opacity and theme tint."
+                ) {
                 LabeledContent {
                     HStack {
                         Slider(
@@ -8109,12 +8173,22 @@ struct SettingsView: View {
                     Label("Theme Tint", systemImage: "paintbrush.pointed")
                 }
             }
+            }
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     @ViewBuilder
     private var quickAISection: some View {
-        Section(header: Label("Quick AI Settings", systemImage: "bolt.fill")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Quick AI Settings",
+                systemImage: "bolt.fill",
+                tint: .blue,
+                description: "Shortcut and dismissal behavior for Quick AI."
+            ) {
             Toggle(isOn: $enableQuickAI) {
                 Label("Enable Quick AI Hotkey", systemImage: "bolt.fill")
             }
@@ -8132,9 +8206,14 @@ struct SettingsView: View {
                 }
                 .toggleStyle(.switch)
             }
-        }
+            }
 
-        Section(header: Label("Quick AI Appearance", systemImage: "window.shade.open")) {
+            settingsCard(
+                "Quick AI Appearance",
+                systemImage: "window.shade.open",
+                tint: .cyan,
+                description: "Tune opacity, vibrancy, and tint across the Quick AI surfaces."
+            ) {
             LabeledContent {
                 HStack {
                     Slider(
@@ -8207,6 +8286,10 @@ struct SettingsView: View {
                 Label("Glass Tint", systemImage: "rectangle.on.rectangle")
             }
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     private func accounts(for provider: APIProviderDefinition) -> [ProviderAccount] {
@@ -9254,7 +9337,13 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var customProviderSection: some View {
-        Section(header: Label("Custom Web Views", systemImage: "macwindow")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Custom Web Views",
+                systemImage: "macwindow",
+                tint: .teal,
+                description: "Add custom destinations for the Web View tool."
+            ) {
             HStack {
                 Text("Add web-based AI chats to the Web View tool.")
                     .font(.caption)
@@ -9294,7 +9383,11 @@ struct SettingsView: View {
                     }
                 }
             }
+            }
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
         .sheet(isPresented: $showAddCustomWebView) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Add Custom Web View")
@@ -9427,7 +9520,13 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var systemPromptSection: some View {
-        Section(header: Label("System Prompt", systemImage: "text.quote")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "System Prompt",
+                systemImage: "text.quote",
+                tint: .yellow,
+                description: "Global instructions applied across chats."
+            ) {
             TextEditor(text: $systemPrompt)
                 .font(.system(.body, design: .monospaced))
                 .frame(height: 80)
@@ -9438,13 +9537,23 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     // MARK: - Autocomplete Sections
 
     @ViewBuilder
     private var autocompleteSections: some View {
-        Section(header: Label("AI Autocomplete", systemImage: "text.cursor")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "AI Autocomplete",
+                systemImage: "text.cursor",
+                tint: .mint,
+                description: "Enable autocomplete and control its shortcut."
+            ) {
             Toggle(
                 isOn: Binding(
                     get: { enableAutocomplete },
@@ -9469,10 +9578,15 @@ struct SettingsView: View {
                     Label("Toggle Shortcut", systemImage: "command")
                 }
             }
-        }
+            }
 
-        if enableAutocomplete {
-            Section(header: Label("Autocomplete Model", systemImage: "cpu")) {
+            if enableAutocomplete {
+                settingsCard(
+                    "Autocomplete Model",
+                    systemImage: "cpu",
+                    tint: .blue,
+                    description: "Choose the backend and model used for completions."
+                ) {
                 Picker(selection: $autocompleteBackend) {
                     ForEach(AutocompleteService.Backend.allCases) { backend in
                         Text(backend.rawValue).tag(backend.rawValue)
@@ -9508,9 +9622,14 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-            }
+                }
 
-            Section(header: Label("Completion Settings", systemImage: "text.alignleft")) {
+                settingsCard(
+                    "Completion Settings",
+                    systemImage: "text.alignleft",
+                    tint: .indigo,
+                    description: "Control how long generated completions can be."
+                ) {
                 Picker(selection: $autocompleteCompletionLength) {
                     ForEach(
                         ["Short (~ 1 - 2 words)", "Medium (~ 2 - 4 words)", "Long (~ 5+ words)"],
@@ -9524,9 +9643,14 @@ struct SettingsView: View {
                 Text("Controls how long generated completions can be.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
+                }
 
-            Section(header: Label("Autocomplete Behavior", systemImage: "slider.horizontal.3")) {
+                settingsCard(
+                    "Autocomplete Behavior",
+                    systemImage: "slider.horizontal.3",
+                    tint: .purple,
+                    description: "Delay, persona, and per-app exclusions."
+                ) {
                 LabeledContent {
                     HStack {
                         Slider(
@@ -9635,9 +9759,14 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
-            }
+                }
 
-            Section(header: Label("Writing Memory", systemImage: "brain")) {
+                settingsCard(
+                    "Writing Memory",
+                    systemImage: "brain",
+                    tint: .orange,
+                    description: "Store accepted suggestions temporarily to match your style."
+                ) {
                 Toggle(isOn: $autocompleteMemory) {
                     Label("Learn Writing Style", systemImage: "memorychip")
                 }
@@ -9663,14 +9792,24 @@ struct SettingsView: View {
                     }
                 }
             }
+            }
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     // MARK: - File Downloads Section
 
     @ViewBuilder
     private var fileDownloadsSection: some View {
-        Section(header: Label("File Downloads", systemImage: "arrow.down.doc")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "File Downloads",
+                systemImage: "arrow.down.doc",
+                tint: .blue,
+                description: "Choose where generated files are saved."
+            ) {
             LabeledContent {
                 HStack {
                     TextField("", text: $imageDownloadPath)
@@ -9701,13 +9840,23 @@ struct SettingsView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     // MARK: - Browser Automation Section
 
     @ViewBuilder
     private var browserAutomationSettingsSection: some View {
-        Section(header: Label("Browser Automation", systemImage: "play.desktopcomputer")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Browser Automation",
+                systemImage: "play.desktopcomputer",
+                tint: .orange,
+                description: "Point Prism at a custom BrowserAutomation server checkout."
+            ) {
             LabeledContent {
                 HStack {
                     TextField("", text: $browserAutomationPath)
@@ -9744,13 +9893,23 @@ struct SettingsView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     // MARK: - Apple Shortcuts Section
 
     @ViewBuilder
     private var shortcutsSection: some View {
-        Section(header: Label("Apple Shortcuts", systemImage: "command")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Apple Shortcuts",
+                systemImage: "command",
+                tint: .gray,
+                description: "Names Prism uses to target your installed Shortcuts."
+            ) {
             LabeledContent {
                 TextField("", text: $shortcutPrivateCloud)
                     .textFieldStyle(.roundedBorder)
@@ -9782,13 +9941,23 @@ struct SettingsView: View {
                 Label("Image Gen (ChatGPT)", systemImage: "photo.badge.plus")
             }
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     // MARK: - Data Section
 
     @ViewBuilder
     private var dataSection: some View {
-        Section(header: Label("Data & Privacy", systemImage: "externaldrive")) {
+        VStack(alignment: .leading, spacing: 18) {
+            settingsCard(
+                "Data & Privacy",
+                systemImage: "externaldrive",
+                tint: .red,
+                description: "Local data controls and destructive cleanup actions."
+            ) {
             Button(role: .destructive) {
                 chatManager.deleteAllSessions()
             } label: {
@@ -9796,6 +9965,10 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     @AppStorage("SelectedSettingsTab") private var selectedTab: SettingsTab = .general
@@ -9806,6 +9979,66 @@ struct SettingsView: View {
 
     private var settingsTintEnd: Color {
         (appTheme.colors.last ?? .green).opacity(0.1)
+    }
+
+    @ViewBuilder
+    private func settingsCard<Content: View>(
+        _ title: String,
+        systemImage: String,
+        tint: Color,
+        description: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [tint.opacity(0.95), tint.opacity(0.55)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    Image(systemName: systemImage)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 46, height: 46)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+
+                    if let description, !description.isEmpty {
+                        Text(description)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+
+            content()
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.74), tint.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .stroke(Color.white.opacity(0.42), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 16, y: 8)
     }
 
     @ViewBuilder
@@ -9895,121 +10128,113 @@ struct SettingsView: View {
             .padding(.top, 26)
             .padding(.bottom, 10)
 
-            if selectedTab == .apis || selectedTab == .cli {
-                ScrollView {
-                    contentForTab(selectedTab)
-                }
-                .sheet(
-                    isPresented: Binding(
-                        get: { addAPIProviderID != nil },
-                        set: { isPresented in
-                            if !isPresented {
+            ScrollView {
+                contentForTab(selectedTab)
+            }
+            .safeAreaPadding(.bottom, 10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .sheet(
+                isPresented: Binding(
+                    get: { addAPIProviderID != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            addAPIProviderID = nil
+                            resetAddAPIProviderDrafts()
+                        }
+                    }
+                )
+            ) {
+                if let providerID = addAPIProviderID,
+                    let provider = APIProviderRegistry.provider(for: providerID)
+                {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Add \(provider.title)")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+
+                        SecureField("API Key", text: $draftAPIKey)
+                            .textFieldStyle(.roundedBorder)
+
+                        if provider.accountType == .customapi {
+                            TextField("Base URL", text: $draftAPIEndpoint)
+                                .textFieldStyle(.roundedBorder)
+                        }
+
+                        Picker("Model", selection: $draftModelChoiceMode) {
+                            if !provider.presetModels.isEmpty {
+                                Text(provider.presetModeLabel).tag("preset")
+                            }
+                            Text("Custom Model").tag("custom")
+                        }
+                        .pickerStyle(.segmented)
+
+                        if draftModelChoiceMode == "preset" && !provider.presetModels.isEmpty {
+                            Picker("Preset", selection: $draftProviderPresetModel) {
+                                ForEach(provider.presetModels, id: \.self) { model in
+                                    Text(model).tag(model)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        } else {
+                            TextField(provider.customPlaceholder, text: $draftProviderCustomModel)
+                                .textFieldStyle(.roundedBorder)
+                        }
+
+                        HStack {
+                            Spacer()
+                            Button("Cancel") {
                                 addAPIProviderID = nil
                                 resetAddAPIProviderDrafts()
                             }
+                            Button("Save") {
+                                saveAddedProvider(provider)
+                            }
+                            .keyboardShortcut(.defaultAction)
                         }
-                    )
-                ) {
-                    if let providerID = addAPIProviderID,
-                        let provider = APIProviderRegistry.provider(for: providerID)
-                    {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Add \(provider.title)")
-                                .font(.system(size: 18, weight: .bold, design: .rounded))
-
-                            SecureField("API Key", text: $draftAPIKey)
-                                .textFieldStyle(.roundedBorder)
-
-                            if provider.accountType == .customapi {
-                                TextField("Base URL", text: $draftAPIEndpoint)
-                                    .textFieldStyle(.roundedBorder)
-                            }
-
-                            Picker("Model", selection: $draftModelChoiceMode) {
-                                if !provider.presetModels.isEmpty {
-                                    Text(provider.presetModeLabel).tag("preset")
-                                }
-                                Text("Custom Model").tag("custom")
-                            }
-                            .pickerStyle(.segmented)
-
-                            if draftModelChoiceMode == "preset" && !provider.presetModels.isEmpty {
-                                Picker("Preset", selection: $draftProviderPresetModel) {
-                                    ForEach(provider.presetModels, id: \.self) { model in
-                                        Text(model).tag(model)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                            } else {
-                                TextField(provider.customPlaceholder, text: $draftProviderCustomModel)
-                                    .textFieldStyle(.roundedBorder)
-                            }
-
-                            HStack {
-                                Spacer()
-                                Button("Cancel") {
-                                    addAPIProviderID = nil
-                                    resetAddAPIProviderDrafts()
-                                }
-                                Button("Save") {
-                                    saveAddedProvider(provider)
-                                }
-                                .keyboardShortcut(.defaultAction)
-                            }
-                        }
-                        .padding(18)
-                        .frame(width: 320)
                     }
+                    .padding(18)
+                    .frame(width: 320)
                 }
-                .sheet(
-                    isPresented: Binding(
-                        get: { customModelProviderID != nil },
-                        set: { isPresented in
-                            if !isPresented {
+            }
+            .sheet(
+                isPresented: Binding(
+                    get: { customModelProviderID != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            customModelProviderID = nil
+                            draftCustomProviderModel = ""
+                        }
+                    }
+                )
+            ) {
+                if let providerID = customModelProviderID,
+                    let provider = APIProviderRegistry.provider(for: providerID)
+                {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Add Custom Model")
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                        Text(provider.title)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        TextField(provider.customPlaceholder, text: $draftCustomProviderModel)
+                            .textFieldStyle(.roundedBorder)
+                        HStack {
+                            Spacer()
+                            Button("Cancel") {
                                 customModelProviderID = nil
                                 draftCustomProviderModel = ""
                             }
-                        }
-                    )
-                ) {
-                    if let providerID = customModelProviderID,
-                        let provider = APIProviderRegistry.provider(for: providerID)
-                    {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("Add Custom Model")
-                                .font(.system(size: 20, weight: .bold, design: .rounded))
-                            Text(provider.title)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            TextField(provider.customPlaceholder, text: $draftCustomProviderModel)
-                                .textFieldStyle(.roundedBorder)
-                            HStack {
-                                Spacer()
-                                Button("Cancel") {
-                                    customModelProviderID = nil
-                                    draftCustomProviderModel = ""
-                                }
-                                Button("Add") {
-                                    apiProviderModelStore.addCustomModel(
-                                        draftCustomProviderModel, for: provider)
-                                    customModelProviderID = nil
-                                    draftCustomProviderModel = ""
-                                }
-                                .keyboardShortcut(.defaultAction)
+                            Button("Add") {
+                                apiProviderModelStore.addCustomModel(
+                                    draftCustomProviderModel, for: provider)
+                                customModelProviderID = nil
+                                draftCustomProviderModel = ""
                             }
+                            .keyboardShortcut(.defaultAction)
                         }
-                        .padding(18)
-                        .frame(width: 300)
                     }
+                    .padding(18)
+                    .frame(width: 300)
                 }
-            } else {
-                Form {
-                    contentForTab(selectedTab)
-                }
-                .formStyle(.grouped)
-                .scrollContentBackground(.hidden)
-                .safeAreaPadding(.bottom, 10)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
