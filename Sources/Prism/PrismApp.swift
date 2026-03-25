@@ -24,6 +24,7 @@ struct PrismApp: App {
         }
         .defaultSize(width: 760, height: 820)
         .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentSize)
 
         Window(" ", id: "browser-automation") {
             BrowserAutomationView()
@@ -241,12 +242,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !window.styleMask.contains(.fullSizeContentView) {
             window.styleMask.insert(.fullSizeContentView)
         }
-        if window.styleMask.contains(.resizable) {
-            window.styleMask.remove(.resizable)
-        }
-        if window.styleMask.contains(.miniaturizable) {
-            window.styleMask.remove(.miniaturizable)
-        }
         if window.isOpaque {
             window.isOpaque = false
         }
@@ -256,15 +251,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if let closeBtn = window.standardWindowButton(.closeButton) {
             if closeBtn.isHidden { closeBtn.isHidden = false }
-            if !closeBtn.isEnabled { closeBtn.isEnabled = true }
         }
         if let minBtn = window.standardWindowButton(.miniaturizeButton) {
             if minBtn.isHidden { minBtn.isHidden = false }
-            if minBtn.isEnabled { minBtn.isEnabled = false }
         }
         if let zoomBtn = window.standardWindowButton(.zoomButton) {
             if zoomBtn.isHidden { zoomBtn.isHidden = false }
-            if zoomBtn.isEnabled { zoomBtn.isEnabled = false }
         }
 
         if window.titlebarSeparatorStyle != .none {

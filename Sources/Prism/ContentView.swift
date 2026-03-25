@@ -10053,7 +10053,7 @@ struct SettingsView: View {
                 .padding(.top, 12)
 
         }
-        .frame(minWidth: 600, idealWidth: 640, minHeight: 640, idealHeight: 700)
+        .frame(width: 760, height: 820)
         .background(Color.clear)
         .ignoresSafeArea(.all)
         .toolbarBackground(.hidden, for: .windowToolbar)
@@ -10087,25 +10087,15 @@ struct SettingsView: View {
                     window.backgroundColor = .clear
                     window.isOpaque = false  // crucial for removing the opaque window background
 
-                    // Show all traffic lights, but keep yellow/green de-colored.
-                    if window.styleMask.contains(.resizable) {
-                        window.styleMask.remove(.resizable)
-                    }
-                    if window.styleMask.contains(.miniaturizable) {
-                        window.styleMask.remove(.miniaturizable)
-                    }
-
+                    // Show all traffic lights
                     if let closeBtn = window.standardWindowButton(.closeButton) {
                         if closeBtn.isHidden { closeBtn.isHidden = false }
-                        if !closeBtn.isEnabled { closeBtn.isEnabled = true }
                     }
                     if let minBtn = window.standardWindowButton(.miniaturizeButton) {
                         if minBtn.isHidden { minBtn.isHidden = false }
-                        if minBtn.isEnabled { minBtn.isEnabled = false }
                     }
                     if let zoomBtn = window.standardWindowButton(.zoomButton) {
                         if zoomBtn.isHidden { zoomBtn.isHidden = false }
-                        if zoomBtn.isEnabled { zoomBtn.isEnabled = false }
                     }
 
                     if window.titlebarSeparatorStyle != .none {
