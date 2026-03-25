@@ -2120,7 +2120,7 @@ struct ContentView: View {
     @State private var showCommands: Bool = false
     @State private var showQuizMe: Bool = false
     @State private var showImageGen: Bool = false
-    @State private var showPDFCreator: Bool = false
+    @State private var showFileCreator: Bool = false
     @State private var showWebView: Bool = false
     @State private var showBrowserAutomation: Bool = false
     @AppStorage("ToolSelectedWebView") private var toolSelectedWebView: String = "ChatGPT Web"
@@ -2218,7 +2218,7 @@ struct ContentView: View {
                     showCommands: $showCommands,
                     showQuizMe: $showQuizMe,
                     showImageGen: $showImageGen,
-                    showPDFCreator: $showPDFCreator,
+                    showFileCreator: $showFileCreator,
                     showWebView: $showWebView,
                     showBrowserAutomation: $showBrowserAutomation)
             } detail: {
@@ -2401,12 +2401,12 @@ struct ContentView: View {
                         }
                         .opacity(
                             showCommands || showModelComparison || showQuizMe || showImageGen
-                                || showPDFCreator || showImageGallery || showWebView
+                                || showFileCreator || showImageGallery || showWebView
                                 || showBrowserAutomation ? 0 : 1
                         )
                         .allowsHitTesting(
                             !(showCommands || showModelComparison || showQuizMe || showImageGen
-                                || showPDFCreator || showImageGallery || showWebView
+                                || showFileCreator || showImageGallery || showWebView
                                 || showBrowserAutomation)
                         )
                         .transaction { t in t.animation = nil }
@@ -2428,8 +2428,8 @@ struct ContentView: View {
                             ImageGenerationView()
                                 .transition(.opacity)
                         }
-                        if showPDFCreator {
-                            PDFCreatorView()
+                        if showFileCreator {
+                            FileCreatorView()
                                 .transition(.opacity)
                         }
                         if showImageGallery {
@@ -2509,7 +2509,7 @@ struct ContentView: View {
             .onChange(of: showImageGen) { _, val in
                 updateActiveToolName()
             }
-            .onChange(of: showPDFCreator) { _, val in
+            .onChange(of: showFileCreator) { _, val in
                 updateActiveToolName()
             }
             .onChange(of: showWebView) { _, val in
@@ -2529,7 +2529,7 @@ struct ContentView: View {
                     toolSelectedWebView = newProvider
                     withAnimation {
                         showWebView = true
-                        showPDFCreator = false
+                        showFileCreator = false
                         showImageGen = false
                         showQuizMe = false
                         showCommands = false
@@ -2701,7 +2701,7 @@ struct ContentView: View {
             activeToolName = "Quiz Me"
         } else if showImageGen {
             activeToolName = "Image Generation"
-        } else if showPDFCreator {
+        } else if showFileCreator {
             activeToolName = "File Creator"
         } else if showWebView {
             activeToolName = "Web View"
@@ -2854,7 +2854,7 @@ struct ContentView: View {
         // Don't send to AI when a tool is active
         guard
             !showCommands && !showModelComparison && !showQuizMe && !showImageGen
-                && !showPDFCreator && !showWebView && !showImageGallery
+                && !showFileCreator && !showWebView && !showImageGallery
         else { return }
         guard
             !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -3598,7 +3598,7 @@ struct SidebarView: View {
     @Binding var showCommands: Bool
     @Binding var showQuizMe: Bool
     @Binding var showImageGen: Bool
-    @Binding var showPDFCreator: Bool
+    @Binding var showFileCreator: Bool
     @Binding var showWebView: Bool
     @Binding var showBrowserAutomation: Bool
     @Namespace private var animation
@@ -3607,11 +3607,11 @@ struct SidebarView: View {
     @AppStorage("ShowCommands") private var showCommandsTool: Bool = true
     @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
     @AppStorage("ShowImageGen") private var showImageGenTool: Bool = true
-    @AppStorage("ShowPDFCreator") private var showPDFCreatorTool: Bool = true
+    @AppStorage("ShowFileCreator") private var showFileCreatorTool: Bool = true
     @AppStorage("ShowWebView") private var showWebViewTool: Bool = true
     @AppStorage("ShowBrowserAutomation") private var showBrowserAutomationTool: Bool = true
     @AppStorage("ToolOrder") private var toolOrderRaw: String =
-        "compare,commands,quizme,imagegen,pdfcreator,webview,browserautomation"
+        "compare,commands,quizme,imagegen,filecreator,webview,browserautomation"
 
     @State private var searchText: String = ""
     @State private var isSearchVisible: Bool = false
@@ -3642,7 +3642,7 @@ struct SidebarView: View {
                 showCommands = false
                 showQuizMe = false
                 showImageGen = false
-                showPDFCreator = false
+                showFileCreator = false
                 showWebView = false
                 showBrowserAutomation = false
                 chatManager.createNewSession()
@@ -3736,7 +3736,7 @@ struct SidebarView: View {
                                         showCommands = false
                                         showQuizMe = false
                                         showImageGen = false
-                                        showPDFCreator = false
+                                        showFileCreator = false
                                         showWebView = false
                                         showBrowserAutomation = false
                                         chatManager.currentSessionId = session.id
@@ -3802,7 +3802,7 @@ struct SidebarView: View {
                     showCommands = false
                     showQuizMe = false
                     showImageGen = false
-                    showPDFCreator = false
+                    showFileCreator = false
                     showWebView = false
                     showBrowserAutomation = false
                     chatManager.currentSessionId = nil
@@ -3839,7 +3839,7 @@ struct SidebarView: View {
                             showCommands = false
                             showQuizMe = false
                             showImageGen = false
-                            showPDFCreator = false
+                            showFileCreator = false
                             showWebView = false
                             showBrowserAutomation = false
                             chatManager.currentSessionId = nil
@@ -3853,7 +3853,7 @@ struct SidebarView: View {
                             showImageGallery = false
                             showQuizMe = false
                             showImageGen = false
-                            showPDFCreator = false
+                            showFileCreator = false
                             showWebView = false
                             showBrowserAutomation = false
                             chatManager.currentSessionId = nil
@@ -3869,7 +3869,7 @@ struct SidebarView: View {
                             showModelComparison = false
                             showImageGallery = false
                             showImageGen = false
-                            showPDFCreator = false
+                            showFileCreator = false
                             showWebView = false
                             showBrowserAutomation = false
                             chatManager.currentSessionId = nil
@@ -3885,18 +3885,18 @@ struct SidebarView: View {
                             showCommands = false
                             showModelComparison = false
                             showImageGallery = false
-                            showPDFCreator = false
+                            showFileCreator = false
                             showWebView = false
                             showBrowserAutomation = false
                             chatManager.currentSessionId = nil
                         }
                     }
-                } else if toolId == "pdfcreator" && showPDFCreatorTool {
+                } else if toolId == "filecreator" && showFileCreatorTool {
                     SidebarItem(
-                        icon: "doc.richtext", title: "File Creator", isSelected: showPDFCreator
+                        icon: "doc.richtext", title: "File Creator", isSelected: showFileCreator
                     ) {
                         withAnimation {
-                            showPDFCreator = true
+                            showFileCreator = true
                             showImageGen = false
                             showQuizMe = false
                             showCommands = false
@@ -3913,7 +3913,7 @@ struct SidebarView: View {
                     ) {
                         withAnimation {
                             showWebView = true
-                            showPDFCreator = false
+                            showFileCreator = false
                             showImageGen = false
                             showQuizMe = false
                             showCommands = false
@@ -3932,7 +3932,7 @@ struct SidebarView: View {
                         withAnimation {
                             showBrowserAutomation = true
                             showWebView = false
-                            showPDFCreator = false
+                            showFileCreator = false
                             showImageGen = false
                             showQuizMe = false
                             showCommands = false
@@ -3951,7 +3951,7 @@ struct SidebarView: View {
     private var toolOrder: [String] {
         let raw = toolOrderRaw.split(separator: ",").map(String.init)
         let allTools = [
-            "compare", "commands", "quizme", "imagegen", "pdfcreator", "webview",
+            "compare", "commands", "quizme", "imagegen", "filecreator", "webview",
             "browserautomation",
         ]
         // Ensure all tools are present (handle new tools added after first save)
@@ -4000,7 +4000,7 @@ struct SidebarView: View {
                 showCommands = false
                 showQuizMe = false
                 showImageGen = false
-                showPDFCreator = false
+                showFileCreator = false
                 showWebView = false
                 showBrowserAutomation = false
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
@@ -7526,11 +7526,11 @@ struct SettingsView: View {
     @AppStorage("ShowCommands") private var showCommandsTool: Bool = true
     @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
     @AppStorage("ShowImageGen") private var showImageGenTool: Bool = true
-    @AppStorage("ShowPDFCreator") private var showPDFCreatorTool: Bool = true
+    @AppStorage("ShowFileCreator") private var showFileCreatorTool: Bool = true
     @AppStorage("ShowWebView") private var showWebViewTool: Bool = true
     @AppStorage("ShowBrowserAutomation") private var showBrowserAutomationTool: Bool = true
     @AppStorage("ToolOrder") private var toolOrderRaw: String =
-        "compare,commands,quizme,imagegen,pdfcreator,webview,browserautomation"
+        "compare,commands,quizme,imagegen,filecreator,webview,browserautomation"
     @State private var draggedTool: String? = nil
 
     @EnvironmentObject var chatManager: ChatManager
@@ -7802,7 +7802,7 @@ struct SettingsView: View {
             }
             .toggleStyle(.switch)
 
-            Toggle(isOn: $showPDFCreatorTool) {
+            Toggle(isOn: $showFileCreatorTool) {
                 Label("File Creator", systemImage: "doc.richtext")
             }
             .toggleStyle(.switch)
@@ -7866,7 +7866,7 @@ struct SettingsView: View {
     private var toolOrder: [String] {
         let raw = toolOrderRaw.split(separator: ",").map(String.init)
         let allTools = [
-            "compare", "commands", "quizme", "imagegen", "pdfcreator", "webview",
+            "compare", "commands", "quizme", "imagegen", "filecreator", "webview",
             "browserautomation",
         ]
         var order = raw.filter { allTools.contains($0) }
@@ -7882,7 +7882,7 @@ struct SettingsView: View {
         case "commands": return "command"
         case "quizme": return "questionmark.bubble"
         case "imagegen": return "paintbrush"
-        case "pdfcreator": return "doc.richtext"
+        case "filecreator": return "doc.richtext"
         case "webview": return "globe"
         case "browserautomation": return "cursorarrow.motionlines.click"
         default: return "questionmark"
@@ -7895,7 +7895,7 @@ struct SettingsView: View {
         case "commands": return "Commands"
         case "quizme": return "Quiz Me"
         case "imagegen": return "Image Generation"
-        case "pdfcreator": return "File Creator"
+        case "filecreator": return "File Creator"
         case "webview": return "Web View"
         case "browserautomation": return "Browser Automation"
         default: return id

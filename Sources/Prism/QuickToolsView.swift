@@ -22,7 +22,7 @@ struct QuickToolsView: View {
     private var canonicalSelectedTool: String {
         switch selectedTool {
         case "Model Comparison": return "Compare"
-        case "PDF Creator": return "File Creator"
+        case "File Creator": return "File Creator"
         case "Image Generator": return "Image Generation"
         default: return selectedTool
         }
@@ -72,7 +72,7 @@ struct QuickToolsView: View {
                     case "Image Generation":
                         ImageGenerationView()
                     case "File Creator":
-                        PDFCreatorView()
+                        FileCreatorView()
                     case "Compare":
                         ModelComparisonView()
                     case "Commands":

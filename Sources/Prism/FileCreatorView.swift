@@ -65,8 +65,8 @@ struct PDFDocumentItem: Identifiable, Codable {
     }
 }
 
-class PDFCreatorStore: ObservableObject {
-    static let shared = PDFCreatorStore()
+class FileCreatorStore: ObservableObject {
+    static let shared = FileCreatorStore()
 
     @Published var items: [PDFDocumentItem] = []
 
@@ -1149,9 +1149,9 @@ struct PDFRenderer {
     }
 }
 
-// MARK: - PDF Creator View
+// MARK: - File Creator View
 
-struct PDFCreatorView: View {
+struct FileCreatorView: View {
     @AppStorage("AppTheme") private var appTheme: AppTheme = .default
     @AppStorage("ImageDownloadPath") private var fileDownloadPath: String = ""
     @AppStorage("GeminiKey") private var geminiKey: String = ""
@@ -1165,7 +1165,7 @@ struct PDFCreatorView: View {
     @AppStorage("PDFModel") private var pdfModel: String = "gemini-2.5-flash"
     @Environment(\.colorScheme) private var colorScheme
 
-    @StateObject private var store = PDFCreatorStore.shared
+    @StateObject private var store = FileCreatorStore.shared
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
     @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
@@ -1182,6 +1182,7 @@ struct PDFCreatorView: View {
     @State private var savedItemIds: Set<UUID> = []
     @State private var isInputExpanded: Bool = false
     @State private var isGenerating: Bool = false
+    @State private var generatingPreviewText: String = ""
     @State private var generateTask: Task<Void, Never>?
     @State private var generationError: String? = nil
     @State private var pdfThinkingLevel: String = "medium"
@@ -1483,7 +1484,7 @@ struct PDFCreatorView: View {
         let endColor = colors.last ?? .purple
 
         return VStack(spacing: 20) {
-            Spacer()
+            Spacer().frame(height: 40)
 
             ProgressView()
                 .scaleEffect(1.2)
@@ -1499,12 +1500,27 @@ struct PDFCreatorView: View {
                     )
                 )
 
-            Text(prompt.prefix(100) + (prompt.count > 100 ? "…" : ""))
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary.opacity(0.7))
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 300)
+            if !generatingPreviewText.isEmpty {
+                ScrollView {
+                    Text(generatingPreviewText)
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(20)
+                }
+                .frame(maxWidth: 600, maxHeight: 300)
+                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: 5)
+                .padding(.horizontal, 20)
+            } else {
+                Text(prompt.prefix(100) + (prompt.count > 100 ? "…" : ""))
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary.opacity(0.7))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+            }
 
             Button(action: {
                 generateTask?.cancel()
@@ -2199,6 +2215,7 @@ struct PDFCreatorView: View {
         guard !trimmed.isEmpty else { return }
 
         isGenerating = true
+        generatingPreviewText = ""
         generationError = nil
 
         let systemPrompt: String
@@ -2325,6 +2342,8 @@ struct PDFCreatorView: View {
                         systemPrompt: systemPrompt, thinkingLevel: "none"
                     ) {
                         fullContent += chunk
+                        let currentChunk = chunk
+                        await MainActor.run { generatingPreviewText += currentChunk }
                     }
 
                 case "Ollama":
@@ -2349,6 +2368,8 @@ struct PDFCreatorView: View {
                         systemPrompt: ollamaSystemPrompt, thinkingLevel: thinking
                     ) {
                         fullContent += chunk
+                        let currentChunk = chunk
+                        await MainActor.run { generatingPreviewText += currentChunk }
                     }
 
                 case "Apple Foundation":
@@ -2356,6 +2377,8 @@ struct PDFCreatorView: View {
                         history: history, systemPrompt: systemPrompt
                     ) {
                         fullContent += chunk
+                        let currentChunk = chunk
+                        await MainActor.run { generatingPreviewText += currentChunk }
                     }
 
                 case "NVIDIA API":
@@ -2371,6 +2394,8 @@ struct PDFCreatorView: View {
                         systemPrompt: systemPrompt
                     ) {
                         fullContent += chunk
+                        let currentChunk = chunk
+                        await MainActor.run { generatingPreviewText += currentChunk }
                     }
 
                 case "GitHub Copilot":
@@ -2385,6 +2410,8 @@ struct PDFCreatorView: View {
                         history: history, model: pdfModel, systemPrompt: systemPrompt
                     ) {
                         fullContent += chunk
+                        let currentChunk = chunk
+                        await MainActor.run { generatingPreviewText += currentChunk }
                     }
 
                 default:
