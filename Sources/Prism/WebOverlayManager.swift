@@ -324,13 +324,15 @@ class WebOverlayManager: ObservableObject {
         webView.uiDelegate = coordinator
         webView.navigationDelegate = coordinator
 
-        if let savedURLString = UserDefaults.standard.string(forKey: "WebOverlayLastURL_builtin_\(service.rawValue)"),
-           let savedURL = URL(string: savedURLString) {
+        if let savedURLString = UserDefaults.standard.string(
+            forKey: "WebOverlayLastURL_builtin_\(service.rawValue)"),
+            let savedURL = URL(string: savedURLString)
+        {
             webView.load(URLRequest(url: savedURL))
         } else {
             webView.load(URLRequest(url: service.url))
         }
-        
+
         webViews[service] = webView
 
         // Observe back/forward/url state for the current service
@@ -339,14 +341,16 @@ class WebOverlayManager: ObservableObject {
                 self?.updateNavigationState()
             }
         }
-        forwardObservers[service] = webView.observe(\.canGoForward, options: [.new]) { [weak self] _, _ in
+        forwardObservers[service] = webView.observe(\.canGoForward, options: [.new]) {
+            [weak self] _, _ in
             DispatchQueue.main.async {
                 self?.updateNavigationState()
             }
         }
         urlObservers[service] = webView.observe(\.url, options: [.new]) { _, change in
             if let url = change.newValue as? URL {
-                UserDefaults.standard.set(url.absoluteString, forKey: "WebOverlayLastURL_builtin_\(service.rawValue)")
+                UserDefaults.standard.set(
+                    url.absoluteString, forKey: "WebOverlayLastURL_builtin_\(service.rawValue)")
             }
         }
 
@@ -375,28 +379,33 @@ class WebOverlayManager: ObservableObject {
         webView.uiDelegate = coordinator
         webView.navigationDelegate = coordinator
 
-        if let savedURLString = UserDefaults.standard.string(forKey: "WebOverlayLastURL_\(item.id)"),
-           let savedURL = URL(string: savedURLString) {
+        if let savedURLString = UserDefaults.standard.string(
+            forKey: "WebOverlayLastURL_\(item.id)"),
+            let savedURL = URL(string: savedURLString)
+        {
             webView.load(URLRequest(url: savedURL))
         } else {
             webView.load(URLRequest(url: item.url))
         }
-        
+
         customWebViews[item.id] = webView
 
-        customBackObservers[item.id] = webView.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in
+        customBackObservers[item.id] = webView.observe(\.canGoBack, options: [.new]) {
+            [weak self] _, _ in
             DispatchQueue.main.async {
                 self?.updateNavigationState()
             }
         }
-        customForwardObservers[item.id] = webView.observe(\.canGoForward, options: [.new]) { [weak self] _, _ in
+        customForwardObservers[item.id] = webView.observe(\.canGoForward, options: [.new]) {
+            [weak self] _, _ in
             DispatchQueue.main.async {
                 self?.updateNavigationState()
             }
         }
         customUrlObservers[item.id] = webView.observe(\.url, options: [.new]) { _, change in
             if let url = change.newValue as? URL {
-                UserDefaults.standard.set(url.absoluteString, forKey: "WebOverlayLastURL_\(item.id)")
+                UserDefaults.standard.set(
+                    url.absoluteString, forKey: "WebOverlayLastURL_\(item.id)")
             }
         }
 
