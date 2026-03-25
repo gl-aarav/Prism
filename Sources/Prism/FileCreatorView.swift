@@ -1408,18 +1408,25 @@ struct FileCreatorView: View {
 
                         let templates: [(String, String, String)] = [
                             ("doc.text", "Essay", "Write a well-structured essay about"),
-                            ("list.bullet", "Study Guide", "Create a comprehensive study guide for"),
+                            (
+                                "list.bullet", "Study Guide",
+                                "Create a comprehensive study guide for"
+                            ),
                             ("chart.bar", "Report", "Generate a professional report with data on"),
                             (
                                 "chevron.left.forwardslash.chevron.right", "Code File",
                                 "Write clean, well-documented code for"
                             ),
                             ("globe", "Web Page", "Create an HTML page with CSS for"),
-                            ("tablecells", "CSV Data", "Generate a CSV dataset with sample data for"),
+                            (
+                                "tablecells", "CSV Data",
+                                "Generate a CSV dataset with sample data for"
+                            ),
                         ]
 
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8)], spacing: 8)
-                        {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 130), spacing: 8)], spacing: 8
+                        ) {
                             ForEach(templates, id: \.1) { icon, label, promptPrefix in
                                 Button(action: {
                                     prompt = promptPrefix + " "
@@ -1442,7 +1449,9 @@ struct FileCreatorView: View {
                                             .font(.system(size: 11))
                                             .foregroundStyle(startColor)
                                         Text(label)
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                                            .font(
+                                                .system(size: 12, weight: .medium, design: .rounded)
+                                            )
                                             .foregroundStyle(.primary.opacity(0.7))
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
