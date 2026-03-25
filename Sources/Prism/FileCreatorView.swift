@@ -1242,6 +1242,7 @@ struct FileCreatorView: View {
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
     @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
+    @ObservedObject private var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
 
@@ -1268,6 +1269,22 @@ struct FileCreatorView: View {
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
     private let nvidiaService = NvidiaService()
+
+    private var geminiDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "gemini") else {
+            return geminiManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? geminiManager.sortedModels : models
+    }
+
+    private var nvidiaDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "nvidia") else {
+            return nvidiaManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? nvidiaManager.sortedModels : models
+    }
     private let webSearchService = WebSearchService()
 
     private var pdfHasThinkingCapability: Bool {
@@ -1964,7 +1981,7 @@ struct FileCreatorView: View {
                     }
                     Divider()
                     Menu("Gemini API") {
-                        ForEach(geminiManager.availableModels, id: \.self) { model in
+                        ForEach(geminiDropdownModels, id: \.self) { model in
                             Button(action: {
                                 pdfProvider = "Gemini API"
                                 pdfModel = model
@@ -1985,7 +2002,7 @@ struct FileCreatorView: View {
                     }
                     if !nvidiaKey.isEmpty {
                         Menu("NVIDIA API") {
-                            ForEach(nvidiaManager.availableModels, id: \.self) { model in
+                            ForEach(nvidiaDropdownModels, id: \.self) { model in
                                 Button(action: {
                                     pdfProvider = "NVIDIA API"
                                     pdfModel = model

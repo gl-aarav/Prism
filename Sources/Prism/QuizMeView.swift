@@ -142,6 +142,7 @@ struct QuizMeView: View {
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
     @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
+    @ObservedObject private var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
     @StateObject private var store = QuizStore.shared
@@ -172,6 +173,22 @@ struct QuizMeView: View {
 
     @FocusState private var isInputFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
+
+    private var geminiDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "gemini") else {
+            return geminiManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? geminiManager.sortedModels : models
+    }
+
+    private var nvidiaDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "nvidia") else {
+            return nvidiaManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? nvidiaManager.sortedModels : models
+    }
 
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
@@ -1261,7 +1278,7 @@ struct QuizMeView: View {
                     }
                     Divider()
                     Menu("Gemini API") {
-                        ForEach(geminiManager.availableModels, id: \.self) { model in
+                        ForEach(geminiDropdownModels, id: \.self) { model in
                             Button(action: {
                                 quizProvider = "Gemini API"
                                 quizModel = model
@@ -1282,7 +1299,7 @@ struct QuizMeView: View {
                     }
                     if !nvidiaKey.isEmpty {
                         Menu("NVIDIA API") {
-                            ForEach(nvidiaManager.availableModels, id: \.self) { model in
+                            ForEach(nvidiaDropdownModels, id: \.self) { model in
                                 Button(action: {
                                     quizProvider = "NVIDIA API"
                                     quizModel = model

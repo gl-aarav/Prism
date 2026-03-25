@@ -73,6 +73,7 @@ struct ModelComparisonView: View {
     @ObservedObject private var ollamaManager = OllamaModelManager.shared
     @ObservedObject private var geminiManager = GeminiModelManager.shared
     @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
+    @ObservedObject private var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
     @ObservedObject private var state = ComparisonStateManager.shared
@@ -114,6 +115,22 @@ struct ModelComparisonView: View {
 
     private func saveSlots() {
         state.saveSlotConfigurations()
+    }
+
+    private var geminiDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "gemini") else {
+            return geminiManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? geminiManager.sortedModels : models
+    }
+
+    private var nvidiaDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "nvidia") else {
+            return nvidiaManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? nvidiaManager.sortedModels : models
     }
 
     var body: some View {
@@ -1430,6 +1447,7 @@ struct ComparisonCard: View {
     @ObservedObject var ollamaManager: OllamaModelManager
     @ObservedObject var geminiManager: GeminiModelManager
     @ObservedObject var nvidiaManager: NvidiaModelManager
+    @ObservedObject var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject var copilotModelManager: GitHubCopilotModelManager
     var hasOllamaAPIKey: Bool = false
     var hasNvidiaKey: Bool = false
@@ -1486,6 +1504,22 @@ struct ComparisonCard: View {
     /// Whether this slot can show web search toggle
     private var slotCanWebSearch: Bool {
         slot.provider == "Ollama"
+    }
+
+    private var geminiDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "gemini") else {
+            return geminiManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? geminiManager.sortedModels : models
+    }
+
+    private var nvidiaDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "nvidia") else {
+            return nvidiaManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? nvidiaManager.sortedModels : models
     }
 
     var body: some View {
@@ -1732,18 +1766,14 @@ struct ComparisonCard: View {
             }
             Divider()
             Menu("Gemini API") {
-                ForEach(GeminiModelManager.modelGroups, id: \.name) { group in
-                    Section(group.name) {
-                        ForEach(group.models, id: \.self) { model in
-                            Button(action: { onChangeProvider("Gemini API", model) }) {
-                                if slot.provider == "Gemini API" && slot.model == model {
-                                    Label(
-                                        geminiManager.displayName(for: model),
-                                        systemImage: "checkmark")
-                                } else {
-                                    Text(geminiManager.displayName(for: model))
-                                }
-                            }
+                ForEach(geminiDropdownModels, id: \.self) { model in
+                    Button(action: { onChangeProvider("Gemini API", model) }) {
+                        if slot.provider == "Gemini API" && slot.model == model {
+                            Label(
+                                geminiManager.displayName(for: model),
+                                systemImage: "checkmark")
+                        } else {
+                            Text(geminiManager.displayName(for: model))
                         }
                     }
                 }
@@ -1761,18 +1791,14 @@ struct ComparisonCard: View {
             }
             if hasNvidiaKey {
                 Menu("NVIDIA API") {
-                    ForEach(NvidiaModelManager.modelGroups, id: \.name) { group in
-                        Section(group.name) {
-                            ForEach(group.models, id: \.self) { model in
-                                Button(action: { onChangeProvider("NVIDIA API", model) }) {
-                                    if slot.provider == "NVIDIA API" && slot.model == model {
-                                        Label(
-                                            nvidiaManager.displayName(for: model),
-                                            systemImage: "checkmark")
-                                    } else {
-                                        Text(nvidiaManager.displayName(for: model))
-                                    }
-                                }
+                    ForEach(nvidiaDropdownModels, id: \.self) { model in
+                        Button(action: { onChangeProvider("NVIDIA API", model) }) {
+                            if slot.provider == "NVIDIA API" && slot.model == model {
+                                Label(
+                                    nvidiaManager.displayName(for: model),
+                                    systemImage: "checkmark")
+                            } else {
+                                Text(nvidiaManager.displayName(for: model))
                             }
                         }
                     }

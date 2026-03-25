@@ -139,6 +139,29 @@ enum APIProviderRegistry {
     static func provider(for id: String) -> APIProviderDefinition? {
         providers.first(where: { $0.id == id })
     }
+
+    static func provider(forDisplayName displayName: String) -> APIProviderDefinition? {
+        switch displayName {
+        case "Gemini API":
+            return provider(for: "gemini")
+        case "NVIDIA API":
+            return provider(for: "nvidia")
+        case "ChatGPT":
+            return provider(for: "chatgpt")
+        case "Claude":
+            return provider(for: "claude")
+        case "Grok":
+            return provider(for: "grok")
+        case "Kimi":
+            return provider(for: "kimi")
+        case "Mistral":
+            return provider(for: "mistral")
+        case "Custom API":
+            return provider(for: "customapi")
+        default:
+            return nil
+        }
+    }
 }
 
 final class APIProviderModelStore: ObservableObject {

@@ -5018,6 +5018,7 @@ struct InputView: View {
         "llama-3.1-70b-instruct"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
+    @ObservedObject var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
     @ObservedObject var nvidiaManager = NvidiaModelManager.shared
     @ObservedObject private var slashCommandManager = SlashCommandManager.shared
@@ -5035,6 +5036,22 @@ struct InputView: View {
     @State private var slashSelectedIndex: Int = 0
     @State private var showSlashAutocomplete: Bool = false
     @Environment(\.colorScheme) private var colorScheme
+
+    private var geminiDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "gemini") else {
+            return geminiManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? geminiManager.sortedModels : models
+    }
+
+    private var nvidiaDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "nvidia") else {
+            return nvidiaManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? nvidiaManager.sortedModels : models
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -5228,35 +5245,39 @@ struct InputView: View {
 
                 if isGemini {
                     Menu {
-                        Section("Favorites") {
-                            ForEach(geminiManager.favoriteModels, id: \.self) { model in
-                                Button(action: { geminiModel = model }) {
-                                    if geminiModel == model {
-                                        Label(
-                                            geminiManager.displayName(for: model),
-                                            systemImage: "checkmark")
-                                    } else {
-                                        Text(GeminiModelManager.shared.displayName(for: model))
+                        let favoriteModels = geminiManager.favoriteModels.filter {
+                            geminiDropdownModels.contains($0)
+                        }
+                        if !favoriteModels.isEmpty {
+                            Section("Favorites") {
+                                ForEach(favoriteModels, id: \.self) { model in
+                                    Button(action: { geminiModel = model }) {
+                                        if geminiModel == model {
+                                            Label(
+                                                geminiManager.displayName(for: model),
+                                                systemImage: "checkmark")
+                                        } else {
+                                            Text(GeminiModelManager.shared.displayName(for: model))
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        ForEach(GeminiModelManager.modelGroups, id: \.name) { group in
-                            let nonFavModels = group.models.filter { !geminiManager.isFavorite($0) }
-                            if !nonFavModels.isEmpty {
-                                Section(group.name) {
-                                    ForEach(nonFavModels, id: \.self) { model in
-                                        Button(action: { geminiModel = model }) {
-                                            if geminiModel == model {
-                                                Label(
-                                                    geminiManager.displayName(for: model),
-                                                    systemImage: "checkmark")
-                                            } else {
-                                                Text(
-                                                    GeminiModelManager.shared.displayName(
-                                                        for: model))
-                                            }
+                        let availableModels = geminiDropdownModels.filter {
+                            !favoriteModels.contains($0)
+                        }
+                        if !availableModels.isEmpty {
+                            Section("Available") {
+                                ForEach(availableModels, id: \.self) { model in
+                                    Button(action: { geminiModel = model }) {
+                                        if geminiModel == model {
+                                            Label(
+                                                geminiManager.displayName(for: model),
+                                                systemImage: "checkmark")
+                                        } else {
+                                            Text(
+                                                GeminiModelManager.shared.displayName(for: model))
                                         }
                                     }
                                 }
@@ -5266,7 +5287,7 @@ struct InputView: View {
                         Divider()
 
                         Menu("Manage Favorites") {
-                            ForEach(geminiManager.sortedModels, id: \.self) {
+                            ForEach(geminiDropdownModels, id: \.self) {
                                 model in
                                 Button(action: { geminiManager.toggleFavorite(model) }) {
                                     if geminiManager.isFavorite(model) {
@@ -5359,9 +5380,12 @@ struct InputView: View {
 
                 if isNvidia {
                     Menu {
-                        if !nvidiaManager.favoriteModels.isEmpty {
+                        let favoriteModels = nvidiaManager.favoriteModels.filter {
+                            nvidiaDropdownModels.contains($0)
+                        }
+                        if !favoriteModels.isEmpty {
                             Section("Favorites") {
-                                ForEach(nvidiaManager.favoriteModels, id: \.self) { model in
+                                ForEach(favoriteModels, id: \.self) { model in
                                     Button(action: { selectedNvidiaModel = model }) {
                                         if selectedNvidiaModel == model {
                                             Label(
@@ -5375,19 +5399,19 @@ struct InputView: View {
                             }
                         }
 
-                        ForEach(NvidiaModelManager.modelGroups, id: \.name) { group in
-                            let nonFavModels = group.models.filter { !nvidiaManager.isFavorite($0) }
-                            if !nonFavModels.isEmpty {
-                                Section(group.name) {
-                                    ForEach(nonFavModels, id: \.self) { model in
-                                        Button(action: { selectedNvidiaModel = model }) {
-                                            if selectedNvidiaModel == model {
-                                                Label(
-                                                    nvidiaManager.displayName(for: model),
-                                                    systemImage: "checkmark")
-                                            } else {
-                                                Text(nvidiaManager.displayName(for: model))
-                                            }
+                        let availableModels = nvidiaDropdownModels.filter {
+                            !favoriteModels.contains($0)
+                        }
+                        if !availableModels.isEmpty {
+                            Section("Available") {
+                                ForEach(availableModels, id: \.self) { model in
+                                    Button(action: { selectedNvidiaModel = model }) {
+                                        if selectedNvidiaModel == model {
+                                            Label(
+                                                nvidiaManager.displayName(for: model),
+                                                systemImage: "checkmark")
+                                        } else {
+                                            Text(nvidiaManager.displayName(for: model))
                                         }
                                     }
                                 }
@@ -5397,7 +5421,7 @@ struct InputView: View {
                         Divider()
 
                         Menu("Manage Favorites") {
-                            ForEach(NvidiaModelManager.shared.availableModels, id: \.self) {
+                            ForEach(nvidiaDropdownModels, id: \.self) {
                                 model in
                                 Button(action: { nvidiaManager.toggleFavorite(model) }) {
                                     if nvidiaManager.isFavorite(model) {
@@ -5906,7 +5930,6 @@ struct InputView: View {
             }
         }
     }
-
 }
 
 struct ThumbnailView: View {
@@ -8337,7 +8360,8 @@ struct SettingsView: View {
         draftAPIKey = ""
         draftAPIEndpoint = ""
         draftProviderCustomModel = ""
-        let currentProvider = provider ?? addAPIProviderID.flatMap(APIProviderRegistry.provider)
+        let currentProvider = provider
+            ?? addAPIProviderID.flatMap { APIProviderRegistry.provider(for: $0) }
         draftProviderPresetModel = currentProvider?.presetModels.first ?? ""
         draftModelChoiceMode = currentProvider?.presetModels.isEmpty == true ? "custom" : "preset"
     }
@@ -9981,6 +10005,10 @@ struct SettingsView: View {
         (appTheme.colors.last ?? .green).opacity(0.1)
     }
 
+    private var settingsSidebarTint: Color {
+        Color(red: 0.96, green: 0.79, blue: 0.28)
+    }
+
     @ViewBuilder
     private func settingsCard<Content: View>(
         _ title: String,
@@ -10111,27 +10139,25 @@ struct SettingsView: View {
             .padding(.bottom, 10)
         }
         .frame(width: 210)
-        .background(Color.white.opacity(0.05))
+        .background(
+            LinearGradient(
+                colors: [
+                    settingsSidebarTint.opacity(0.30),
+                    settingsSidebarTint.opacity(0.12),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
     }
 
     @ViewBuilder
     private var settingsContentPane: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: selectedTab.icon)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(selectedTab.iconColor)
-                Text(selectedTab.rawValue)
-                    .font(.system(size: 20, weight: .bold))
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 26)
-            .padding(.bottom, 10)
-
             ScrollView {
                 contentForTab(selectedTab)
             }
-            .safeAreaPadding(.bottom, 10)
+            .safeAreaPadding(.bottom, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .sheet(
                 isPresented: Binding(
@@ -10253,13 +10279,13 @@ struct SettingsView: View {
                 .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.15), radius: 24, y: 10)
-        .padding(EdgeInsets(top: 42, leading: 10, bottom: 10, trailing: 10))
+        .padding(EdgeInsets(top: 22, leading: 10, bottom: 10, trailing: 10))
     }
 
     // MARK: - Body
 
     var body: some View {
-        ZStack(alignment: .top) {
+        ZStack {
             ZStack {
                 LinearGradient(
                     colors: [settingsTintStart, settingsTintEnd],
@@ -10270,17 +10296,9 @@ struct SettingsView: View {
 
                 settingsContainer
             }
-
-            Text("Prism Settings")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.85))
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, 12)
-
         }
-        .frame(width: 760, height: 820)
+        .frame(width: 760, height: 760)
         .background(Color.clear)
-        .ignoresSafeArea(.all)
         .toolbarBackground(.hidden, for: .windowToolbar)
         .navigationTitle(" ")
 

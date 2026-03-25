@@ -49,6 +49,7 @@ struct QuickAIView: View {
         "llama-3.1-70b-instruct"
     @ObservedObject var ollamaManager = OllamaModelManager.shared
     @ObservedObject var geminiManager = GeminiModelManager.shared
+    @ObservedObject var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject var copilotModelManager = GitHubCopilotModelManager.shared
     @ObservedObject var copilotService = GitHubCopilotService.shared
     @State private var showAddCustomOllamaModel = false
@@ -82,6 +83,22 @@ struct QuickAIView: View {
 
     private var collapseAnimation: Animation {
         .spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.05)
+    }
+
+    private var geminiDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "gemini") else {
+            return geminiManager.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? geminiManager.sortedModels : models
+    }
+
+    private var nvidiaDropdownModels: [String] {
+        guard let provider = APIProviderRegistry.provider(for: "nvidia") else {
+            return NvidiaModelManager.shared.sortedModels
+        }
+        let models = apiProviderModelStore.enabledModels(for: provider)
+        return models.isEmpty ? NvidiaModelManager.shared.sortedModels : models
     }
 
     var body: some View {
@@ -2473,9 +2490,12 @@ extension QuickAIView {
                     || selectedProvider.hasPrefix("Gemini API|")
                 {
                     Menu {
-                        if !geminiManager.favoriteModels.isEmpty {
+                        let favoriteModels = geminiManager.favoriteModels.filter {
+                            geminiDropdownModels.contains($0)
+                        }
+                        if !favoriteModels.isEmpty {
                             Section("Favorites") {
-                                ForEach(geminiManager.favoriteModels, id: \.self) { model in
+                                ForEach(favoriteModels, id: \.self) { model in
                                     Button(action: { geminiModel = model }) {
                                         if geminiModel == model {
                                             Label(
@@ -2492,23 +2512,23 @@ extension QuickAIView {
                             }
                         }
 
-                        ForEach(GeminiModelManager.modelGroups, id: \.name) { group in
-                            let nonFavModels = group.models.filter { !geminiManager.isFavorite($0) }
-                            if !nonFavModels.isEmpty {
-                                Section(group.name) {
-                                    ForEach(nonFavModels, id: \.self) { model in
-                                        Button(action: { geminiModel = model }) {
-                                            if geminiModel == model {
-                                                Label(
-                                                    geminiManager.displayName(for: model),
-                                                    systemImage: "checkmark"
-                                                )
-                                                .foregroundStyle(
-                                                    colorScheme == .dark
-                                                        ? Color.white : Color.primary)
-                                            } else {
-                                                Text(geminiManager.displayName(for: model))
-                                            }
+                        let availableModels = geminiDropdownModels.filter {
+                            !favoriteModels.contains($0)
+                        }
+                        if !availableModels.isEmpty {
+                            Section("Available") {
+                                ForEach(availableModels, id: \.self) { model in
+                                    Button(action: { geminiModel = model }) {
+                                        if geminiModel == model {
+                                            Label(
+                                                geminiManager.displayName(for: model),
+                                                systemImage: "checkmark"
+                                            )
+                                            .foregroundStyle(
+                                                colorScheme == .dark
+                                                    ? Color.white : Color.primary)
+                                        } else {
+                                            Text(geminiManager.displayName(for: model))
                                         }
                                     }
                                 }
@@ -2518,7 +2538,7 @@ extension QuickAIView {
                         Divider()
 
                         Menu("Manage Favorites") {
-                            ForEach(geminiManager.sortedModels, id: \.self) { model in
+                            ForEach(geminiDropdownModels, id: \.self) { model in
                                 Button(action: { geminiManager.toggleFavorite(model) }) {
                                     if geminiManager.isFavorite(model) {
                                         Label(
@@ -2779,9 +2799,12 @@ extension QuickAIView {
                 if selectedProvider == "NVIDIA API" || selectedProvider.hasPrefix("NVIDIA API|") {
                     Menu {
                         let nvidiaManager = NvidiaModelManager.shared
-                        if !nvidiaManager.favoriteModels.isEmpty {
+                        let favoriteModels = nvidiaManager.favoriteModels.filter {
+                            nvidiaDropdownModels.contains($0)
+                        }
+                        if !favoriteModels.isEmpty {
                             Section("Favorites") {
-                                ForEach(nvidiaManager.favoriteModels, id: \.self) { model in
+                                ForEach(favoriteModels, id: \.self) { model in
                                     Button(action: { selectedNvidiaModel = model }) {
                                         if selectedNvidiaModel == model {
                                             Label(
@@ -2799,24 +2822,24 @@ extension QuickAIView {
                             }
                         }
 
-                        ForEach(NvidiaModelManager.modelGroups, id: \.name) { group in
-                            let nonFavModels = group.models.filter { !nvidiaManager.isFavorite($0) }
-                            if !nonFavModels.isEmpty {
-                                Section(group.name) {
-                                    ForEach(nonFavModels, id: \.self) { model in
-                                        Button(action: { selectedNvidiaModel = model }) {
-                                            if selectedNvidiaModel == model {
-                                                Label(
-                                                    nvidiaManager.displayName(for: model),
-                                                    systemImage: "checkmark"
-                                                )
-                                                .foregroundStyle(
-                                                    colorScheme == .dark
-                                                        ? Color.white : Color.primary
-                                                )
-                                            } else {
-                                                Text(nvidiaManager.displayName(for: model))
-                                            }
+                        let availableModels = nvidiaDropdownModels.filter {
+                            !favoriteModels.contains($0)
+                        }
+                        if !availableModels.isEmpty {
+                            Section("Available") {
+                                ForEach(availableModels, id: \.self) { model in
+                                    Button(action: { selectedNvidiaModel = model }) {
+                                        if selectedNvidiaModel == model {
+                                            Label(
+                                                nvidiaManager.displayName(for: model),
+                                                systemImage: "checkmark"
+                                            )
+                                            .foregroundStyle(
+                                                colorScheme == .dark
+                                                    ? Color.white : Color.primary
+                                            )
+                                        } else {
+                                            Text(nvidiaManager.displayName(for: model))
                                         }
                                     }
                                 }
