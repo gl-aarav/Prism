@@ -1614,23 +1614,27 @@ struct FileCreatorView: View {
                         .frame(width: 1)
                         .padding(.vertical, 14)
 
-                    // Right panel: streaming code preview
+                    // Right panel: streaming code preview — always dark
                     ZStack(alignment: .topLeading) {
-                        Color.black.opacity(0.25)
+                        Color(red: 0.13, green: 0.14, blue: 0.15)
 
                         ScrollViewReader { proxy in
                             ScrollView(.vertical, showsIndicators: false) {
-                                Text(
-                                    generatingPreviewText.isEmpty
-                                        ? "Waiting for response…"
-                                        : String(generatingPreviewText.suffix(1400))
-                                )
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(
-                                    generatingPreviewText.isEmpty
-                                        ? Color.secondary.opacity(0.35)
-                                        : Color(red: 0.71, green: 0.80, blue: 0.56)
-                                )
+                                Group {
+                                    if generatingPreviewText.isEmpty {
+                                        Text("Waiting for response…")
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundStyle(Color.white.opacity(0.25))
+                                    } else {
+                                        Text(
+                                            SyntaxHighlighter.shared.highlight(
+                                                String(generatingPreviewText.suffix(1400)),
+                                                language: selectedFormat,
+                                                isDark: true
+                                            )
+                                        )
+                                    }
+                                }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(14)
                                 .id("genEnd")
@@ -2609,11 +2613,11 @@ struct FileCreatorView: View {
                     isGenerating = false
                 }
             } catch {
-                if !Task.isCancelled {
-                    await MainActor.run {
+                await MainActor.run {
+                    if !(error is CancellationError) && !Task.isCancelled {
                         generationError = "Error: \(error.localizedDescription)"
-                        isGenerating = false
                     }
+                    isGenerating = false
                 }
             }
         }
