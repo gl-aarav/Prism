@@ -85,10 +85,20 @@ class QuickAIManager: ObservableObject {
             // We should ensure the main window doesn't pop up and distract.
             if !NSApp.isActive {
                 previousApp = NSWorkspace.shared.frontmostApplication
-                for window in NSApp.windows {
-                    if window != panel {
-                        window.orderOut(nil)
-                    }
+            } else {
+                if QuickToolsManager.shared.panel?.isVisible == true {
+                    if let app = QuickToolsManager.shared.previousApp { previousApp = app }
+                    QuickToolsManager.shared.previousApp = nil
+                }
+                if WebOverlayManager.shared.panel?.isVisible == true {
+                    if let app = WebOverlayManager.shared.previousApp { previousApp = app }
+                    WebOverlayManager.shared.previousApp = nil
+                }
+            }
+
+            for window in NSApp.windows {
+                if window != panel {
+                    window.orderOut(nil)
                 }
             }
 

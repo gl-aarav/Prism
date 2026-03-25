@@ -104,10 +104,20 @@ class QuickToolsManager: ObservableObject {
         } else {
             if !NSApp.isActive {
                 previousApp = NSWorkspace.shared.frontmostApplication
-                for window in NSApp.windows {
-                    if window != panel {
-                        window.orderOut(nil)
-                    }
+            } else {
+                if QuickAIManager.shared.panel?.isVisible == true {
+                    if let app = QuickAIManager.shared.previousApp { previousApp = app }
+                    QuickAIManager.shared.previousApp = nil
+                }
+                if WebOverlayManager.shared.panel?.isVisible == true {
+                    if let app = WebOverlayManager.shared.previousApp { previousApp = app }
+                    WebOverlayManager.shared.previousApp = nil
+                }
+            }
+
+            for window in NSApp.windows {
+                if window != panel {
+                    window.orderOut(nil)
                 }
             }
 

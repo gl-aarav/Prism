@@ -200,7 +200,24 @@ class WebOverlayManager: ObservableObject {
             returnFocusToPreviousApp()
         } else {
             // Remember previous app before we do anything
-            previousApp = NSWorkspace.shared.frontmostApplication
+            if !NSApp.isActive {
+                previousApp = NSWorkspace.shared.frontmostApplication
+            } else {
+                if QuickAIManager.shared.panel?.isVisible == true {
+                    if let app = QuickAIManager.shared.previousApp { previousApp = app }
+                    QuickAIManager.shared.previousApp = nil
+                }
+                if QuickToolsManager.shared.panel?.isVisible == true {
+                    if let app = QuickToolsManager.shared.previousApp { previousApp = app }
+                    QuickToolsManager.shared.previousApp = nil
+                }
+            }
+
+            for window in NSApp.windows {
+                if window != panel {
+                    window.orderOut(nil)
+                }
+            }
 
             positionPanel(panel)
             panel.makeKeyAndOrderFront(nil)
