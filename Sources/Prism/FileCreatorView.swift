@@ -1149,6 +1149,79 @@ struct PDFRenderer {
     }
 }
 
+// MARK: - Generating Orb
+
+private struct GeneratingOrbView: View {
+    let startColor: Color
+    let endColor: Color
+
+    @State private var rotation: Double = 0
+    @State private var pulseScale: CGFloat = 1.0
+
+    var body: some View {
+        ZStack {
+            // Ambient glow aura (extends outside sphere)
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [startColor.opacity(0.55), Color.clear],
+                        center: .center, startRadius: 0, endRadius: 28
+                    )
+                )
+                .scaleEffect(1.45 * pulseScale)
+                .blur(radius: 7)
+
+            // Sphere content clipped to circle
+            ZStack {
+                // Main 3-D sphere surface
+                Circle()
+                    .fill(
+                        EllipticalGradient(
+                            colors: [
+                                Color.white.opacity(0.65),
+                                startColor,
+                                endColor,
+                                Color.black.opacity(0.4),
+                            ],
+                            center: UnitPoint(x: 0.32, y: 0.28),
+                            startRadiusFraction: 0,
+                            endRadiusFraction: 0.88
+                        )
+                    )
+
+                // Animated swirl bands
+                ForEach(0..<3) { i in
+                    Ellipse()
+                        .fill(Color.white.opacity(0.05 + Double(i) * 0.02))
+                        .frame(width: 52, height: 16)
+                        .rotationEffect(.degrees(rotation + Double(i) * 55))
+                        .blendMode(.overlay)
+                }
+
+                // Specular highlight
+                Ellipse()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.white.opacity(0.55), Color.clear],
+                            center: .center, startRadius: 0, endRadius: 10
+                        )
+                    )
+                    .frame(width: 22, height: 15)
+                    .offset(x: -9, y: -11)
+            }
+            .clipShape(Circle())
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 7).repeatForever(autoreverses: false)) {
+                rotation = 360
+            }
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) {
+                pulseScale = 1.1
+            }
+        }
+    }
+}
+
 // MARK: - File Creator View
 
 struct FileCreatorView: View {
@@ -1492,64 +1565,131 @@ struct FileCreatorView: View {
         let startColor = colors.first ?? .indigo
         let endColor = colors.last ?? .purple
 
-        return VStack(spacing: 20) {
-            Spacer().frame(height: 40)
+        return ZStack {
+            // Ambient background glow
+            RadialGradient(
+                colors: [startColor.opacity(0.08), Color.clear],
+                center: .center, startRadius: 0, endRadius: 200
+            )
+            .blur(radius: 40)
+            .allowsHitTesting(false)
 
-            ProgressView()
-                .scaleEffect(1.2)
-                .tint(startColor)
+            VStack(spacing: 18) {
+                Spacer()
 
-            Text("Generating \(selectedFormat.uppercased())…")
-                .font(.system(size: 18, weight: .semibold, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [startColor, endColor],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+                // ── Main generating card ───────────────────────────────────
+                HStack(spacing: 0) {
+
+                    // Left panel: animated orb + prompt description
+                    HStack(alignment: .center, spacing: 16) {
+                        GeneratingOrbView(startColor: startColor, endColor: endColor)
+                            .frame(width: 58, height: 58)
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(prompt.prefix(80) + (prompt.count > 80 ? "…" : ""))
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            HStack(spacing: 5) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(startColor)
+                                Text("Generating \(selectedFormat.uppercased())")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 18)
+                    .frame(maxWidth: .infinity)
+
+                    // Vertical separator
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.07))
+                        .frame(width: 1)
+                        .padding(.vertical, 14)
+
+                    // Right panel: streaming code preview
+                    ZStack(alignment: .topLeading) {
+                        Color.black.opacity(0.25)
+
+                        ScrollViewReader { proxy in
+                            ScrollView(.vertical, showsIndicators: false) {
+                                Text(
+                                    generatingPreviewText.isEmpty
+                                        ? "Waiting for response…"
+                                        : String(generatingPreviewText.suffix(1400))
+                                )
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(
+                                    generatingPreviewText.isEmpty
+                                        ? Color.secondary.opacity(0.35)
+                                        : Color(red: 0.71, green: 0.80, blue: 0.56)
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(14)
+                                .id("genEnd")
+                            }
+                            .onChange(of: generatingPreviewText) {
+                                withAnimation(.easeOut(duration: 0.12)) {
+                                    proxy.scrollTo("genEnd", anchor: .bottom)
+                                }
+                            }
+                        }
+                    }
+                    .frame(width: 290)
+                }
+                .frame(height: 110)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(
+                            colorScheme == .dark
+                                ? Color(nsColor: .controlBackgroundColor).opacity(0.65)
+                                : Color(nsColor: .windowBackgroundColor).opacity(0.9)
+                        )
                 )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .shadow(
+                    color: colorScheme == .dark
+                        ? Color.black.opacity(0.4)
+                        : Color.black.opacity(0.1),
+                    radius: 28, x: 0, y: 10
+                )
+                .frame(maxWidth: 700)
+                .padding(.horizontal, 28)
+                // ── End main card ──────────────────────────────────────────
 
-            if !generatingPreviewText.isEmpty {
-                ScrollView {
-                    Text(generatingPreviewText)
-                        .font(.system(size: 13, design: .monospaced))
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(20)
+                // Cancel button
+                Button(action: {
+                    generateTask?.cancel()
+                    generateTask = nil
+                    isGenerating = false
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 9))
+                        Text("Cancel")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .glassEffect(.regular, in: .capsule)
                 }
-                .frame(maxWidth: 600, maxHeight: 300)
-                .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .shadow(color: .black.opacity(0.1), radius: 10, y: 5)
-                .padding(.horizontal, 20)
-            } else {
-                Text(prompt.prefix(100) + (prompt.count > 100 ? "…" : ""))
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary.opacity(0.7))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 300)
-            }
+                .buttonStyle(.plain)
 
-            Button(action: {
-                generateTask?.cancel()
-                generateTask = nil
-                isGenerating = false
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "stop.fill")
-                        .font(.system(size: 10))
-                    Text("Cancel")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .glassEffect(.regular, in: .capsule)
+                Spacer()
             }
-            .buttonStyle(.plain)
-
-            Spacer()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

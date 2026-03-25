@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - Account Configuration
 
 enum ProviderType: String {
-    case gemini, ollama, copilot, nvidia
+    case gemini, chatgpt, claude, grok, kimi, mistral, customapi, ollama, copilot, nvidia
 }
 
 struct ProviderAccount: Identifiable, Codable, Equatable {
@@ -36,6 +36,41 @@ struct ProviderAccount: Identifiable, Codable, Equatable {
     static func nvidiaAccount(name: String = "NVIDIA", apiKey: String) -> ProviderAccount {
         ProviderAccount(
             providerType: "nvidia", displayName: name, apiKey: apiKey, endpoint: "", isActive: true)
+    }
+
+    static func chatgptAccount(name: String = "ChatGPT", apiKey: String = "") -> ProviderAccount {
+        ProviderAccount(
+            providerType: "chatgpt", displayName: name, apiKey: apiKey, endpoint: "",
+            isActive: true)
+    }
+
+    static func claudeAccount(name: String = "Claude", apiKey: String = "") -> ProviderAccount {
+        ProviderAccount(
+            providerType: "claude", displayName: name, apiKey: apiKey, endpoint: "",
+            isActive: true)
+    }
+
+    static func grokAccount(name: String = "Grok", apiKey: String = "") -> ProviderAccount {
+        ProviderAccount(
+            providerType: "grok", displayName: name, apiKey: apiKey, endpoint: "", isActive: true)
+    }
+
+    static func kimiAccount(name: String = "Kimi", apiKey: String = "") -> ProviderAccount {
+        ProviderAccount(
+            providerType: "kimi", displayName: name, apiKey: apiKey, endpoint: "", isActive: true)
+    }
+
+    static func mistralAccount(name: String = "Mistral", apiKey: String = "") -> ProviderAccount {
+        ProviderAccount(
+            providerType: "mistral", displayName: name, apiKey: apiKey, endpoint: "",
+            isActive: true)
+    }
+
+    static func customAPIAccount(name: String = "Custom API", apiKey: String = "") -> ProviderAccount
+    {
+        ProviderAccount(
+            providerType: "customapi", displayName: name, apiKey: apiKey, endpoint: "",
+            isActive: true)
     }
 }
 
@@ -184,6 +219,30 @@ class AccountManager: ObservableObject {
         accounts.filter { $0.providerType == "nvidia" && $0.isActive }
     }
 
+    func chatGPTAccounts() -> [ProviderAccount] {
+        accounts.filter { $0.providerType == "chatgpt" && $0.isActive }
+    }
+
+    func claudeAccounts() -> [ProviderAccount] {
+        accounts.filter { $0.providerType == "claude" && $0.isActive }
+    }
+
+    func grokAccounts() -> [ProviderAccount] {
+        accounts.filter { $0.providerType == "grok" && $0.isActive }
+    }
+
+    func kimiAccounts() -> [ProviderAccount] {
+        accounts.filter { $0.providerType == "kimi" && $0.isActive }
+    }
+
+    func mistralAccounts() -> [ProviderAccount] {
+        accounts.filter { $0.providerType == "mistral" && $0.isActive }
+    }
+
+    func customAPIAccounts() -> [ProviderAccount] {
+        accounts.filter { $0.providerType == "customapi" && $0.isActive }
+    }
+
     /// Returns true if there are any configured & active accounts for a provider type
     func hasActiveAccount(type: String) -> Bool {
         switch type {
@@ -195,6 +254,18 @@ class AccountManager: ObservableObject {
             return GitHubCopilotService.shared.isAuthenticated
         case "nvidia":
             return nvidiaAccounts().contains(where: { !$0.apiKey.isEmpty })
+        case "chatgpt":
+            return chatGPTAccounts().contains(where: { !$0.apiKey.isEmpty })
+        case "claude":
+            return claudeAccounts().contains(where: { !$0.apiKey.isEmpty })
+        case "grok":
+            return grokAccounts().contains(where: { !$0.apiKey.isEmpty })
+        case "kimi":
+            return kimiAccounts().contains(where: { !$0.apiKey.isEmpty })
+        case "mistral":
+            return mistralAccounts().contains(where: { !$0.apiKey.isEmpty })
+        case "customapi":
+            return customAPIAccounts().contains(where: { !$0.apiKey.isEmpty })
         default:
             return false
         }
@@ -208,6 +279,12 @@ class AccountManager: ObservableObject {
         case "ollama": accts = ollamaAccounts()
         case "copilot": accts = copilotAccounts()
         case "nvidia": accts = nvidiaAccounts()
+        case "chatgpt": accts = chatGPTAccounts()
+        case "claude": accts = claudeAccounts()
+        case "grok": accts = grokAccounts()
+        case "kimi": accts = kimiAccounts()
+        case "mistral": accts = mistralAccounts()
+        case "customapi": accts = customAPIAccounts()
         default: return type
         }
         guard index < accts.count else { return type }

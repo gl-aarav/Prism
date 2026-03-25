@@ -7387,10 +7387,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case quickAI = "Quick AI"
     case quickTools = "Quick Tools"
     case webOverlay = "Web Overlay"
-    case gemini = "Gemini"
-    case ollama = "Ollama"
-    case nvidia = "NVIDIA"
-    case copilot = "GitHub Copilot"
+    case apis = "APIs"
+    case cli = "CLI"
     case customWebViews = "Custom Web Views"
     case systemPrompt = "System Prompt"
     case autocomplete = "Autocomplete"
@@ -7410,10 +7408,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .quickAI: return "window.shade.open"
         case .quickTools: return "briefcase"
         case .webOverlay: return "macwindow.on.rectangle"
-        case .gemini: return "diamond"
-        case .ollama: return "server.rack"
-        case .nvidia: return "bolt.fill"
-        case .copilot: return "chevron.left.forwardslash.chevron.right"
+        case .apis: return "key.horizontal"
+        case .cli: return "terminal"
         case .customWebViews: return "macwindow"
         case .systemPrompt: return "text.quote"
         case .autocomplete: return "text.cursor"
@@ -7433,10 +7429,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .quickAI: return .blue
         case .quickTools: return .orange
         case .webOverlay: return .purple
-        case .gemini: return .cyan
-        case .ollama: return .green
-        case .nvidia: return .green
-        case .copilot: return .indigo
+        case .apis: return .blue
+        case .cli: return .green
         case .customWebViews: return .teal
         case .systemPrompt: return .yellow
         case .autocomplete: return .mint
@@ -7451,7 +7445,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     enum Category: String, CaseIterable {
         case app = ""
         case overlays = "Overlays"
-        case providers = "AI Providers"
+        case providers = "Providers"
+        case cli = "CLI"
+        case web = "Web"
         case advanced = "Advanced"
     }
 
@@ -7459,7 +7455,9 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         switch self {
         case .general, .sidebarTools, .appearance: return .app
         case .quickAI, .quickTools, .webOverlay: return .overlays
-        case .gemini, .ollama, .nvidia, .copilot, .customWebViews: return .providers
+        case .apis: return .providers
+        case .cli: return .cli
+        case .customWebViews: return .web
         case .systemPrompt, .autocomplete, .downloads, .browserAutomation, .shortcuts, .updates,
             .dataPrivacy:
             return .advanced
@@ -7541,6 +7539,7 @@ struct SettingsView: View {
     @ObservedObject var copilotService = GitHubCopilotService.shared
     @ObservedObject var updateManager = UpdateManager.shared
     @ObservedObject var webOverlayManager = WebOverlayManager.shared
+    @ObservedObject var apiProviderModelStore = APIProviderModelStore.shared
     @State private var showAddCustomOllamaModel = false
     @State private var newCustomModelName = ""
     @State private var showAddCustomGeminiModel = false
@@ -7548,6 +7547,16 @@ struct SettingsView: View {
     @State private var newCustomNvidiaModelName = ""
     @State private var editingAccountId: UUID? = nil
     @State private var editingAccountName: String = ""
+    @State private var customModelProviderID: String? = nil
+    @State private var draftCustomProviderModel: String = ""
+    @State private var addAPIProviderID: String? = nil
+    @State private var draftAPIKey: String = ""
+    @State private var draftAPIEndpoint: String = ""
+    @State private var draftProviderPresetModel: String = ""
+    @State private var draftProviderCustomModel: String = ""
+    @State private var draftModelChoiceMode: String = "preset"
+    @State private var expandedModelProviders: Set<String> = []
+    @State private var fetchingProviders: Set<String> = []
 
     // Custom web views
     @AppStorage("CustomWebViews") private var customWebViewsJSON: String = "[]"
@@ -8200,6 +8209,546 @@ struct SettingsView: View {
         }
     }
 
+    private func accounts(for provider: APIProviderDefinition) -> [ProviderAccount] {
+        switch provider.accountType {
+        case .gemini: return accountManager.geminiAccounts()
+        case .chatgpt: return accountManager.chatGPTAccounts()
+        case .claude: return accountManager.claudeAccounts()
+        case .grok: return accountManager.grokAccounts()
+        case .kimi: return accountManager.kimiAccounts()
+        case .mistral: return accountManager.mistralAccounts()
+        case .nvidia: return accountManager.nvidiaAccounts()
+        case .customapi: return accountManager.customAPIAccounts()
+        case .ollama, .copilot: return []
+        }
+    }
+
+    private func addAccountLabel(for provider: APIProviderDefinition, count: Int) -> String {
+        switch provider.accountType {
+        case .customapi: return "Custom API \(count + 1)"
+        default: return "\(provider.title) \(count + 1)"
+        }
+    }
+
+    private func providerAccountDescription(for provider: APIProviderDefinition) -> String {
+        switch provider.id {
+        case "gemini": return "Google Gemini API keys with sparkle-style model management."
+        case "chatgpt": return "OpenAI API keys with GPT presets and custom model IDs."
+        case "claude": return "Anthropic Claude keys and curated model presets."
+        case "grok": return "xAI Grok keys and fast preset selection."
+        case "kimi": return "Moonshot Kimi keys and reasoning-focused presets."
+        case "mistral": return "Mistral API keys with hosted model presets."
+        case "nvidia": return "NVIDIA NIM API keys and catalog presets."
+        case "customapi": return "Bring your own compatible API key and model IDs."
+        default: return ""
+        }
+    }
+
+    private func providerAccountsExist(_ provider: APIProviderDefinition) -> Bool {
+        accounts(for: provider).contains {
+            !$0.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    private func resetAddAPIProviderDrafts(for provider: APIProviderDefinition? = nil) {
+        draftAPIKey = ""
+        draftAPIEndpoint = ""
+        draftProviderCustomModel = ""
+        let currentProvider = provider ?? addAPIProviderID.flatMap(APIProviderRegistry.provider)
+        draftProviderPresetModel = currentProvider?.presetModels.first ?? ""
+        draftModelChoiceMode = currentProvider?.presetModels.isEmpty == true ? "custom" : "preset"
+    }
+
+    private func apiKeyBinding(for account: ProviderAccount, provider: APIProviderDefinition)
+        -> Binding<String>
+    {
+        Binding(
+            get: { account.apiKey },
+            set: { newKey in
+                accountManager.updateAccount(id: account.id, apiKey: newKey)
+                Task { await fetchModelsIfPossible(for: provider, account: account, apiKey: newKey) }
+            }
+        )
+    }
+
+    private func endpointBinding(for account: ProviderAccount) -> Binding<String> {
+        Binding(
+            get: { account.endpoint },
+            set: { newValue in
+                accountManager.updateAccount(id: account.id, endpoint: newValue)
+            }
+        )
+    }
+
+    @MainActor
+    private func fetchModelsIfPossible(
+        for provider: APIProviderDefinition,
+        account: ProviderAccount,
+        apiKey: String? = nil
+    ) async {
+        let key = (apiKey ?? account.apiKey).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        guard provider.fetchStrategy != .none else { return }
+
+        fetchingProviders.insert(provider.id)
+        defer { fetchingProviders.remove(provider.id) }
+
+        do {
+            let models = try await APIModelFetcher.shared.fetchModels(
+                for: provider,
+                apiKey: key,
+                endpointOverride: account.endpoint
+            )
+            apiProviderModelStore.replaceFetchedModels(models, for: provider)
+        } catch {
+            // Keep presets/customs available even if fetch fails.
+        }
+    }
+
+    private func initialModelForDraft(provider: APIProviderDefinition) -> String {
+        if draftModelChoiceMode == "custom" {
+            return draftProviderCustomModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return draftProviderPresetModel.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func saveAddedProvider(_ provider: APIProviderDefinition) {
+        let key = draftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+
+        let name = provider.title
+        accountManager.addAccount(
+            providerType: provider.accountType,
+            displayName: name,
+            apiKey: key,
+            endpoint: draftAPIEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+
+        let initialModel = initialModelForDraft(provider: provider)
+        if !initialModel.isEmpty {
+            if draftModelChoiceMode == "custom" {
+                apiProviderModelStore.addCustomModel(initialModel, for: provider)
+            } else {
+                apiProviderModelStore.addPresetModel(initialModel, for: provider)
+            }
+            apiProviderModelStore.setSelectedModel(initialModel, for: provider)
+        }
+
+        if let account = accounts(for: provider).last {
+            Task { await fetchModelsIfPossible(for: provider, account: account, apiKey: key) }
+        }
+
+        addAPIProviderID = nil
+        resetAddAPIProviderDrafts()
+    }
+
+    @ViewBuilder
+    private func accountRows(for provider: APIProviderDefinition) -> some View {
+        let providerAccounts = accounts(for: provider)
+        VStack(spacing: 12) {
+            ForEach(providerAccounts) { account in
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        Label(account.displayName, systemImage: "person.crop.circle")
+                            .font(.system(size: 14, weight: .semibold))
+                        Spacer()
+                        Button {
+                            editingAccountName = account.displayName
+                            editingAccountId = account.id
+                        } label: {
+                            Image(systemName: "pencil")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+
+                        if providerAccounts.count > 1 {
+                            Button(role: .destructive) {
+                                accountManager.removeAccount(id: account.id)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    if editingAccountId == account.id {
+                        HStack(spacing: 8) {
+                            TextField("Name", text: $editingAccountName)
+                                .textFieldStyle(.roundedBorder)
+                            Button("Save") {
+                                accountManager.renameAccount(
+                                    id: account.id, newName: editingAccountName)
+                                editingAccountId = nil
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
+                    }
+
+                    SecureField("API Key", text: apiKeyBinding(for: account, provider: provider))
+                    .textFieldStyle(.roundedBorder)
+
+                    if provider.accountType == .customapi {
+                        TextField("Base URL", text: endpointBinding(for: account))
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.white.opacity(0.5))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                )
+            }
+
+            Button {
+                addAPIProviderID = provider.id
+                resetAddAPIProviderDrafts(for: provider)
+            } label: {
+                Label(providerAccounts.isEmpty ? "Add API Key" : "Add Account", systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.plain)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(provider.tint.opacity(0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(provider.tint.opacity(0.2), lineWidth: 1)
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func modelPickerCard(for provider: APIProviderDefinition) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Models")
+                        .font(.system(size: 16, weight: .semibold))
+                    Text("Preset and custom models live together under one provider.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Menu {
+                    if !provider.presetModels.isEmpty {
+                        Section("Presets") {
+                            ForEach(provider.presetModels, id: \.self) { model in
+                                Button(model) {
+                                    apiProviderModelStore.addPresetModel(model, for: provider)
+                                }
+                            }
+                        }
+                        Divider()
+                    }
+                    Button("Custom Model…") {
+                        customModelProviderID = provider.id
+                    }
+                } label: {
+                    Label("Add Model", systemImage: "plus")
+                }
+                .menuStyle(.borderlessButton)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(provider.tint.opacity(0.14))
+                )
+            }
+
+            Picker("Default Model", selection: Binding(
+                get: { apiProviderModelStore.selectedModel(for: provider) },
+                set: { apiProviderModelStore.setSelectedModel($0, for: provider) }
+            )) {
+                ForEach(apiProviderModelStore.enabledModels(for: provider), id: \.self) { model in
+                    Text(model).tag(model)
+                }
+            }
+            .pickerStyle(.menu)
+
+            let models = apiProviderModelStore.combinedModels(for: provider)
+            let enabledModels = apiProviderModelStore.enabledModels(for: provider)
+            if models.isEmpty {
+                Text("No models added yet.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 10) {
+                    Label(
+                        "\(enabledModels.count) enabled of \(models.count)",
+                        systemImage: "checklist"
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    if fetchingProviders.contains(provider.id) {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Spacer()
+                    Button(expandedModelProviders.contains(provider.id) ? "Collapse" : "Expand") {
+                        if expandedModelProviders.contains(provider.id) {
+                            expandedModelProviders.remove(provider.id)
+                        } else {
+                            expandedModelProviders.insert(provider.id)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(provider.tint.opacity(0.12)))
+                }
+
+                if expandedModelProviders.contains(provider.id) {
+                    HStack {
+                        Button("Select All") {
+                            apiProviderModelStore.selectAll(for: provider)
+                        }
+                        .buttonStyle(.plain)
+                        Button("Unselect All") {
+                            apiProviderModelStore.unselectAll(for: provider)
+                        }
+                        .buttonStyle(.plain)
+                        Spacer()
+                    }
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 10)], spacing: 10)
+                    {
+                        ForEach(models, id: \.self) { model in
+                            Button {
+                                apiProviderModelStore.toggleEnabled(model, for: provider)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(
+                                        systemName: enabledModels.contains(model)
+                                            ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(
+                                            enabledModels.contains(model)
+                                                ? provider.tint : .secondary)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(model)
+                                            .font(
+                                                .system(
+                                                    size: 12, weight: .medium,
+                                                    design: .monospaced))
+                                            .lineLimit(2)
+                                        Text(
+                                            apiProviderModelStore.isBuiltInPreset(model, for: provider)
+                                                ? "Preset"
+                                                : apiProviderModelStore.fetchedModels(for: provider)
+                                                    .contains(model) ? "Fetched" : "Custom"
+                                        )
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if !apiProviderModelStore.isBuiltInPreset(model, for: provider)
+                                        && !apiProviderModelStore.fetchedModels(for: provider)
+                                            .contains(model)
+                                    {
+                                        Button(role: .destructive) {
+                                            apiProviderModelStore.removeModel(model, for: provider)
+                                        } label: {
+                                            Image(systemName: "trash")
+                                                .foregroundStyle(.red)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .padding(12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(
+                                            enabledModels.contains(model)
+                                                ? provider.tint.opacity(0.12)
+                                                : Color.white.opacity(0.5))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .stroke(
+                                            enabledModels.contains(model)
+                                                ? provider.tint.opacity(0.35)
+                                                : Color.white.opacity(0.4), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.28), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private func apiProviderCard(_ provider: APIProviderDefinition) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [provider.tint.opacity(0.95), provider.tint.opacity(0.55)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Image(systemName: provider.icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .frame(width: 46, height: 46)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(provider.title)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                    Text(providerAccountDescription(for: provider))
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            accountRows(for: provider)
+            modelPickerCard(for: provider)
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.74), provider.tint.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .stroke(Color.white.opacity(0.42), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 16, y: 8)
+        .task(id: accounts(for: provider).map(\.apiKey).joined(separator: "|")) {
+            if let firstAccount = accounts(for: provider).first {
+                await fetchModelsIfPossible(for: provider, account: firstAccount)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var apisSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Cloud APIs")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("Configured providers only. Add a key, fetch models, then enable what you want.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(APIProviderRegistry.providers.filter { !providerAccountsExist($0) }) {
+                        provider in
+                        Button {
+                            addAPIProviderID = provider.id
+                            resetAddAPIProviderDrafts(for: provider)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: provider.icon)
+                                Text(provider.title)
+                            }
+                            .font(.system(size: 13, weight: .semibold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(provider.tint.opacity(0.12)))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            ForEach(APIProviderRegistry.providers.filter { providerAccountsExist($0) }) { provider in
+                apiProviderCard(provider)
+            }
+
+            if APIProviderRegistry.providers.filter({ providerAccountsExist($0) }).isEmpty {
+                Text("No API providers configured yet.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
+    }
+
+    @ViewBuilder
+    private var cliSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("CLI Providers")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                Text("Local and developer-adjacent providers live here now.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 16) {
+                copilotSection
+            }
+            .padding(22)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [Color.white.opacity(0.74), Color.indigo.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .stroke(Color.white.opacity(0.42), lineWidth: 1)
+            )
+
+            VStack(alignment: .leading, spacing: 16) {
+                ollamaSection
+            }
+            .padding(22)
+            .background(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [Color.white.opacity(0.74), Color.green.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .stroke(Color.white.opacity(0.42), lineWidth: 1)
+            )
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
+    }
+
     // MARK: - AI Providers Section
 
     @ViewBuilder
@@ -8781,7 +9330,7 @@ struct SettingsView: View {
                 }
             }
             .padding(14)
-            .frame(width: 340)
+            .frame(width: 300)
         }
     }
 
@@ -9346,13 +9895,122 @@ struct SettingsView: View {
             .padding(.top, 26)
             .padding(.bottom, 10)
 
-            Form {
-                contentForTab(selectedTab)
+            if selectedTab == .apis || selectedTab == .cli {
+                ScrollView {
+                    contentForTab(selectedTab)
+                }
+                .sheet(
+                    isPresented: Binding(
+                        get: { addAPIProviderID != nil },
+                        set: { isPresented in
+                            if !isPresented {
+                                addAPIProviderID = nil
+                                resetAddAPIProviderDrafts()
+                            }
+                        }
+                    )
+                ) {
+                    if let providerID = addAPIProviderID,
+                        let provider = APIProviderRegistry.provider(for: providerID)
+                    {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Add \(provider.title)")
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+
+                            SecureField("API Key", text: $draftAPIKey)
+                                .textFieldStyle(.roundedBorder)
+
+                            if provider.accountType == .customapi {
+                                TextField("Base URL", text: $draftAPIEndpoint)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+
+                            Picker("Model", selection: $draftModelChoiceMode) {
+                                if !provider.presetModels.isEmpty {
+                                    Text(provider.presetModeLabel).tag("preset")
+                                }
+                                Text("Custom Model").tag("custom")
+                            }
+                            .pickerStyle(.segmented)
+
+                            if draftModelChoiceMode == "preset" && !provider.presetModels.isEmpty {
+                                Picker("Preset", selection: $draftProviderPresetModel) {
+                                    ForEach(provider.presetModels, id: \.self) { model in
+                                        Text(model).tag(model)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                            } else {
+                                TextField(provider.customPlaceholder, text: $draftProviderCustomModel)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+
+                            HStack {
+                                Spacer()
+                                Button("Cancel") {
+                                    addAPIProviderID = nil
+                                    resetAddAPIProviderDrafts()
+                                }
+                                Button("Save") {
+                                    saveAddedProvider(provider)
+                                }
+                                .keyboardShortcut(.defaultAction)
+                            }
+                        }
+                        .padding(18)
+                        .frame(width: 320)
+                    }
+                }
+                .sheet(
+                    isPresented: Binding(
+                        get: { customModelProviderID != nil },
+                        set: { isPresented in
+                            if !isPresented {
+                                customModelProviderID = nil
+                                draftCustomProviderModel = ""
+                            }
+                        }
+                    )
+                ) {
+                    if let providerID = customModelProviderID,
+                        let provider = APIProviderRegistry.provider(for: providerID)
+                    {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Add Custom Model")
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                            Text(provider.title)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            TextField(provider.customPlaceholder, text: $draftCustomProviderModel)
+                                .textFieldStyle(.roundedBorder)
+                            HStack {
+                                Spacer()
+                                Button("Cancel") {
+                                    customModelProviderID = nil
+                                    draftCustomProviderModel = ""
+                                }
+                                Button("Add") {
+                                    apiProviderModelStore.addCustomModel(
+                                        draftCustomProviderModel, for: provider)
+                                    customModelProviderID = nil
+                                    draftCustomProviderModel = ""
+                                }
+                                .keyboardShortcut(.defaultAction)
+                            }
+                        }
+                        .padding(18)
+                        .frame(width: 300)
+                    }
+                }
+            } else {
+                Form {
+                    contentForTab(selectedTab)
+                }
+                .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
+                .safeAreaPadding(.bottom, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .formStyle(.grouped)
-            .scrollContentBackground(.hidden)
-            .safeAreaPadding(.bottom, 10)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -9395,7 +10053,7 @@ struct SettingsView: View {
                 .padding(.top, 12)
 
         }
-        .frame(minWidth: 640, idealWidth: 680, minHeight: 700, idealHeight: 760)
+        .frame(minWidth: 600, idealWidth: 640, minHeight: 640, idealHeight: 700)
         .background(Color.clear)
         .ignoresSafeArea(.all)
         .toolbarBackground(.hidden, for: .windowToolbar)
@@ -9472,14 +10130,10 @@ struct SettingsView: View {
             quickToolsSection
         case .webOverlay:
             webOverlaySection
-        case .gemini:
-            geminiSection
-        case .ollama:
-            ollamaSection
-        case .nvidia:
-            nvidiaSection
-        case .copilot:
-            copilotSection
+        case .apis:
+            apisSection
+        case .cli:
+            cliSection
         case .customWebViews:
             customProviderSection
         case .systemPrompt:
