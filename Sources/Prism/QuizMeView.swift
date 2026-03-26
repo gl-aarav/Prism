@@ -145,6 +145,7 @@ struct QuizMeView: View {
     @ObservedObject private var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
+    @ObservedObject private var accountManager = AccountManager.shared
     @StateObject private var store = QuizStore.shared
 
     @State private var activeSessionId: UUID? = nil
@@ -190,6 +191,64 @@ struct QuizMeView: View {
         return models.isEmpty ? nvidiaManager.sortedModels : models
     }
 
+    private var quizProviderBase: String {
+        quizProvider.split(separator: "|").first.map(String.init) ?? quizProvider
+    }
+
+    private var quizProviderAccountID: UUID? {
+        guard
+            quizProvider.contains("|"),
+            let uuidStr = quizProvider.split(separator: "|").last.map(String.init)
+        else { return nil }
+        return UUID(uuidString: uuidStr)
+    }
+
+    private var selectedQuizAccount: ProviderAccount? {
+        guard let id = quizProviderAccountID else { return nil }
+        return accountManager.accounts.first(where: { $0.id == id })
+    }
+
+    private var quizProviderDisplayName: String {
+        if let id = quizProviderAccountID,
+            quizProviderBase == "GitHub Copilot",
+            let ghUser = copilotService.accountAuthState[id]?.userName,
+            !ghUser.isEmpty
+        {
+            return "GitHub Copilot (\(ghUser))"
+        }
+        return selectedQuizAccount?.displayName ?? quizProviderBase
+    }
+
+    private var quizModelDisplayName: String {
+        switch quizProviderBase {
+        case "Gemini API":
+            return geminiManager.displayName(for: quizModel)
+        case "NVIDIA API":
+            return nvidiaManager.displayName(for: quizModel)
+        case "GitHub Copilot":
+            return copilotModelManager.displayName(for: quizModel)
+        default:
+            return quizModel
+        }
+    }
+
+    private var resolvedGeminiKey: String {
+        selectedQuizAccount?.apiKey ?? geminiKey
+    }
+
+    private var resolvedNvidiaKey: String {
+        selectedQuizAccount?.apiKey ?? nvidiaKey
+    }
+
+    private var resolvedOllamaEndpoint: String {
+        guard let account = selectedQuizAccount else { return ollamaURL }
+        return account.endpoint.isEmpty ? ollamaURL : account.endpoint
+    }
+
+    private var resolvedCopilotAccountID: String? {
+        quizProviderAccountID?.uuidString
+    }
+
     private let geminiService = GeminiService()
     private let ollamaService = OllamaService()
     private let appleFoundationService = AppleFoundationService()
@@ -207,9 +266,10 @@ struct QuizMeView: View {
     }
 
     private func effectiveThinkingLevel(provider: String, model: String, level: String) -> String {
-        if provider == "Gemini API" {
+        let base = provider.split(separator: "|").first.map(String.init) ?? provider
+        if base == "Gemini API" {
             return "none"
-        } else if provider == "Ollama" {
+        } else if base == "Ollama" {
             let lower = model.lowercased()
             if lower.contains("gpt-oss") {
                 return level
@@ -326,8 +386,11 @@ struct QuizMeView: View {
             HStack(spacing: 4) {
                 Image(systemName: providerIcon)
                     .font(.system(size: 10))
-                Text(quizModel.count > 20 ? String(quizModel.prefix(18)) + "…" : quizModel)
-                    .font(.system(size: 11, weight: .medium))
+                Text(
+                    quizModelDisplayName.count > 20
+                        ? String(quizModelDisplayName.prefix(18)) + "…" : quizModelDisplayName
+                )
+                .font(.system(size: 11, weight: .medium))
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
@@ -599,7 +662,7 @@ struct QuizMeView: View {
                     )
                 )
 
-            Text("Using \(quizProvider) — \(quizModel)")
+            Text("Using \(quizProviderDisplayName) — \(quizModelDisplayName)")
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary.opacity(0.7))
 
@@ -1277,27 +1340,85 @@ struct QuizMeView: View {
                         Label("Apple Foundation", systemImage: "apple.logo")
                     }
                     Divider()
-                    Menu("Gemini API") {
-                        ForEach(geminiDropdownModels, id: \.self) { model in
-                            Button(action: {
-                                quizProvider = "Gemini API"
-                                quizModel = model
-                            }) {
-                                Text(geminiManager.displayName(for: model))
+                    let geminiAccounts = accountManager.geminiAccounts().filter {
+                        !$0.apiKey.isEmpty
+                    }
+                    if !geminiAccounts.isEmpty {
+                        Menu("Gemini API") {
+                            ForEach(geminiAccounts) { account in
+                                Menu(account.displayName) {
+                                    ForEach(geminiDropdownModels, id: \.self) { model in
+                                        Button(action: {
+                                            quizProvider = "Gemini API|\(account.id.uuidString)"
+                                            quizModel = model
+                                        }) {
+                                            Text(geminiManager.displayName(for: model))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Menu("Gemini API") {
+                            ForEach(geminiDropdownModels, id: \.self) { model in
+                                Button(action: {
+                                    quizProvider = "Gemini API"
+                                    quizModel = model
+                                }) {
+                                    Text(geminiManager.displayName(for: model))
+                                }
                             }
                         }
                     }
-                    Menu("Ollama") {
-                        ForEach(ollamaManager.allModels, id: \.self) { model in
-                            Button(action: {
-                                quizProvider = "Ollama"
-                                quizModel = model
-                            }) {
-                                Text(model)
+
+                    let ollamaAccounts = accountManager.ollamaAccounts()
+                    if !ollamaAccounts.isEmpty {
+                        Menu("Ollama") {
+                            ForEach(ollamaAccounts) { account in
+                                Menu(account.displayName) {
+                                    ForEach(ollamaManager.allModels, id: \.self) { model in
+                                        Button(action: {
+                                            quizProvider = "Ollama|\(account.id.uuidString)"
+                                            quizModel = model
+                                        }) {
+                                            Text(model)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Menu("Ollama") {
+                            ForEach(ollamaManager.allModels, id: \.self) { model in
+                                Button(action: {
+                                    quizProvider = "Ollama"
+                                    quizModel = model
+                                }) {
+                                    Text(model)
+                                }
                             }
                         }
                     }
-                    if !nvidiaKey.isEmpty {
+
+                    let nvidiaAccounts = accountManager.nvidiaAccounts().filter {
+                        !$0.apiKey.isEmpty
+                    }
+                    if !nvidiaAccounts.isEmpty {
+                        Menu("NVIDIA API") {
+                            ForEach(nvidiaAccounts) { account in
+                                Menu(account.displayName) {
+                                    ForEach(nvidiaDropdownModels, id: \.self) { model in
+                                        Button(action: {
+                                            quizProvider = "NVIDIA API|\(account.id.uuidString)"
+                                            quizModel = model
+                                        }) {
+                                            Text(nvidiaManager.displayName(for: model))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if !nvidiaKey.isEmpty {
                         Menu("NVIDIA API") {
                             ForEach(nvidiaDropdownModels, id: \.self) { model in
                                 Button(action: {
@@ -1309,14 +1430,41 @@ struct QuizMeView: View {
                             }
                         }
                     }
+
                     if copilotService.isAuthenticated {
-                        Menu("GitHub Copilot") {
-                            ForEach(copilotModelManager.chatModels, id: \.self) { model in
-                                Button(action: {
-                                    quizProvider = "GitHub Copilot"
-                                    quizModel = model
-                                }) {
-                                    Text(copilotModelManager.displayName(for: model))
+                        let copilotAccounts = accountManager.copilotAccounts()
+                        if !copilotAccounts.isEmpty {
+                            Menu("GitHub Copilot") {
+                                ForEach(copilotAccounts) { account in
+                                    let ghUser =
+                                        copilotService.accountAuthState[account.id]?.userName ?? ""
+                                    let label =
+                                        ghUser.isEmpty
+                                        ? account.displayName
+                                        : "GitHub Copilot (\(ghUser))"
+                                    Menu(label) {
+                                        ForEach(copilotModelManager.chatModels, id: \.self) {
+                                            model in
+                                            Button(action: {
+                                                quizProvider =
+                                                    "GitHub Copilot|\(account.id.uuidString)"
+                                                quizModel = model
+                                            }) {
+                                                Text(copilotModelManager.displayName(for: model))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Menu("GitHub Copilot") {
+                                ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                                    Button(action: {
+                                        quizProvider = "GitHub Copilot"
+                                        quizModel = model
+                                    }) {
+                                        Text(copilotModelManager.displayName(for: model))
+                                    }
                                 }
                             }
                         }
@@ -1336,7 +1484,7 @@ struct QuizMeView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .frame(width: 34)
-                .help("\(quizProvider) — \(quizModel)")
+                .help("\(quizProviderDisplayName) — \(quizModelDisplayName)")
 
                 // Topic text input
                 ZStack(alignment: .leading) {
@@ -1371,7 +1519,7 @@ struct QuizMeView: View {
                 }
 
                 // Thinking button (Ollama only, capable models)
-                if quizProvider == "Ollama" && quizHasThinkingCapability {
+                if quizProviderBase == "Ollama" && quizHasThinkingCapability {
                     Menu {
                         Button(action: { quizThinkingLevel = "low" }) {
                             if quizThinkingLevel == "low" {
@@ -1413,7 +1561,7 @@ struct QuizMeView: View {
                 }
 
                 // Web Search toggle (Ollama)
-                if quizProvider == "Ollama" {
+                if quizProviderBase == "Ollama" {
                     Button(action: { quizWebSearchEnabled.toggle() }) {
                         Image(systemName: "globe")
                             .font(.system(size: 14, weight: .medium))
@@ -1563,7 +1711,7 @@ struct QuizMeView: View {
     }
 
     private var providerIcon: String {
-        switch quizProvider {
+        switch quizProviderBase {
         case "Apple Foundation": return "apple.logo"
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
@@ -1695,14 +1843,14 @@ struct QuizMeView: View {
             do {
                 var fullContent = ""
 
-                switch quizProvider {
+                switch quizProviderBase {
                 case "Gemini API":
-                    guard !geminiKey.isEmpty else {
+                    guard !resolvedGeminiKey.isEmpty else {
                         await MainActor.run { isGradingFRQ = false }
                         return
                     }
                     for try await (chunk, _, _) in geminiService.sendMessageStream(
-                        history: history, apiKey: geminiKey, model: quizModel,
+                        history: history, apiKey: resolvedGeminiKey, model: quizModel,
                         systemPrompt: "", thinkingLevel: "none"
                     ) {
                         fullContent += chunk
@@ -1711,7 +1859,7 @@ struct QuizMeView: View {
                     let thinking = effectiveThinkingLevel(
                         provider: quizProvider, model: quizModel, level: quizThinkingLevel)
                     for try await (chunk, _) in ollamaService.sendMessageStream(
-                        history: history, endpoint: ollamaURL, model: quizModel,
+                        history: history, endpoint: resolvedOllamaEndpoint, model: quizModel,
                         systemPrompt: "", thinkingLevel: thinking
                     ) {
                         fullContent += chunk
@@ -1723,19 +1871,22 @@ struct QuizMeView: View {
                         fullContent += chunk
                     }
                 case "NVIDIA API":
-                    guard !nvidiaKey.isEmpty else {
+                    guard !resolvedNvidiaKey.isEmpty else {
                         await MainActor.run { isGradingFRQ = false }
                         return
                     }
                     for try await (chunk, _) in nvidiaService.sendMessageStream(
-                        history: history, apiKey: nvidiaKey, model: quizModel,
+                        history: history, apiKey: resolvedNvidiaKey, model: quizModel,
                         systemPrompt: ""
                     ) {
                         fullContent += chunk
                     }
                 case "GitHub Copilot":
                     for try await (chunk, _) in copilotService.sendMessageStream(
-                        history: history, model: quizModel, systemPrompt: ""
+                        history: history,
+                        model: quizModel,
+                        systemPrompt: "",
+                        accountId: resolvedCopilotAccountID
                     ) {
                         fullContent += chunk
                     }
@@ -1892,9 +2043,9 @@ struct QuizMeView: View {
             do {
                 var fullContent = ""
 
-                switch quizProvider {
+                switch quizProviderBase {
                 case "Gemini API":
-                    guard !geminiKey.isEmpty else {
+                    guard !resolvedGeminiKey.isEmpty else {
                         await MainActor.run {
                             generationError = "No Gemini API key set. Please configure in Settings."
                             isGenerating = false
@@ -1902,7 +2053,7 @@ struct QuizMeView: View {
                         return
                     }
                     for try await (chunk, _, _) in geminiService.sendMessageStream(
-                        history: history, apiKey: geminiKey, model: quizModel,
+                        history: history, apiKey: resolvedGeminiKey, model: quizModel,
                         systemPrompt: "", thinkingLevel: "none"
                     ) {
                         fullContent += chunk
@@ -1924,7 +2075,7 @@ struct QuizMeView: View {
                         }
                     }
                     for try await (chunk, _) in ollamaService.sendMessageStream(
-                        history: history, endpoint: ollamaURL, model: quizModel,
+                        history: history, endpoint: resolvedOllamaEndpoint, model: quizModel,
                         systemPrompt: quizSystemPrompt, thinkingLevel: quizThinking
                     ) {
                         fullContent += chunk
@@ -1938,7 +2089,7 @@ struct QuizMeView: View {
                     }
 
                 case "NVIDIA API":
-                    guard !nvidiaKey.isEmpty else {
+                    guard !resolvedNvidiaKey.isEmpty else {
                         await MainActor.run {
                             generationError = "No NVIDIA API key set. Please configure in Settings."
                             isGenerating = false
@@ -1946,7 +2097,7 @@ struct QuizMeView: View {
                         return
                     }
                     for try await (chunk, _) in nvidiaService.sendMessageStream(
-                        history: history, apiKey: nvidiaKey, model: quizModel,
+                        history: history, apiKey: resolvedNvidiaKey, model: quizModel,
                         systemPrompt: ""
                     ) {
                         fullContent += chunk
@@ -1961,7 +2112,10 @@ struct QuizMeView: View {
                         return
                     }
                     for try await (chunk, _) in copilotService.sendMessageStream(
-                        history: history, model: quizModel, systemPrompt: ""
+                        history: history,
+                        model: quizModel,
+                        systemPrompt: "",
+                        accountId: resolvedCopilotAccountID
                     ) {
                         fullContent += chunk
                     }

@@ -76,6 +76,7 @@ struct ModelComparisonView: View {
     @ObservedObject private var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
+    @ObservedObject private var accountManager = AccountManager.shared
     @ObservedObject private var state = ComparisonStateManager.shared
 
     @AppStorage("ComparePrompt") private var prompt: String = ""
@@ -131,6 +132,66 @@ struct ModelComparisonView: View {
         }
         let models = apiProviderModelStore.enabledModels(for: provider)
         return models.isEmpty ? nvidiaManager.sortedModels : models
+    }
+
+    private func providerBase(_ provider: String) -> String {
+        provider.split(separator: "|").first.map(String.init) ?? provider
+    }
+
+    private func accountIdentifier(from provider: String) -> UUID? {
+        guard
+            provider.contains("|"),
+            let uuidStr = provider.split(separator: "|").last.map(String.init)
+        else { return nil }
+        return UUID(uuidString: uuidStr)
+    }
+
+    private func account(for provider: String) -> ProviderAccount? {
+        guard let id = accountIdentifier(from: provider) else { return nil }
+        return accountManager.accounts.first(where: { $0.id == id })
+    }
+
+    private func providerDisplayName(_ provider: String) -> String {
+        guard provider.contains("|") else { return providerBase(provider) }
+        let base = providerBase(provider)
+        if let id = accountIdentifier(from: provider),
+            base == "GitHub Copilot",
+            let ghUser = copilotService.accountAuthState[id]?.userName,
+            !ghUser.isEmpty
+        {
+            return "GitHub Copilot (\(ghUser))"
+        }
+        return account(for: provider)?.displayName ?? base
+    }
+
+    private func modelDisplayName(provider: String, model: String) -> String {
+        switch providerBase(provider) {
+        case "Gemini API":
+            return geminiManager.displayName(for: model)
+        case "NVIDIA API":
+            return nvidiaManager.displayName(for: model)
+        case "GitHub Copilot":
+            return copilotModelManager.displayName(for: model)
+        default:
+            return model
+        }
+    }
+
+    private func resolvedGeminiAPIKey(for provider: String) -> String {
+        account(for: provider)?.apiKey ?? geminiKey
+    }
+
+    private func resolvedNvidiaAPIKey(for provider: String) -> String {
+        account(for: provider)?.apiKey ?? nvidiaKey
+    }
+
+    private func resolvedOllamaEndpoint(for provider: String) -> String {
+        guard let account = account(for: provider) else { return ollamaURL }
+        return account.endpoint.isEmpty ? ollamaURL : account.endpoint
+    }
+
+    private func resolvedCopilotAccountID(for provider: String) -> String? {
+        accountIdentifier(from: provider)?.uuidString
     }
 
     var body: some View {
@@ -436,52 +497,107 @@ struct ModelComparisonView: View {
                         Label("Apple Foundation", systemImage: "apple.logo")
                     }
                     Divider()
-                    Menu("Gemini API") {
-                        ForEach(GeminiModelManager.modelGroups, id: \.name) { group in
-                            Section(group.name) {
-                                ForEach(group.models, id: \.self) { model in
-                                    Button(action: {
-                                        synthesizeProvider = "Gemini API"
-                                        synthesizeModel = model
-                                    }) {
-                                        if synthesizeProvider == "Gemini API"
-                                            && synthesizeModel == model
-                                        {
-                                            Label(
-                                                geminiManager.displayName(for: model),
-                                                systemImage: "checkmark")
-                                        } else {
-                                            Text(geminiManager.displayName(for: model))
+                    let geminiAccounts = accountManager.geminiAccounts().filter {
+                        !$0.apiKey.isEmpty
+                    }
+                    if !geminiAccounts.isEmpty {
+                        Menu("Gemini API") {
+                            ForEach(geminiAccounts) { account in
+                                Menu(account.displayName) {
+                                    ForEach(geminiDropdownModels, id: \.self) { model in
+                                        Button(action: {
+                                            synthesizeProvider =
+                                                "Gemini API|\(account.id.uuidString)"
+                                            synthesizeModel = model
+                                        }) {
+                                            if synthesizeProvider.contains(account.id.uuidString)
+                                                && synthesizeModel == model
+                                            {
+                                                Label(
+                                                    geminiManager.displayName(for: model),
+                                                    systemImage: "checkmark")
+                                            } else {
+                                                Text(geminiManager.displayName(for: model))
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                    Menu("Ollama") {
-                        ForEach(ollamaManager.allModels, id: \.self) { model in
-                            Button(action: {
-                                synthesizeProvider = "Ollama"
-                                synthesizeModel = model
-                            }) {
-                                if synthesizeProvider == "Ollama" && synthesizeModel == model {
-                                    Label(model, systemImage: "checkmark")
-                                } else {
-                                    Text(model)
+                    } else {
+                        Menu("Gemini API") {
+                            ForEach(geminiDropdownModels, id: \.self) { model in
+                                Button(action: {
+                                    synthesizeProvider = "Gemini API"
+                                    synthesizeModel = model
+                                }) {
+                                    if providerBase(synthesizeProvider) == "Gemini API"
+                                        && synthesizeModel == model
+                                    {
+                                        Label(
+                                            geminiManager.displayName(for: model),
+                                            systemImage: "checkmark")
+                                    } else {
+                                        Text(geminiManager.displayName(for: model))
+                                    }
                                 }
                             }
                         }
                     }
-                    if !nvidiaKey.isEmpty {
-                        Menu("NVIDIA API") {
-                            ForEach(NvidiaModelManager.modelGroups, id: \.name) { group in
-                                Section(group.name) {
-                                    ForEach(group.models, id: \.self) { model in
+                    let ollamaAccounts = accountManager.ollamaAccounts()
+                    if !ollamaAccounts.isEmpty {
+                        Menu("Ollama") {
+                            ForEach(ollamaAccounts) { account in
+                                Menu(account.displayName) {
+                                    ForEach(ollamaManager.allModels, id: \.self) { model in
                                         Button(action: {
-                                            synthesizeProvider = "NVIDIA API"
+                                            synthesizeProvider = "Ollama|\(account.id.uuidString)"
                                             synthesizeModel = model
                                         }) {
-                                            if synthesizeProvider == "NVIDIA API"
+                                            if synthesizeProvider.contains(account.id.uuidString)
+                                                && synthesizeModel == model
+                                            {
+                                                Label(model, systemImage: "checkmark")
+                                            } else {
+                                                Text(model)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Menu("Ollama") {
+                            ForEach(ollamaManager.allModels, id: \.self) { model in
+                                Button(action: {
+                                    synthesizeProvider = "Ollama"
+                                    synthesizeModel = model
+                                }) {
+                                    if providerBase(synthesizeProvider) == "Ollama"
+                                        && synthesizeModel == model
+                                    {
+                                        Label(model, systemImage: "checkmark")
+                                    } else {
+                                        Text(model)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let nvidiaAccounts = accountManager.nvidiaAccounts().filter {
+                        !$0.apiKey.isEmpty
+                    }
+                    if !nvidiaAccounts.isEmpty {
+                        Menu("NVIDIA API") {
+                            ForEach(nvidiaAccounts) { account in
+                                Menu(account.displayName) {
+                                    ForEach(nvidiaDropdownModels, id: \.self) { model in
+                                        Button(action: {
+                                            synthesizeProvider =
+                                                "NVIDIA API|\(account.id.uuidString)"
+                                            synthesizeModel = model
+                                        }) {
+                                            if synthesizeProvider.contains(account.id.uuidString)
                                                 && synthesizeModel == model
                                             {
                                                 Label(
@@ -495,22 +611,77 @@ struct ModelComparisonView: View {
                                 }
                             }
                         }
-                    }
-                    if copilotService.isAuthenticated {
-                        Menu("GitHub Copilot") {
-                            ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                    } else if !nvidiaKey.isEmpty {
+                        Menu("NVIDIA API") {
+                            ForEach(nvidiaDropdownModels, id: \.self) { model in
                                 Button(action: {
-                                    synthesizeProvider = "GitHub Copilot"
+                                    synthesizeProvider = "NVIDIA API"
                                     synthesizeModel = model
                                 }) {
-                                    if synthesizeProvider == "GitHub Copilot"
+                                    if providerBase(synthesizeProvider) == "NVIDIA API"
                                         && synthesizeModel == model
                                     {
                                         Label(
-                                            copilotModelManager.displayName(for: model),
+                                            nvidiaManager.displayName(for: model),
                                             systemImage: "checkmark")
                                     } else {
-                                        Text(copilotModelManager.displayName(for: model))
+                                        Text(nvidiaManager.displayName(for: model))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if copilotService.isAuthenticated {
+                        let copilotAccounts = accountManager.copilotAccounts()
+                        if !copilotAccounts.isEmpty {
+                            Menu("GitHub Copilot") {
+                                ForEach(copilotAccounts) { account in
+                                    let ghUser =
+                                        copilotService.accountAuthState[account.id]?.userName ?? ""
+                                    let label =
+                                        ghUser.isEmpty
+                                        ? account.displayName
+                                        : "GitHub Copilot (\(ghUser))"
+                                    Menu(label) {
+                                        ForEach(copilotModelManager.chatModels, id: \.self) {
+                                            model in
+                                            Button(action: {
+                                                synthesizeProvider =
+                                                    "GitHub Copilot|\(account.id.uuidString)"
+                                                synthesizeModel = model
+                                            }) {
+                                                if synthesizeProvider.contains(
+                                                    account.id.uuidString)
+                                                    && synthesizeModel == model
+                                                {
+                                                    Label(
+                                                        copilotModelManager.displayName(for: model),
+                                                        systemImage: "checkmark")
+                                                } else {
+                                                    Text(
+                                                        copilotModelManager.displayName(for: model))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Menu("GitHub Copilot") {
+                                ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                                    Button(action: {
+                                        synthesizeProvider = "GitHub Copilot"
+                                        synthesizeModel = model
+                                    }) {
+                                        if providerBase(synthesizeProvider) == "GitHub Copilot"
+                                            && synthesizeModel == model
+                                        {
+                                            Label(
+                                                copilotModelManager.displayName(for: model),
+                                                systemImage: "checkmark")
+                                        } else {
+                                            Text(copilotModelManager.displayName(for: model))
+                                        }
                                     }
                                 }
                             }
@@ -543,8 +714,10 @@ struct ModelComparisonView: View {
                     HStack(spacing: 6) {
                         Image(systemName: synthesizeProviderIcon)
                             .font(.system(size: 11, weight: .semibold))
-                        Text("\(synthesizeProvider) — \(synthesizeModel)")
-                            .font(.system(size: 12, weight: .medium))
+                        Text(
+                            "\(providerDisplayName(synthesizeProvider)) — \(modelDisplayName(provider: synthesizeProvider, model: synthesizeModel))"
+                        )
+                        .font(.system(size: 12, weight: .medium))
                         Image(
                             systemName: isSynthesizeProviderMenuOpen ? "chevron.up" : "chevron.down"
                         )
@@ -662,7 +835,9 @@ struct ModelComparisonView: View {
             .padding(.vertical, 12)
 
             // Synthesize options bar (thinking + web search)
-            if synthesizeProvider == "Ollama" || synthesizeProvider == "NVIDIA API" {
+            if providerBase(synthesizeProvider) == "Ollama"
+                || providerBase(synthesizeProvider) == "NVIDIA API"
+            {
                 HStack(spacing: 10) {
                     // Thinking level
                     if synthesizeHasThinkingCapability {
@@ -693,7 +868,7 @@ struct ModelComparisonView: View {
                     }
 
                     // Web search toggle
-                    if synthesizeProvider == "Ollama" {
+                    if providerBase(synthesizeProvider) == "Ollama" {
                         Button(action: { synthesizeWebSearchEnabled.toggle() }) {
                             HStack(spacing: 5) {
                                 Image(systemName: "globe")
@@ -775,9 +950,11 @@ struct ModelComparisonView: View {
 
                 if !state.synthesizedResponse.isEmpty && !isSynthesizing {
                     HStack {
-                        Text("Synthesized by \(synthesizeProvider) — \(synthesizeModel)")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary.opacity(0.6))
+                        Text(
+                            "Synthesized by \(providerDisplayName(synthesizeProvider)) — \(modelDisplayName(provider: synthesizeProvider, model: synthesizeModel))"
+                        )
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary.opacity(0.6))
                         Spacer()
                     }
                     .padding(.horizontal, 16)
@@ -792,7 +969,7 @@ struct ModelComparisonView: View {
     }
 
     private var synthesizeProviderIcon: String {
-        switch synthesizeProvider {
+        switch providerBase(synthesizeProvider) {
         case "Apple Foundation": return "apple.logo"
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
@@ -806,13 +983,13 @@ struct ModelComparisonView: View {
 
     /// Whether any slot is an Ollama provider
     private var hasOllamaSlot: Bool {
-        slots.contains(where: { $0.provider == "Ollama" })
+        slots.contains(where: { providerBase($0.provider) == "Ollama" })
     }
 
     /// Whether any Ollama slot has a thinking-capable model (deepseek, gpt-oss, r1)
     private var hasThinkingCapableOllamaSlot: Bool {
         slots.contains(where: { slot in
-            guard slot.provider == "Ollama" else { return false }
+            guard providerBase(slot.provider) == "Ollama" else { return false }
             let lower = slot.model.lowercased()
             return lower.contains("deepseek") || lower.contains("gpt-oss") || lower.contains("r1")
         })
@@ -820,10 +997,10 @@ struct ModelComparisonView: View {
 
     /// Whether the synthesize model has thinking capability
     private var synthesizeHasThinkingCapability: Bool {
-        if synthesizeProvider == "Ollama" {
+        if providerBase(synthesizeProvider) == "Ollama" {
             let lower = synthesizeModel.lowercased()
             return lower.contains("deepseek") || lower.contains("gpt-oss") || lower.contains("r1")
-        } else if synthesizeProvider == "NVIDIA API" {
+        } else if providerBase(synthesizeProvider) == "NVIDIA API" {
             let lower = synthesizeModel.lowercased()
             return lower.contains("deepseek") || lower.contains("glm")
         }
@@ -836,13 +1013,14 @@ struct ModelComparisonView: View {
     }
 
     private func effectiveThinkingLevel(provider: String, model: String, level: String) -> String {
-        if provider == "Gemini API" {
+        let base = providerBase(provider)
+        if base == "Gemini API" {
             let lower = model.lowercased()
             if lower.hasPrefix("gemini-3") || lower.hasPrefix("gemini-2.5") {
                 return level  // auto, low, medium, high
             }
             return "none"
-        } else if provider == "Ollama" {
+        } else if base == "Ollama" {
             let lower = model.lowercased()
             if lower.contains("gpt-oss") {
                 return level  // low, medium, high from setting
@@ -850,7 +1028,7 @@ struct ModelComparisonView: View {
                 return level == "high" ? "true" : "false"
             }
             return "false"
-        } else if provider == "NVIDIA API" {
+        } else if base == "NVIDIA API" {
             let lower = model.lowercased()
             if lower.contains("deepseek") || lower.contains("glm") {
                 return level == "high" ? "true" : "false"
@@ -874,7 +1052,7 @@ struct ModelComparisonView: View {
         synthesisPrompt += "Original prompt: \(prompt)\n\n"
         for (i, slot) in completedSlots.enumerated() {
             synthesisPrompt +=
-                "--- Response \(i + 1) (\(slot.provider) / \(slot.model)) ---\n\(slot.response)\n\n"
+                "--- Response \(i + 1) (\(providerDisplayName(slot.provider)) / \(modelDisplayName(provider: slot.provider, model: slot.model))) ---\n\(slot.response)\n\n"
         }
 
         let userMsg = Message(content: synthesisPrompt, isUser: true)
@@ -884,9 +1062,10 @@ struct ModelComparisonView: View {
 
         synthesizeTask = Task {
             do {
+                let synthBaseProvider = providerBase(synthesizeProvider)
                 // Web search augmentation for Ollama synthesis
                 var synthSystemPrompt = ""
-                if synthesizeProvider == "Ollama" && synthesizeWebSearchEnabled {
+                if synthBaseProvider == "Ollama" && synthesizeWebSearchEnabled {
                     do {
                         let searchResults = try await webSearchService.search(
                             query: prompt)
@@ -900,9 +1079,10 @@ struct ModelComparisonView: View {
                     }
                 }
 
-                switch synthesizeProvider {
+                switch synthBaseProvider {
                 case "Gemini API":
-                    guard !geminiKey.isEmpty else {
+                    let apiKey = resolvedGeminiAPIKey(for: synthesizeProvider)
+                    guard !apiKey.isEmpty else {
                         await MainActor.run {
                             state.synthesizedResponse = "Error: No Gemini API key set."
                             isSynthesizing = false
@@ -911,7 +1091,7 @@ struct ModelComparisonView: View {
                     }
                     var full = ""
                     for try await (chunk, _, _) in geminiService.sendMessageStream(
-                        history: history, apiKey: geminiKey, model: synthesizeModel,
+                        history: history, apiKey: apiKey, model: synthesizeModel,
                         systemPrompt: "",
                         thinkingLevel: synthThinking
                     ) {
@@ -925,7 +1105,9 @@ struct ModelComparisonView: View {
                     var fullThinking = ""
                     var lastUpdateTime = Date()
                     for try await (chunk, thinkChunk) in ollamaService.sendMessageStream(
-                        history: history, endpoint: ollamaURL, model: synthesizeModel,
+                        history: history,
+                        endpoint: resolvedOllamaEndpoint(for: synthesizeProvider),
+                        model: synthesizeModel,
                         systemPrompt: synthSystemPrompt,
                         thinkingLevel: synthThinking
                     ) {
@@ -966,7 +1148,8 @@ struct ModelComparisonView: View {
                     }
 
                 case "NVIDIA API":
-                    guard !nvidiaKey.isEmpty else {
+                    let apiKey = resolvedNvidiaAPIKey(for: synthesizeProvider)
+                    guard !apiKey.isEmpty else {
                         await MainActor.run {
                             state.synthesizedResponse = "Error: No NVIDIA API key set."
                             isSynthesizing = false
@@ -978,7 +1161,7 @@ struct ModelComparisonView: View {
                     var lastUpdateTime = Date()
                     let nvidiaEnableThinking = synthThinking == "true"
                     for try await (chunk, thinkChunk) in nvidiaService.sendMessageStream(
-                        history: history, apiKey: nvidiaKey, model: synthesizeModel,
+                        history: history, apiKey: apiKey, model: synthesizeModel,
                         systemPrompt: "",
                         enableThinking: nvidiaEnableThinking
                     ) {
@@ -1016,7 +1199,10 @@ struct ModelComparisonView: View {
                     var full = ""
                     var lastUpdateTime = Date()
                     for try await (chunk, _) in GitHubCopilotService.shared.sendMessageStream(
-                        history: history, model: synthesizeModel, systemPrompt: ""
+                        history: history,
+                        model: synthesizeModel,
+                        systemPrompt: "",
+                        accountId: resolvedCopilotAccountID(for: synthesizeProvider)
                     ) {
                         full += chunk
                         if Date().timeIntervalSince(lastUpdateTime) > 0.05 {
@@ -1152,9 +1338,11 @@ struct ModelComparisonView: View {
             let task = Task {
                 let startTime = Date()
                 do {
-                    switch provider {
+                    let baseProvider = providerBase(provider)
+                    switch baseProvider {
                     case "Gemini API":
-                        guard !geminiKey.isEmpty else {
+                        let apiKey = resolvedGeminiAPIKey(for: provider)
+                        guard !apiKey.isEmpty else {
                             await MainActor.run {
                                 if let idx = slots.firstIndex(where: { $0.id == slotId }) {
                                     state.slots[idx].error = "No Gemini API key set"
@@ -1169,7 +1357,7 @@ struct ModelComparisonView: View {
                             provider: provider, model: model, level: slotThinkingLevel)
                         var lastGeminiUpdateTime = Date()
                         for try await (chunk, thinkChunk, _) in geminiService.sendMessageStream(
-                            history: history, apiKey: geminiKey, model: model,
+                            history: history, apiKey: apiKey, model: model,
                             systemPrompt: systemPrompt, thinkingLevel: geminiThinking
                         ) {
                             fullContent += chunk
@@ -1227,7 +1415,9 @@ struct ModelComparisonView: View {
                         }
 
                         for try await (chunk, thinkChunk) in ollamaService.sendMessageStream(
-                            history: history, endpoint: ollamaURL, model: model,
+                            history: history,
+                            endpoint: resolvedOllamaEndpoint(for: provider),
+                            model: model,
                             systemPrompt: ollamaSystemPrompt, thinkingLevel: ollamaThinking
                         ) {
                             fullContent += chunk
@@ -1285,7 +1475,8 @@ struct ModelComparisonView: View {
                         }
 
                     case "NVIDIA API":
-                        guard !nvidiaKey.isEmpty else {
+                        let apiKey = resolvedNvidiaAPIKey(for: provider)
+                        guard !apiKey.isEmpty else {
                             await MainActor.run {
                                 if let idx = slots.firstIndex(where: { $0.id == slotId }) {
                                     state.slots[idx].error = "No NVIDIA API key set"
@@ -1300,7 +1491,7 @@ struct ModelComparisonView: View {
                         let nvidiaThinking = effectiveThinkingLevel(
                             provider: provider, model: model, level: slotThinkingLevel)
                         for try await (chunk, thinkChunk) in nvidiaService.sendMessageStream(
-                            history: history, apiKey: nvidiaKey, model: model,
+                            history: history, apiKey: apiKey, model: model,
                             systemPrompt: systemPrompt,
                             enableThinking: nvidiaThinking == "true"
                         ) {
@@ -1348,7 +1539,10 @@ struct ModelComparisonView: View {
                         var fullContent = ""
                         var lastUpdateTime = Date()
                         for try await (chunk, _) in GitHubCopilotService.shared.sendMessageStream(
-                            history: history, model: model, systemPrompt: systemPrompt
+                            history: history,
+                            model: model,
+                            systemPrompt: systemPrompt,
+                            accountId: resolvedCopilotAccountID(for: provider)
                         ) {
                             fullContent += chunk
 
@@ -1449,6 +1643,8 @@ struct ComparisonCard: View {
     @ObservedObject var nvidiaManager: NvidiaModelManager
     @ObservedObject var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject var copilotModelManager: GitHubCopilotModelManager
+    @ObservedObject var accountManager = AccountManager.shared
+    @ObservedObject var copilotService = GitHubCopilotService.shared
     var hasOllamaAPIKey: Bool = false
     var hasNvidiaKey: Bool = false
     var hasCopilotAuth: Bool = false
@@ -1465,8 +1661,36 @@ struct ComparisonCard: View {
         return palette[index % palette.count]
     }
 
+    private var slotProviderBase: String {
+        slot.provider.split(separator: "|").first.map(String.init) ?? slot.provider
+    }
+
+    private var slotAccountID: UUID? {
+        guard
+            slot.provider.contains("|"),
+            let uuidStr = slot.provider.split(separator: "|").last.map(String.init)
+        else { return nil }
+        return UUID(uuidString: uuidStr)
+    }
+
+    private var slotProviderDisplayName: String {
+        if let id = slotAccountID,
+            slotProviderBase == "GitHub Copilot",
+            let ghUser = copilotService.accountAuthState[id]?.userName,
+            !ghUser.isEmpty
+        {
+            return "GitHub Copilot (\(ghUser))"
+        }
+        if let id = slotAccountID,
+            let account = accountManager.accounts.first(where: { $0.id == id })
+        {
+            return account.displayName
+        }
+        return slotProviderBase
+    }
+
     private var providerIcon: String {
-        switch slot.provider {
+        switch slotProviderBase {
         case "Apple Foundation": return "apple.logo"
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
@@ -1481,19 +1705,19 @@ struct ComparisonCard: View {
     /// Determine the thinking mode for this slot's provider/model
     private var slotThinkingMode: ThinkingMode {
         let lower = slot.model.lowercased()
-        if slot.provider == "Gemini API" {
+        if slotProviderBase == "Gemini API" {
             if lower.hasPrefix("gemini-3-pro") {
                 return .geminiPro
             } else if lower.hasPrefix("gemini-3") || lower.hasPrefix("gemini-2.5") {
                 return .geminiFlash
             }
-        } else if slot.provider == "Ollama" {
+        } else if slotProviderBase == "Ollama" {
             if lower.contains("gpt-oss") {
                 return .threeState
             } else if lower.contains("deepseek") || lower.contains("r1") {
                 return .binary
             }
-        } else if slot.provider == "NVIDIA API" {
+        } else if slotProviderBase == "NVIDIA API" {
             if lower.contains("deepseek") || lower.contains("glm") {
                 return .binary
             }
@@ -1503,7 +1727,7 @@ struct ComparisonCard: View {
 
     /// Whether this slot can show web search toggle
     private var slotCanWebSearch: Bool {
-        slot.provider == "Ollama"
+        slotProviderBase == "Ollama"
     }
 
     private var geminiDropdownModels: [String] {
@@ -1520,6 +1744,19 @@ struct ComparisonCard: View {
         }
         let models = apiProviderModelStore.enabledModels(for: provider)
         return models.isEmpty ? nvidiaManager.sortedModels : models
+    }
+
+    private var slotModelDisplayName: String {
+        switch slotProviderBase {
+        case "Gemini API":
+            return geminiManager.displayName(for: slot.model)
+        case "NVIDIA API":
+            return nvidiaManager.displayName(for: slot.model)
+        case "GitHub Copilot":
+            return copilotModelManager.displayName(for: slot.model)
+        default:
+            return slot.model
+        }
     }
 
     var body: some View {
@@ -1765,35 +2002,108 @@ struct ComparisonCard: View {
                 Label("Apple Foundation", systemImage: "apple.logo")
             }
             Divider()
-            Menu("Gemini API") {
-                ForEach(geminiDropdownModels, id: \.self) { model in
-                    Button(action: { onChangeProvider("Gemini API", model) }) {
-                        if slot.provider == "Gemini API" && slot.model == model {
-                            Label(
-                                geminiManager.displayName(for: model),
-                                systemImage: "checkmark")
-                        } else {
-                            Text(geminiManager.displayName(for: model))
+            let geminiAccounts = accountManager.geminiAccounts().filter { !$0.apiKey.isEmpty }
+            if !geminiAccounts.isEmpty {
+                Menu("Gemini API") {
+                    ForEach(geminiAccounts) { account in
+                        Menu(account.displayName) {
+                            ForEach(geminiDropdownModels, id: \.self) { model in
+                                Button(action: {
+                                    onChangeProvider("Gemini API|\(account.id.uuidString)", model)
+                                }) {
+                                    if slot.provider.contains(account.id.uuidString)
+                                        && slot.model == model
+                                    {
+                                        Label(
+                                            geminiManager.displayName(for: model),
+                                            systemImage: "checkmark")
+                                    } else {
+                                        Text(geminiManager.displayName(for: model))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Menu("Gemini API") {
+                    ForEach(geminiDropdownModels, id: \.self) { model in
+                        Button(action: { onChangeProvider("Gemini API", model) }) {
+                            if slotProviderBase == "Gemini API" && slot.model == model {
+                                Label(
+                                    geminiManager.displayName(for: model),
+                                    systemImage: "checkmark")
+                            } else {
+                                Text(geminiManager.displayName(for: model))
+                            }
                         }
                     }
                 }
             }
-            Menu("Ollama") {
-                ForEach(ollamaManager.allModels, id: \.self) { model in
-                    Button(action: { onChangeProvider("Ollama", model) }) {
-                        if slot.provider == "Ollama" && slot.model == model {
-                            Label(model, systemImage: "checkmark")
-                        } else {
-                            Text(model)
+
+            let ollamaAccounts = accountManager.ollamaAccounts()
+            if !ollamaAccounts.isEmpty {
+                Menu("Ollama") {
+                    ForEach(ollamaAccounts) { account in
+                        Menu(account.displayName) {
+                            ForEach(ollamaManager.allModels, id: \.self) { model in
+                                Button(action: {
+                                    onChangeProvider("Ollama|\(account.id.uuidString)", model)
+                                }) {
+                                    if slot.provider.contains(account.id.uuidString)
+                                        && slot.model == model
+                                    {
+                                        Label(model, systemImage: "checkmark")
+                                    } else {
+                                        Text(model)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Menu("Ollama") {
+                    ForEach(ollamaManager.allModels, id: \.self) { model in
+                        Button(action: { onChangeProvider("Ollama", model) }) {
+                            if slotProviderBase == "Ollama" && slot.model == model {
+                                Label(model, systemImage: "checkmark")
+                            } else {
+                                Text(model)
+                            }
                         }
                     }
                 }
             }
-            if hasNvidiaKey {
+
+            let nvidiaAccounts = accountManager.nvidiaAccounts().filter { !$0.apiKey.isEmpty }
+            if !nvidiaAccounts.isEmpty {
+                Menu("NVIDIA API") {
+                    ForEach(nvidiaAccounts) { account in
+                        Menu(account.displayName) {
+                            ForEach(nvidiaDropdownModels, id: \.self) { model in
+                                Button(action: {
+                                    onChangeProvider("NVIDIA API|\(account.id.uuidString)", model)
+                                }) {
+                                    if slot.provider.contains(account.id.uuidString)
+                                        && slot.model == model
+                                    {
+                                        Label(
+                                            nvidiaManager.displayName(for: model),
+                                            systemImage: "checkmark")
+                                    } else {
+                                        Text(nvidiaManager.displayName(for: model))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if hasNvidiaKey {
                 Menu("NVIDIA API") {
                     ForEach(nvidiaDropdownModels, id: \.self) { model in
                         Button(action: { onChangeProvider("NVIDIA API", model) }) {
-                            if slot.provider == "NVIDIA API" && slot.model == model {
+                            if slotProviderBase == "NVIDIA API" && slot.model == model {
                                 Label(
                                     nvidiaManager.displayName(for: model),
                                     systemImage: "checkmark")
@@ -1804,16 +2114,48 @@ struct ComparisonCard: View {
                     }
                 }
             }
+
             if hasCopilotAuth {
-                Menu("GitHub Copilot") {
-                    ForEach(copilotModelManager.chatModels, id: \.self) { model in
-                        Button(action: { onChangeProvider("GitHub Copilot", model) }) {
-                            if slot.provider == "GitHub Copilot" && slot.model == model {
-                                Label(
-                                    copilotModelManager.displayName(for: model),
-                                    systemImage: "checkmark")
-                            } else {
-                                Text(copilotModelManager.displayName(for: model))
+                let copilotAccounts = accountManager.copilotAccounts()
+                if !copilotAccounts.isEmpty {
+                    Menu("GitHub Copilot") {
+                        ForEach(copilotAccounts) { account in
+                            let ghUser = copilotService.accountAuthState[account.id]?.userName ?? ""
+                            let label =
+                                ghUser.isEmpty
+                                ? account.displayName
+                                : "GitHub Copilot (\(ghUser))"
+                            Menu(label) {
+                                ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                                    Button(action: {
+                                        onChangeProvider(
+                                            "GitHub Copilot|\(account.id.uuidString)", model)
+                                    }) {
+                                        if slot.provider.contains(account.id.uuidString)
+                                            && slot.model == model
+                                        {
+                                            Label(
+                                                copilotModelManager.displayName(for: model),
+                                                systemImage: "checkmark")
+                                        } else {
+                                            Text(copilotModelManager.displayName(for: model))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Menu("GitHub Copilot") {
+                        ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                            Button(action: { onChangeProvider("GitHub Copilot", model) }) {
+                                if slotProviderBase == "GitHub Copilot" && slot.model == model {
+                                    Label(
+                                        copilotModelManager.displayName(for: model),
+                                        systemImage: "checkmark")
+                                } else {
+                                    Text(copilotModelManager.displayName(for: model))
+                                }
                             }
                         }
                     }
@@ -1822,14 +2164,14 @@ struct ComparisonCard: View {
             Divider()
             Section("Shortcuts") {
                 Button(action: { onChangeProvider("ChatGPT", "ChatGPT") }) {
-                    if slot.provider == "ChatGPT" {
+                    if slotProviderBase == "ChatGPT" {
                         Label("ChatGPT", systemImage: "checkmark")
                     } else {
                         Label("ChatGPT", systemImage: "message")
                     }
                 }
                 Button(action: { onChangeProvider("Private Cloud", "Private Cloud") }) {
-                    if slot.provider == "Private Cloud" {
+                    if slotProviderBase == "Private Cloud" {
                         Label("Private Cloud", systemImage: "checkmark")
                     } else {
                         Label("Private Cloud", systemImage: "lock.icloud")
@@ -1838,7 +2180,7 @@ struct ComparisonCard: View {
             }
         } label: {
             HStack(spacing: 4) {
-                Text(slot.provider)
+                Text(slotProviderDisplayName)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary.opacity(0.9))
                 Image(systemName: isProviderMenuOpen ? "chevron.up" : "chevron.down")
@@ -1867,7 +2209,7 @@ struct ComparisonCard: View {
     // MARK: - Model Label
 
     private var modelLabel: some View {
-        Text(slot.model)
+        Text(slotModelDisplayName)
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(.secondary)
             .lineLimit(1)

@@ -1245,6 +1245,7 @@ struct FileCreatorView: View {
     @ObservedObject private var apiProviderModelStore = APIProviderModelStore.shared
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var copilotModelManager = GitHubCopilotModelManager.shared
+    @ObservedObject private var accountManager = AccountManager.shared
 
     @State private var prompt: String = ""
     @State private var selectedPageSize: String = "Letter"
@@ -1285,6 +1286,64 @@ struct FileCreatorView: View {
         let models = apiProviderModelStore.enabledModels(for: provider)
         return models.isEmpty ? nvidiaManager.sortedModels : models
     }
+
+    private var pdfProviderBase: String {
+        pdfProvider.split(separator: "|").first.map(String.init) ?? pdfProvider
+    }
+
+    private var pdfProviderAccountID: UUID? {
+        guard
+            pdfProvider.contains("|"),
+            let uuidStr = pdfProvider.split(separator: "|").last.map(String.init)
+        else { return nil }
+        return UUID(uuidString: uuidStr)
+    }
+
+    private var selectedPDFAccount: ProviderAccount? {
+        guard let id = pdfProviderAccountID else { return nil }
+        return accountManager.accounts.first(where: { $0.id == id })
+    }
+
+    private var pdfProviderDisplayName: String {
+        if let id = pdfProviderAccountID,
+            pdfProviderBase == "GitHub Copilot",
+            let ghUser = copilotService.accountAuthState[id]?.userName,
+            !ghUser.isEmpty
+        {
+            return "GitHub Copilot (\(ghUser))"
+        }
+        return selectedPDFAccount?.displayName ?? pdfProviderBase
+    }
+
+    private var pdfModelDisplayName: String {
+        switch pdfProviderBase {
+        case "Gemini API":
+            return geminiManager.displayName(for: pdfModel)
+        case "NVIDIA API":
+            return nvidiaManager.displayName(for: pdfModel)
+        case "GitHub Copilot":
+            return copilotModelManager.displayName(for: pdfModel)
+        default:
+            return pdfModel
+        }
+    }
+
+    private var resolvedGeminiKey: String {
+        selectedPDFAccount?.apiKey ?? geminiKey
+    }
+
+    private var resolvedNvidiaKey: String {
+        selectedPDFAccount?.apiKey ?? nvidiaKey
+    }
+
+    private var resolvedOllamaEndpoint: String {
+        guard let account = selectedPDFAccount else { return ollamaURL }
+        return account.endpoint.isEmpty ? ollamaURL : account.endpoint
+    }
+
+    private var resolvedCopilotAccountID: String? {
+        pdfProviderAccountID?.uuidString
+    }
     private let webSearchService = WebSearchService()
 
     private var pdfHasThinkingCapability: Bool {
@@ -1293,7 +1352,7 @@ struct FileCreatorView: View {
     }
 
     private var providerIcon: String {
-        switch pdfProvider {
+        switch pdfProviderBase {
         case "Apple Foundation": return "apple.logo"
         case "Gemini API": return "sparkles"
         case "Ollama": return "laptopcomputer"
@@ -1304,9 +1363,10 @@ struct FileCreatorView: View {
     }
 
     private func effectiveThinkingLevel(provider: String, model: String, level: String) -> String {
-        if provider == "Gemini API" {
+        let base = provider.split(separator: "|").first.map(String.init) ?? provider
+        if base == "Gemini API" {
             return "none"
-        } else if provider == "Ollama" {
+        } else if base == "Ollama" {
             let lower = model.lowercased()
             if lower.contains("gpt-oss") {
                 return level
@@ -1378,8 +1438,11 @@ struct FileCreatorView: View {
             HStack(spacing: 4) {
                 Image(systemName: providerIcon)
                     .font(.system(size: 10))
-                Text(pdfModel.count > 20 ? String(pdfModel.prefix(18)) + "…" : pdfModel)
-                    .font(.system(size: 11, weight: .medium))
+                Text(
+                    pdfModelDisplayName.count > 20
+                        ? String(pdfModelDisplayName.prefix(18)) + "…" : pdfModelDisplayName
+                )
+                .font(.system(size: 11, weight: .medium))
             }
             .foregroundStyle(.secondary)
             .padding(.horizontal, 10)
@@ -1980,27 +2043,85 @@ struct FileCreatorView: View {
                         Label("Apple Foundation", systemImage: "apple.logo")
                     }
                     Divider()
-                    Menu("Gemini API") {
-                        ForEach(geminiDropdownModels, id: \.self) { model in
-                            Button(action: {
-                                pdfProvider = "Gemini API"
-                                pdfModel = model
-                            }) {
-                                Text(geminiManager.displayName(for: model))
+                    let geminiAccounts = accountManager.geminiAccounts().filter {
+                        !$0.apiKey.isEmpty
+                    }
+                    if !geminiAccounts.isEmpty {
+                        Menu("Gemini API") {
+                            ForEach(geminiAccounts) { account in
+                                Menu(account.displayName) {
+                                    ForEach(geminiDropdownModels, id: \.self) { model in
+                                        Button(action: {
+                                            pdfProvider = "Gemini API|\(account.id.uuidString)"
+                                            pdfModel = model
+                                        }) {
+                                            Text(geminiManager.displayName(for: model))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Menu("Gemini API") {
+                            ForEach(geminiDropdownModels, id: \.self) { model in
+                                Button(action: {
+                                    pdfProvider = "Gemini API"
+                                    pdfModel = model
+                                }) {
+                                    Text(geminiManager.displayName(for: model))
+                                }
                             }
                         }
                     }
-                    Menu("Ollama") {
-                        ForEach(ollamaManager.allModels, id: \.self) { model in
-                            Button(action: {
-                                pdfProvider = "Ollama"
-                                pdfModel = model
-                            }) {
-                                Text(model)
+
+                    let ollamaAccounts = accountManager.ollamaAccounts()
+                    if !ollamaAccounts.isEmpty {
+                        Menu("Ollama") {
+                            ForEach(ollamaAccounts) { account in
+                                Menu(account.displayName) {
+                                    ForEach(ollamaManager.allModels, id: \.self) { model in
+                                        Button(action: {
+                                            pdfProvider = "Ollama|\(account.id.uuidString)"
+                                            pdfModel = model
+                                        }) {
+                                            Text(model)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Menu("Ollama") {
+                            ForEach(ollamaManager.allModels, id: \.self) { model in
+                                Button(action: {
+                                    pdfProvider = "Ollama"
+                                    pdfModel = model
+                                }) {
+                                    Text(model)
+                                }
                             }
                         }
                     }
-                    if !nvidiaKey.isEmpty {
+
+                    let nvidiaAccounts = accountManager.nvidiaAccounts().filter {
+                        !$0.apiKey.isEmpty
+                    }
+                    if !nvidiaAccounts.isEmpty {
+                        Menu("NVIDIA API") {
+                            ForEach(nvidiaAccounts) { account in
+                                Menu(account.displayName) {
+                                    ForEach(nvidiaDropdownModels, id: \.self) { model in
+                                        Button(action: {
+                                            pdfProvider = "NVIDIA API|\(account.id.uuidString)"
+                                            pdfModel = model
+                                        }) {
+                                            Text(nvidiaManager.displayName(for: model))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if !nvidiaKey.isEmpty {
                         Menu("NVIDIA API") {
                             ForEach(nvidiaDropdownModels, id: \.self) { model in
                                 Button(action: {
@@ -2012,14 +2133,41 @@ struct FileCreatorView: View {
                             }
                         }
                     }
+
                     if copilotService.isAuthenticated {
-                        Menu("GitHub Copilot") {
-                            ForEach(copilotModelManager.chatModels, id: \.self) { model in
-                                Button(action: {
-                                    pdfProvider = "GitHub Copilot"
-                                    pdfModel = model
-                                }) {
-                                    Text(copilotModelManager.displayName(for: model))
+                        let copilotAccounts = accountManager.copilotAccounts()
+                        if !copilotAccounts.isEmpty {
+                            Menu("GitHub Copilot") {
+                                ForEach(copilotAccounts) { account in
+                                    let ghUser =
+                                        copilotService.accountAuthState[account.id]?.userName ?? ""
+                                    let label =
+                                        ghUser.isEmpty
+                                        ? account.displayName
+                                        : "GitHub Copilot (\(ghUser))"
+                                    Menu(label) {
+                                        ForEach(copilotModelManager.chatModels, id: \.self) {
+                                            model in
+                                            Button(action: {
+                                                pdfProvider =
+                                                    "GitHub Copilot|\(account.id.uuidString)"
+                                                pdfModel = model
+                                            }) {
+                                                Text(copilotModelManager.displayName(for: model))
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Menu("GitHub Copilot") {
+                                ForEach(copilotModelManager.chatModels, id: \.self) { model in
+                                    Button(action: {
+                                        pdfProvider = "GitHub Copilot"
+                                        pdfModel = model
+                                    }) {
+                                        Text(copilotModelManager.displayName(for: model))
+                                    }
                                 }
                             }
                         }
@@ -2039,7 +2187,7 @@ struct FileCreatorView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .frame(width: 34)
-                .help("\(pdfProvider) — \(pdfModel)")
+                .help("\(pdfProviderDisplayName) — \(pdfModelDisplayName)")
 
                 // Text input
                 ZStack(alignment: .leading) {
@@ -2240,7 +2388,7 @@ struct FileCreatorView: View {
                 .help("Page Size: \(selectedPageSize)")
 
                 // Thinking button (Ollama only, capable models)
-                if pdfProvider == "Ollama" && pdfHasThinkingCapability {
+                if pdfProviderBase == "Ollama" && pdfHasThinkingCapability {
                     Menu {
                         Button(action: { pdfThinkingLevel = "low" }) {
                             if pdfThinkingLevel == "low" {
@@ -2282,7 +2430,7 @@ struct FileCreatorView: View {
                 }
 
                 // Web Search toggle (Ollama)
-                if pdfProvider == "Ollama" {
+                if pdfProviderBase == "Ollama" {
                     Button(action: {
                         pdfWebSearchEnabled.toggle()
                     }) {
@@ -2498,9 +2646,9 @@ struct FileCreatorView: View {
             do {
                 var fullContent = ""
 
-                switch pdfProvider {
+                switch pdfProviderBase {
                 case "Gemini API":
-                    guard !geminiKey.isEmpty else {
+                    guard !resolvedGeminiKey.isEmpty else {
                         await MainActor.run {
                             generationError = "No Gemini API key set. Please configure in Settings."
                             isGenerating = false
@@ -2508,7 +2656,7 @@ struct FileCreatorView: View {
                         return
                     }
                     for try await (chunk, _, _) in geminiService.sendMessageStream(
-                        history: history, apiKey: geminiKey, model: pdfModel,
+                        history: history, apiKey: resolvedGeminiKey, model: pdfModel,
                         systemPrompt: systemPrompt, thinkingLevel: "none"
                     ) {
                         fullContent += chunk
@@ -2534,7 +2682,7 @@ struct FileCreatorView: View {
                         }
                     }
                     for try await (chunk, _) in ollamaService.sendMessageStream(
-                        history: history, endpoint: ollamaURL, model: pdfModel,
+                        history: history, endpoint: resolvedOllamaEndpoint, model: pdfModel,
                         systemPrompt: ollamaSystemPrompt, thinkingLevel: thinking
                     ) {
                         fullContent += chunk
@@ -2552,7 +2700,7 @@ struct FileCreatorView: View {
                     }
 
                 case "NVIDIA API":
-                    guard !nvidiaKey.isEmpty else {
+                    guard !resolvedNvidiaKey.isEmpty else {
                         await MainActor.run {
                             generationError = "No NVIDIA API key set. Please configure in Settings."
                             isGenerating = false
@@ -2560,7 +2708,7 @@ struct FileCreatorView: View {
                         return
                     }
                     for try await (chunk, _) in nvidiaService.sendMessageStream(
-                        history: history, apiKey: nvidiaKey, model: pdfModel,
+                        history: history, apiKey: resolvedNvidiaKey, model: pdfModel,
                         systemPrompt: systemPrompt
                     ) {
                         fullContent += chunk
@@ -2577,7 +2725,10 @@ struct FileCreatorView: View {
                         return
                     }
                     for try await (chunk, _) in copilotService.sendMessageStream(
-                        history: history, model: pdfModel, systemPrompt: systemPrompt
+                        history: history,
+                        model: pdfModel,
+                        systemPrompt: systemPrompt,
+                        accountId: resolvedCopilotAccountID
                     ) {
                         fullContent += chunk
                         let currentChunk = chunk

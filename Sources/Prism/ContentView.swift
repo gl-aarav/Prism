@@ -2164,7 +2164,7 @@ struct ContentView: View {
                 return .geminiFlash
             }
             return .none
-        } else if selectedProvider.contains("Ollama") {
+        } else if selectedProvider == "Ollama" || selectedProvider.hasPrefix("Ollama|") {
             let lower = selectedOllamaModel.lowercased()
             if lower.contains("gpt-oss") {
                 return .threeState  // Low, Med, High
@@ -2345,7 +2345,8 @@ struct ContentView: View {
                                     onStop: stopGeneration,
                                     onSelectAttachment: selectAttachment,
                                     thinkingMode: thinkingMode,
-                                    isOllama: selectedProvider.contains("Ollama"),
+                                    isOllama: selectedProvider == "Ollama"
+                                        || selectedProvider.hasPrefix("Ollama|"),
                                     isGemini: selectedProvider == "Gemini API"
                                         || selectedProvider.hasPrefix("Gemini API|"),
                                     isCopilot: selectedProvider == "GitHub Copilot"
