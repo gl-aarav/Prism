@@ -8459,16 +8459,7 @@ struct SettingsView: View {
             endpoint: draftAPIEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         )
 
-        let initialModel = initialModelForDraft(provider: provider)
-        if !initialModel.isEmpty {
-            if draftModelChoiceMode == "custom" {
-                apiProviderModelStore.addCustomModel(initialModel, for: provider)
-            } else {
-                apiProviderModelStore.addPresetModel(initialModel, for: provider)
-            }
-            apiProviderModelStore.setSelectedModel(initialModel, for: provider)
-        }
-
+        // Automatically fetch models on add
         if let account = accounts(for: provider).last {
             Task { await fetchModelsIfPossible(for: provider, account: account, apiKey: key) }
         }
@@ -8765,6 +8756,23 @@ struct SettingsView: View {
                 }
 
                 Spacer()
+                
+                if let firstAccount = accounts(for: provider).first {
+                    Button(action: {
+                        Task { await fetchModelsIfPossible(for: provider, account: firstAccount) }
+                    }) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 16))
+                            .rotationEffect(.degrees(fetchingProviders.contains(provider.id) ? 360 : 0))
+                            .animation(fetchingProviders.contains(provider.id) ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: fetchingProviders.contains(provider.id))
+                            .foregroundStyle(.secondary)
+                            .padding(8)
+                            .background(Circle().fill(Color.secondary.opacity(0.1)))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Fetch Models")
+                    .disabled(fetchingProviders.contains(provider.id))
+                }
             }
 
             accountRows(for: provider)
@@ -8812,6 +8820,17 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
+            ForEach(APIProviderRegistry.providers.filter { providerAccountsExist($0) }) {
+                provider in
+                apiProviderCard(provider)
+            }
+
+            if APIProviderRegistry.providers.filter({ providerAccountsExist($0) }).isEmpty {
+                Text("No API providers configured yet.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(APIProviderRegistry.providers.filter { !providerAccountsExist($0) }) {
@@ -8832,17 +8851,6 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                     }
                 }
-            }
-
-            ForEach(APIProviderRegistry.providers.filter { providerAccountsExist($0) }) {
-                provider in
-                apiProviderCard(provider)
-            }
-
-            if APIProviderRegistry.providers.filter({ providerAccountsExist($0) }).isEmpty {
-                Text("No API providers configured yet.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 24)
@@ -10247,28 +10255,8 @@ struct SettingsView: View {
                         SecureField("API Key", text: $draftAPIKey)
                             .textFieldStyle(.roundedBorder)
 
-                        if provider.accountType == .customapi {
-                            TextField("Base URL", text: $draftAPIEndpoint)
-                                .textFieldStyle(.roundedBorder)
-                        }
-
-                        Picker("Model", selection: $draftModelChoiceMode) {
-                            if !provider.presetModels.isEmpty {
-                                Text(provider.presetModeLabel).tag("preset")
-                            }
-                            Text("Custom Model").tag("custom")
-                        }
-                        .pickerStyle(.segmented)
-
-                        if draftModelChoiceMode == "preset" && !provider.presetModels.isEmpty {
-                            Picker("Preset", selection: $draftProviderPresetModel) {
-                                ForEach(provider.presetModels, id: \.self) { model in
-                                    Text(model).tag(model)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                        } else {
-                            TextField(provider.customPlaceholder, text: $draftProviderCustomModel)
+                        if provider.accountType == .customapi || provider.fetchStrategy != .none {
+                            TextField("Base URL (Optional)", text: $draftAPIEndpoint)
                                 .textFieldStyle(.roundedBorder)
                         }
 

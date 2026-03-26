@@ -31,7 +31,7 @@ enum APIProviderRegistry {
             tint: .cyan,
             storageKeyPrefix: "Gemini",
             accountType: .gemini,
-            presetModels: GeminiModelManager.shared.availableModels,
+            presetModels: [],
             defaultModel: "gemini-2.5-flash",
             customPlaceholder: "gemini-3.1-pro-preview",
             fetchStrategy: .gemini,
@@ -44,9 +44,9 @@ enum APIProviderRegistry {
             tint: .blue,
             storageKeyPrefix: "ChatGPT",
             accountType: .chatgpt,
-            presetModels: ["gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4o", "o3"],
-            defaultModel: "gpt-5",
-            customPlaceholder: "gpt-4.1-mini",
+            presetModels: [],
+            defaultModel: "gpt-4o",
+            customPlaceholder: "gpt-4o-mini",
             fetchStrategy: .openAICompatible(baseURL: "https://api.openai.com"),
             presetModeLabel: "Choose Preset"
         ),
@@ -57,12 +57,9 @@ enum APIProviderRegistry {
             tint: .orange,
             storageKeyPrefix: "Claude",
             accountType: .claude,
-            presetModels: [
-                "claude-opus-4-1-20250805", "claude-sonnet-4-20250514",
-                "claude-3-7-sonnet-20250219", "claude-3-5-haiku-20241022",
-            ],
-            defaultModel: "claude-sonnet-4-20250514",
-            customPlaceholder: "claude-sonnet-4-20250514",
+            presetModels: [],
+            defaultModel: "claude-3-7-sonnet-20250219",
+            customPlaceholder: "claude-3-7-sonnet-20250219",
             fetchStrategy: .anthropic,
             presetModeLabel: "Choose Preset"
         ),
@@ -73,9 +70,9 @@ enum APIProviderRegistry {
             tint: .pink,
             storageKeyPrefix: "Grok",
             accountType: .grok,
-            presetModels: ["grok-4", "grok-3", "grok-3-mini", "grok-2-vision-1212"],
-            defaultModel: "grok-4",
-            customPlaceholder: "grok-beta",
+            presetModels: [],
+            defaultModel: "grok-2",
+            customPlaceholder: "grok-2",
             fetchStrategy: .openAICompatible(baseURL: "https://api.x.ai"),
             presetModeLabel: "Choose Preset"
         ),
@@ -86,8 +83,8 @@ enum APIProviderRegistry {
             tint: .indigo,
             storageKeyPrefix: "Kimi",
             accountType: .kimi,
-            presetModels: ["kimi-k2-0711-preview", "kimi-k1.5", "moonshot-v1-128k"],
-            defaultModel: "kimi-k2-0711-preview",
+            presetModels: [],
+            defaultModel: "moonshot-v1-32k",
             customPlaceholder: "moonshot-v1-32k",
             fetchStrategy: .openAICompatible(baseURL: "https://api.moonshot.cn"),
             presetModeLabel: "Choose Preset"
@@ -99,12 +96,9 @@ enum APIProviderRegistry {
             tint: .mint,
             storageKeyPrefix: "Mistral",
             accountType: .mistral,
-            presetModels: [
-                "mistral-large-latest", "mistral-medium-latest", "mistral-small-latest",
-                "codestral-latest", "ministral-8b-latest",
-            ],
+            presetModels: [],
             defaultModel: "mistral-large-latest",
-            customPlaceholder: "mistral-saba-latest",
+            customPlaceholder: "mistral-large-latest",
             fetchStrategy: .openAICompatible(baseURL: "https://api.mistral.ai"),
             presetModeLabel: "Choose Preset"
         ),
@@ -115,10 +109,10 @@ enum APIProviderRegistry {
             tint: .green,
             storageKeyPrefix: "Nvidia",
             accountType: .nvidia,
-            presetModels: NvidiaModelManager.shared.availableModels,
+            presetModels: [],
             defaultModel: "meta/llama-3.1-70b-instruct",
             customPlaceholder: "meta/llama-3.1-405b-instruct",
-            fetchStrategy: .none,
+            fetchStrategy: .openAICompatible(baseURL: "https://integrate.api.nvidia.com/v1"),
             presetModeLabel: "Choose Preset"
         ),
         APIProviderDefinition(
@@ -357,7 +351,11 @@ final class APIModelFetcher {
         switch provider.fetchStrategy {
         case let .openAICompatible(baseURL):
             let origin = endpointOverride.isEmpty ? baseURL : endpointOverride
-            let url = URL(string: origin.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/v1/models")!
+            let urlString = origin.trimmingCharacters(in: .whitespacesAndNewlines)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            let finalURLString = urlString.hasSuffix("/v1") ? urlString + "/models" : urlString + "/v1/models"
+            
+            let url = URL(string: finalURLString)!
             var request = URLRequest(url: url)
             request.addValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
             let (data, _) = try await session.data(for: request)
