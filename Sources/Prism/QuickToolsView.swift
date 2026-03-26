@@ -23,6 +23,7 @@ struct QuickToolsView: View {
         switch selectedTool {
         case "Model Comparison": return "Compare"
         case "File Creator": return "File Creator"
+        case "Folder Context": return "Folder Context"
         case "Image Generator": return "Image Generation"
         default: return selectedTool
         }
@@ -73,6 +74,8 @@ struct QuickToolsView: View {
                         ImageGenerationView()
                     case "File Creator":
                         FileCreatorView()
+                    case "Folder Context":
+                        FolderContextView()
                     case "Compare":
                         ModelComparisonView()
                     case "Commands":
@@ -95,6 +98,9 @@ struct QuickToolsView: View {
                     }
                     Button(action: { selectedTool = "File Creator" }) {
                         Label("File Creator", systemImage: "doc.richtext")
+                    }
+                    Button(action: { selectedTool = "Folder Context" }) {
+                        Label("Folder Context", systemImage: "folder.badge.questionmark")
                     }
                     Button(action: { selectedTool = "Compare" }) {
                         Label("Compare", systemImage: "square.split.2x1")
@@ -190,6 +196,7 @@ struct QuickToolsView: View {
         switch tool {
         case "Image Generation": return "paintbrush"
         case "File Creator": return "doc.richtext"
+        case "Folder Context": return "folder.badge.questionmark"
         case "Compare": return "square.split.2x1"
         case "Commands": return "command"
         case "Quiz Me": return "questionmark.bubble"

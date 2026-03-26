@@ -1940,22 +1940,14 @@ extension QuickAIView {
                 }
                 if !geminiAccounts.isEmpty {
                     Section("Gemini API") {
-                        if geminiAccounts.count == 1 {
-                            Button(action: { selectedProvider = "Gemini API" }) {
+                        ForEach(Array(geminiAccounts.enumerated()), id: \.element.id) {
+                            index, account in
+                            Button(action: {
+                                selectedProvider = "Gemini API|\(account.id.uuidString)"
+                            }) {
                                 Label(
-                                    geminiAccounts[0].displayName,
+                                    account.displayName,
                                     systemImage: getProviderIcon("Gemini API"))
-                            }
-                        } else {
-                            ForEach(Array(geminiAccounts.enumerated()), id: \.element.id) {
-                                index, account in
-                                Button(action: {
-                                    selectedProvider = "Gemini API|\(account.id.uuidString)"
-                                }) {
-                                    Label(
-                                        account.displayName,
-                                        systemImage: getProviderIcon("Gemini API"))
-                                }
                             }
                         }
                     }
@@ -1965,22 +1957,14 @@ extension QuickAIView {
                 let ollamaAccounts = AccountManager.shared.ollamaAccounts()
                 if !ollamaAccounts.isEmpty {
                     Section("Ollama") {
-                        if ollamaAccounts.count == 1 {
-                            Button(action: { selectedProvider = "Ollama" }) {
+                        ForEach(Array(ollamaAccounts.enumerated()), id: \.element.id) {
+                            index, account in
+                            Button(action: {
+                                selectedProvider = "Ollama|\(account.id.uuidString)"
+                            }) {
                                 Label(
-                                    ollamaAccounts[0].displayName,
+                                    account.displayName,
                                     systemImage: getProviderIcon("Ollama"))
-                            }
-                        } else {
-                            ForEach(Array(ollamaAccounts.enumerated()), id: \.element.id) {
-                                index, account in
-                                Button(action: {
-                                    selectedProvider = "Ollama|\(account.id.uuidString)"
-                                }) {
-                                    Label(
-                                        account.displayName,
-                                        systemImage: getProviderIcon("Ollama"))
-                                }
                             }
                         }
                     }
@@ -1992,22 +1976,14 @@ extension QuickAIView {
                 }
                 if !nvidiaAccounts.isEmpty {
                     Section("NVIDIA API") {
-                        if nvidiaAccounts.count == 1 {
-                            Button(action: { selectedProvider = "NVIDIA API" }) {
+                        ForEach(Array(nvidiaAccounts.enumerated()), id: \.element.id) {
+                            index, account in
+                            Button(action: {
+                                selectedProvider = "NVIDIA API|\(account.id.uuidString)"
+                            }) {
                                 Label(
-                                    nvidiaAccounts[0].displayName,
+                                    account.displayName,
                                     systemImage: getProviderIcon("NVIDIA API"))
-                            }
-                        } else {
-                            ForEach(Array(nvidiaAccounts.enumerated()), id: \.element.id) {
-                                index, account in
-                                Button(action: {
-                                    selectedProvider = "NVIDIA API|\(account.id.uuidString)"
-                                }) {
-                                    Label(
-                                        account.displayName,
-                                        systemImage: getProviderIcon("NVIDIA API"))
-                                }
                             }
                         }
                     }
@@ -2017,27 +1993,19 @@ extension QuickAIView {
                 if copilotService.isAuthenticated {
                     let copilotAccounts = AccountManager.shared.copilotAccounts()
                     Section("GitHub Copilot") {
-                        if copilotAccounts.count <= 1 {
-                            Button(action: { selectedProvider = "GitHub Copilot" }) {
+                        ForEach(copilotAccounts) { account in
+                            let ghUser =
+                                copilotService.accountAuthState[account.id]?.userName ?? ""
+                            let label =
+                                ghUser.isEmpty
+                                ? account.displayName : "GitHub Copilot (\(ghUser))"
+                            Button(action: {
+                                selectedProvider =
+                                    "GitHub Copilot|\(account.id.uuidString)"
+                            }) {
                                 Label(
-                                    "GitHub Copilot",
+                                    label,
                                     systemImage: getProviderIcon("GitHub Copilot"))
-                            }
-                        } else {
-                            ForEach(copilotAccounts) { account in
-                                let ghUser =
-                                    copilotService.accountAuthState[account.id]?.userName ?? ""
-                                let label =
-                                    ghUser.isEmpty
-                                    ? "GitHub Copilot" : "GitHub Copilot (\(ghUser))"
-                                Button(action: {
-                                    selectedProvider =
-                                        "GitHub Copilot|\(account.id.uuidString)"
-                                }) {
-                                    Label(
-                                        label,
-                                        systemImage: getProviderIcon("GitHub Copilot"))
-                                }
                             }
                         }
                     }

@@ -2121,6 +2121,7 @@ struct ContentView: View {
     @State private var showQuizMe: Bool = false
     @State private var showImageGen: Bool = false
     @State private var showFileCreator: Bool = false
+    @State private var showFolderContext: Bool = false
     @State private var showWebView: Bool = false
     @State private var showBrowserAutomation: Bool = false
     @AppStorage("ToolSelectedWebView") private var toolSelectedWebView: String = "ChatGPT Web"
@@ -2219,6 +2220,7 @@ struct ContentView: View {
                     showQuizMe: $showQuizMe,
                     showImageGen: $showImageGen,
                     showFileCreator: $showFileCreator,
+                    showFolderContext: $showFolderContext,
                     showWebView: $showWebView,
                     showBrowserAutomation: $showBrowserAutomation)
             } detail: {
@@ -2401,12 +2403,12 @@ struct ContentView: View {
                         }
                         .opacity(
                             showCommands || showModelComparison || showQuizMe || showImageGen
-                                || showFileCreator || showImageGallery || showWebView
+                                || showFileCreator || showFolderContext || showImageGallery || showWebView
                                 || showBrowserAutomation ? 0 : 1
                         )
                         .allowsHitTesting(
                             !(showCommands || showModelComparison || showQuizMe || showImageGen
-                                || showFileCreator || showImageGallery || showWebView
+                                || showFileCreator || showFolderContext || showImageGallery || showWebView
                                 || showBrowserAutomation)
                         )
                         .transaction { t in t.animation = nil }
@@ -2430,6 +2432,10 @@ struct ContentView: View {
                         }
                         if showFileCreator {
                             FileCreatorView()
+                                .transition(.opacity)
+                        }
+                        if showFolderContext {
+                            FolderContextView()
                                 .transition(.opacity)
                         }
                         if showImageGallery {
@@ -2512,6 +2518,9 @@ struct ContentView: View {
             .onChange(of: showFileCreator) { _, val in
                 updateActiveToolName()
             }
+            .onChange(of: showFolderContext) { _, val in
+                updateActiveToolName()
+            }
             .onChange(of: showWebView) { _, val in
                 updateActiveToolName()
             }
@@ -2530,6 +2539,7 @@ struct ContentView: View {
                     withAnimation {
                         showWebView = true
                         showFileCreator = false
+                        showFolderContext = false
                         showImageGen = false
                         showQuizMe = false
                         showCommands = false
@@ -2703,6 +2713,8 @@ struct ContentView: View {
             activeToolName = "Image Generation"
         } else if showFileCreator {
             activeToolName = "File Creator"
+        } else if showFolderContext {
+            activeToolName = "Folder Context"
         } else if showWebView {
             activeToolName = "Web View"
         } else if showBrowserAutomation {
@@ -2854,7 +2866,7 @@ struct ContentView: View {
         // Don't send to AI when a tool is active
         guard
             !showCommands && !showModelComparison && !showQuizMe && !showImageGen
-                && !showFileCreator && !showWebView && !showImageGallery
+                && !showFileCreator && !showFolderContext && !showWebView && !showImageGallery
         else { return }
         guard
             !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -3599,6 +3611,7 @@ struct SidebarView: View {
     @Binding var showQuizMe: Bool
     @Binding var showImageGen: Bool
     @Binding var showFileCreator: Bool
+    @Binding var showFolderContext: Bool
     @Binding var showWebView: Bool
     @Binding var showBrowserAutomation: Bool
     @Namespace private var animation
@@ -3608,10 +3621,11 @@ struct SidebarView: View {
     @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
     @AppStorage("ShowImageGen") private var showImageGenTool: Bool = true
     @AppStorage("ShowFileCreator") private var showFileCreatorTool: Bool = true
+    @AppStorage("ShowFolderContext") private var showFolderContextTool: Bool = true
     @AppStorage("ShowWebView") private var showWebViewTool: Bool = true
     @AppStorage("ShowBrowserAutomation") private var showBrowserAutomationTool: Bool = true
     @AppStorage("ToolOrder") private var toolOrderRaw: String =
-        "compare,commands,quizme,imagegen,filecreator,webview,browserautomation"
+        "compare,commands,quizme,imagegen,filecreator,foldercontext,webview,browserautomation"
 
     @State private var searchText: String = ""
     @State private var isSearchVisible: Bool = false
@@ -3643,6 +3657,7 @@ struct SidebarView: View {
                 showQuizMe = false
                 showImageGen = false
                 showFileCreator = false
+                showFolderContext = false
                 showWebView = false
                 showBrowserAutomation = false
                 chatManager.createNewSession()
@@ -3737,6 +3752,7 @@ struct SidebarView: View {
                                         showQuizMe = false
                                         showImageGen = false
                                         showFileCreator = false
+                                        showFolderContext = false
                                         showWebView = false
                                         showBrowserAutomation = false
                                         chatManager.currentSessionId = session.id
@@ -3803,6 +3819,7 @@ struct SidebarView: View {
                     showQuizMe = false
                     showImageGen = false
                     showFileCreator = false
+                    showFolderContext = false
                     showWebView = false
                     showBrowserAutomation = false
                     chatManager.currentSessionId = nil
@@ -3840,6 +3857,7 @@ struct SidebarView: View {
                             showQuizMe = false
                             showImageGen = false
                             showFileCreator = false
+                            showFolderContext = false
                             showWebView = false
                             showBrowserAutomation = false
                             chatManager.currentSessionId = nil
@@ -3854,6 +3872,7 @@ struct SidebarView: View {
                             showQuizMe = false
                             showImageGen = false
                             showFileCreator = false
+                            showFolderContext = false
                             showWebView = false
                             showBrowserAutomation = false
                             chatManager.currentSessionId = nil
@@ -3870,6 +3889,7 @@ struct SidebarView: View {
                             showImageGallery = false
                             showImageGen = false
                             showFileCreator = false
+                            showFolderContext = false
                             showWebView = false
                             showBrowserAutomation = false
                             chatManager.currentSessionId = nil
@@ -3886,6 +3906,7 @@ struct SidebarView: View {
                             showModelComparison = false
                             showImageGallery = false
                             showFileCreator = false
+                            showFolderContext = false
                             showWebView = false
                             showBrowserAutomation = false
                             chatManager.currentSessionId = nil
@@ -3897,6 +3918,26 @@ struct SidebarView: View {
                     ) {
                         withAnimation {
                             showFileCreator = true
+                            showImageGen = false
+                            showQuizMe = false
+                            showCommands = false
+                            showModelComparison = false
+                            showImageGallery = false
+                            showFolderContext = false
+                            showWebView = false
+                            showBrowserAutomation = false
+                            chatManager.currentSessionId = nil
+                        }
+                    }
+                } else if toolId == "foldercontext" && showFolderContextTool {
+                    SidebarItem(
+                        icon: "folder.badge.questionmark",
+                        title: "Folder Context",
+                        isSelected: showFolderContext
+                    ) {
+                        withAnimation {
+                            showFolderContext = true
+                            showFileCreator = false
                             showImageGen = false
                             showQuizMe = false
                             showCommands = false
@@ -3914,6 +3955,7 @@ struct SidebarView: View {
                         withAnimation {
                             showWebView = true
                             showFileCreator = false
+                            showFolderContext = false
                             showImageGen = false
                             showQuizMe = false
                             showCommands = false
@@ -3933,6 +3975,7 @@ struct SidebarView: View {
                             showBrowserAutomation = true
                             showWebView = false
                             showFileCreator = false
+                            showFolderContext = false
                             showImageGen = false
                             showQuizMe = false
                             showCommands = false
@@ -3951,7 +3994,7 @@ struct SidebarView: View {
     private var toolOrder: [String] {
         let raw = toolOrderRaw.split(separator: ",").map(String.init)
         let allTools = [
-            "compare", "commands", "quizme", "imagegen", "filecreator", "webview",
+            "compare", "commands", "quizme", "imagegen", "filecreator", "foldercontext", "webview",
             "browserautomation",
         ]
         // Ensure all tools are present (handle new tools added after first save)
@@ -3989,7 +4032,8 @@ struct SidebarView: View {
         SidebarRow(
             session: session,
             isSelected: !showImageGallery && !showModelComparison && !showCommands
-                && !showQuizMe && !showWebView && !showBrowserAutomation
+                && !showQuizMe && !showFileCreator && !showFolderContext && !showWebView
+                && !showBrowserAutomation
                 && chatManager.currentSessionId == session.id,
             isRenaming: renamingSessionId == session.id,
             renameText: $renameText,
@@ -4001,6 +4045,7 @@ struct SidebarView: View {
                 showQuizMe = false
                 showImageGen = false
                 showFileCreator = false
+                showFolderContext = false
                 showWebView = false
                 showBrowserAutomation = false
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
@@ -4316,22 +4361,14 @@ struct HeaderView: View {
                 let geminiAccounts = accountManager.geminiAccounts().filter { !$0.apiKey.isEmpty }
                 if !geminiAccounts.isEmpty {
                     Section("Gemini API") {
-                        if geminiAccounts.count == 1 {
-                            Button(action: { selectedProvider = "Gemini API" }) {
+                        ForEach(Array(geminiAccounts.enumerated()), id: \.element.id) {
+                            index, account in
+                            Button(action: {
+                                selectedProvider = "Gemini API|\(account.id.uuidString)"
+                            }) {
                                 Label(
-                                    geminiAccounts[0].displayName,
+                                    account.displayName,
                                     systemImage: getProviderIcon("Gemini API"))
-                            }
-                        } else {
-                            ForEach(Array(geminiAccounts.enumerated()), id: \.element.id) {
-                                index, account in
-                                Button(action: {
-                                    selectedProvider = "Gemini API|\(account.id.uuidString)"
-                                }) {
-                                    Label(
-                                        account.displayName,
-                                        systemImage: getProviderIcon("Gemini API"))
-                                }
                             }
                         }
                     }
@@ -4341,21 +4378,13 @@ struct HeaderView: View {
                 let ollamaAccounts = accountManager.ollamaAccounts()
                 if !ollamaAccounts.isEmpty {
                     Section("Ollama") {
-                        if ollamaAccounts.count == 1 {
-                            Button(action: { selectedProvider = "Ollama" }) {
+                        ForEach(Array(ollamaAccounts.enumerated()), id: \.element.id) {
+                            index, account in
+                            Button(action: {
+                                selectedProvider = "Ollama|\(account.id.uuidString)"
+                            }) {
                                 Label(
-                                    ollamaAccounts[0].displayName,
-                                    systemImage: getProviderIcon("Ollama"))
-                            }
-                        } else {
-                            ForEach(Array(ollamaAccounts.enumerated()), id: \.element.id) {
-                                index, account in
-                                Button(action: {
-                                    selectedProvider = "Ollama|\(account.id.uuidString)"
-                                }) {
-                                    Label(
-                                        account.displayName, systemImage: getProviderIcon("Ollama"))
-                                }
+                                    account.displayName, systemImage: getProviderIcon("Ollama"))
                             }
                         }
                     }
@@ -4365,22 +4394,14 @@ struct HeaderView: View {
                 let nvidiaAccounts = accountManager.nvidiaAccounts().filter { !$0.apiKey.isEmpty }
                 if !nvidiaAccounts.isEmpty {
                     Section("NVIDIA API") {
-                        if nvidiaAccounts.count == 1 {
-                            Button(action: { selectedProvider = "NVIDIA API" }) {
+                        ForEach(Array(nvidiaAccounts.enumerated()), id: \.element.id) {
+                            index, account in
+                            Button(action: {
+                                selectedProvider = "NVIDIA API|\(account.id.uuidString)"
+                            }) {
                                 Label(
-                                    nvidiaAccounts[0].displayName,
+                                    account.displayName,
                                     systemImage: getProviderIcon("NVIDIA API"))
-                            }
-                        } else {
-                            ForEach(Array(nvidiaAccounts.enumerated()), id: \.element.id) {
-                                index, account in
-                                Button(action: {
-                                    selectedProvider = "NVIDIA API|\(account.id.uuidString)"
-                                }) {
-                                    Label(
-                                        account.displayName,
-                                        systemImage: getProviderIcon("NVIDIA API"))
-                                }
                             }
                         }
                     }
@@ -4390,25 +4411,17 @@ struct HeaderView: View {
                 if copilotService.isAuthenticated {
                     let copilotAccounts = accountManager.copilotAccounts()
                     Section("GitHub Copilot") {
-                        if copilotAccounts.count <= 1 {
-                            Button(action: { selectedProvider = "GitHub Copilot" }) {
+                        ForEach(copilotAccounts) { account in
+                            let ghUser =
+                                copilotService.accountAuthState[account.id]?.userName ?? ""
+                            let label =
+                                ghUser.isEmpty ? account.displayName : "GitHub Copilot (\(ghUser))"
+                            Button(action: {
+                                selectedProvider = "GitHub Copilot|\(account.id.uuidString)"
+                            }) {
                                 Label(
-                                    "GitHub Copilot", systemImage: getProviderIcon("GitHub Copilot")
-                                )
-                            }
-                        } else {
-                            ForEach(copilotAccounts) { account in
-                                let ghUser =
-                                    copilotService.accountAuthState[account.id]?.userName ?? ""
-                                let label =
-                                    ghUser.isEmpty ? "GitHub Copilot" : "GitHub Copilot (\(ghUser))"
-                                Button(action: {
-                                    selectedProvider = "GitHub Copilot|\(account.id.uuidString)"
-                                }) {
-                                    Label(
-                                        label,
-                                        systemImage: getProviderIcon("GitHub Copilot"))
-                                }
+                                    label,
+                                    systemImage: getProviderIcon("GitHub Copilot"))
                             }
                         }
                     }
@@ -7546,10 +7559,11 @@ struct SettingsView: View {
     @AppStorage("ShowQuizMe") private var showQuizMeTool: Bool = true
     @AppStorage("ShowImageGen") private var showImageGenTool: Bool = true
     @AppStorage("ShowFileCreator") private var showFileCreatorTool: Bool = true
+    @AppStorage("ShowFolderContext") private var showFolderContextTool: Bool = true
     @AppStorage("ShowWebView") private var showWebViewTool: Bool = true
     @AppStorage("ShowBrowserAutomation") private var showBrowserAutomationTool: Bool = true
     @AppStorage("ToolOrder") private var toolOrderRaw: String =
-        "compare,commands,quizme,imagegen,filecreator,webview,browserautomation"
+        "compare,commands,quizme,imagegen,filecreator,foldercontext,webview,browserautomation"
     @State private var draggedTool: String? = nil
 
     @EnvironmentObject var chatManager: ChatManager
@@ -7873,6 +7887,11 @@ struct SettingsView: View {
             }
             .toggleStyle(.switch)
 
+            Toggle(isOn: $showFolderContextTool) {
+                Label("Folder Context", systemImage: "folder.badge.questionmark")
+            }
+            .toggleStyle(.switch)
+
             Toggle(isOn: $showWebViewTool) {
                 Label("Web View", systemImage: "globe")
             }
@@ -7936,7 +7955,7 @@ struct SettingsView: View {
     private var toolOrder: [String] {
         let raw = toolOrderRaw.split(separator: ",").map(String.init)
         let allTools = [
-            "compare", "commands", "quizme", "imagegen", "filecreator", "webview",
+            "compare", "commands", "quizme", "imagegen", "filecreator", "foldercontext", "webview",
             "browserautomation",
         ]
         var order = raw.filter { allTools.contains($0) }
@@ -7953,6 +7972,7 @@ struct SettingsView: View {
         case "quizme": return "questionmark.bubble"
         case "imagegen": return "paintbrush"
         case "filecreator": return "doc.richtext"
+        case "foldercontext": return "folder.badge.questionmark"
         case "webview": return "globe"
         case "browserautomation": return "cursorarrow.motionlines.click"
         default: return "questionmark"
@@ -7966,6 +7986,7 @@ struct SettingsView: View {
         case "quizme": return "Quiz Me"
         case "imagegen": return "Image Generation"
         case "filecreator": return "File Creator"
+        case "foldercontext": return "Folder Context"
         case "webview": return "Web View"
         case "browserautomation": return "Browser Automation"
         default: return id
