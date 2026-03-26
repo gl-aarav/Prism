@@ -216,6 +216,9 @@ struct FolderContextView: View {
     @State private var fileSearchQuery: String = ""
     @State private var showFilesExpanded: Bool = false
 
+    @AppStorage("FolderContextSidebarWidth") private var sidebarWidth: Double = 320
+    @State private var dragInitialWidth: Double? = nil
+
     @Environment(\.colorScheme) private var colorScheme
 
     private let geminiService = GeminiService()
@@ -243,11 +246,48 @@ struct FolderContextView: View {
             }
             .frame(minWidth: 480)
 
+            if showFilesExpanded {
+                ZStack {
+                    Color.clear
+                        .frame(width: 14) // invisible grab area
+                    Divider()
+                        .frame(width: 1)
+                        .padding(.vertical, 20)
+                }
+                .contentShape(Rectangle())
+                .onHover { isHovering in
+                    if isHovering {
+                        NSCursor.resizeLeftRight.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            if dragInitialWidth == nil {
+                                dragInitialWidth = sidebarWidth
+                            }
+                            if let initial = dragInitialWidth {
+                                let newWidth = initial - value.translation.width
+                                sidebarWidth = max(240, min(800, newWidth))
+                            }
+                        }
+                        .onEnded { _ in
+                            dragInitialWidth = nil
+                        }
+                )
+                .zIndex(1)
+            }
+
             // File sidebar
-            fileSidebar
-                .frame(width: showFilesExpanded ? 320 : 0)
-                .clipped()
-                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showFilesExpanded)
+            HStack(spacing: 0) {
+                fileSidebar
+                    .frame(width: sidebarWidth)
+            }
+            .frame(width: showFilesExpanded ? sidebarWidth : 0)
+            .clipped()
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showFilesExpanded)
         }
         .onAppear {
             if !selectedFolderPath.isEmpty {
@@ -883,15 +923,26 @@ struct FolderContextView: View {
             }
         }
         .background(
-            Rectangle()
-                .fill(colorScheme == .dark ? Color.black.opacity(0.15) : Color.white.opacity(0.3))
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
         )
         .overlay(
-            Rectangle()
-                .fill(colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.04))
-                .frame(width: 0.5),
-            alignment: .leading
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.5),
+                            colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.03),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
+                )
         )
+        .padding(.vertical, 20)
+        .padding(.trailing, 20)
+        .padding(.leading, 10)
     }
 
     // MARK: - File Row
@@ -999,7 +1050,7 @@ struct FolderContextView: View {
             }
             .frame(height: 180)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(colorScheme == .dark ? Color.black.opacity(0.2) : Color.black.opacity(0.03))
             )
             .padding(.horizontal, 10)
