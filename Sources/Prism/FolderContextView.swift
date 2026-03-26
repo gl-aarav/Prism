@@ -263,55 +263,6 @@ struct FolderContextView: View {
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 14) {
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: themeColors,
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 44, height: 44)
-
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Folder Context")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                    Text("Analyze folder contents with AI")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                // Toggle file sidebar
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                        showFilesExpanded.toggle()
-                    }
-                } label: {
-                    Image(systemName: showFilesExpanded ? "sidebar.trailing" : "sidebar.left")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 34, height: 34)
-                        .background(
-                            Circle()
-                                .fill(
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
-                        )
-                }
-                .buttonStyle(.plain)
-                .help(showFilesExpanded ? "Hide Files" : "Show Files")
-            }
-
             // Folder path bar
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
@@ -356,6 +307,26 @@ struct FolderContextView: View {
                     )
                 }
                 .buttonStyle(.plain)
+
+                // Toggle file sidebar
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        showFilesExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: showFilesExpanded ? "sidebar.trailing" : "sidebar.left")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 26, height: 26)
+                        .background(
+                            Circle()
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(showFilesExpanded ? "Hide Files" : "Show Files")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
