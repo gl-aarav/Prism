@@ -10,8 +10,8 @@ private struct AnalyzedFile: Identifiable {
     let fullURL: URL
     let fileSize: Int
     let fileExtension: String
-    let isIncluded: Bool // whether content was included in the prompt
-    let snippet: String? // first portion of file content
+    let isIncluded: Bool  // whether content was included in the prompt
+    let snippet: String?  // first portion of file content
 }
 
 private struct FolderSnapshot {
@@ -41,7 +41,7 @@ private enum FolderSnapshotBuilder {
         let maxPerFileCharacters = 12_000
         let maxTotalCharacters = 200_000
         let maxFileSizeBytes = 256_000
-        let maxPDFFileSizeBytes = 10_000_000 // 10 MB for PDFs
+        let maxPDFFileSizeBytes = 10_000_000  // 10 MB for PDFs
 
         var analyzedFiles: [AnalyzedFile] = []
         var snippets: [String] = []
@@ -73,8 +73,8 @@ private enum FolderSnapshotBuilder {
             let sizeLimit = isPDF ? maxPDFFileSizeBytes : maxFileSizeBytes
 
             if includedFileCount < maxIncludedFiles,
-               totalCharacters < maxTotalCharacters,
-               fileSize > 0, fileSize <= sizeLimit
+                totalCharacters < maxTotalCharacters,
+                fileSize > 0, fileSize <= sizeLimit
             {
                 // Try PDF extraction first, then plain text
                 let rawText: String?
@@ -160,8 +160,8 @@ private enum FolderSnapshotBuilder {
         let maxPages = min(pageCount, 200)
         for i in 0..<maxPages {
             if let page = document.page(at: i),
-               let text = page.string,
-               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let text = page.string,
+                !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             {
                 pages.append("[Page \(i + 1)]\n\(text)")
             }
@@ -303,7 +303,9 @@ struct FolderContextView: View {
                         .frame(width: 34, height: 34)
                         .background(
                             Circle()
-                                .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
                         )
                 }
                 .buttonStyle(.plain)
@@ -335,8 +337,11 @@ struct FolderContextView: View {
                     chooseFolder()
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: selectedFolderPath.isEmpty ? "folder.badge.plus" : "arrow.triangle.2.circlepath")
-                            .font(.system(size: 11, weight: .medium))
+                        Image(
+                            systemName: selectedFolderPath.isEmpty
+                                ? "folder.badge.plus" : "arrow.triangle.2.circlepath"
+                        )
+                        .font(.system(size: 11, weight: .medium))
                         Text(selectedFolderPath.isEmpty ? "Choose" : "Change")
                             .font(.system(size: 12, weight: .medium))
                     }
@@ -345,7 +350,9 @@ struct FolderContextView: View {
                     .padding(.vertical, 6)
                     .background(
                         Capsule()
-                            .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
+                            .fill(
+                                colorScheme == .dark
+                                    ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
                     )
                 }
                 .buttonStyle(.plain)
@@ -354,14 +361,19 @@ struct FolderContextView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+                    .fill(
+                        colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.02)
+                    )
             )
 
             // Stats bar
             if scannedFileCount > 0 {
                 HStack(spacing: 16) {
-                    statPill(icon: "doc.text", label: "\(scannedFileCount) scanned", color: .secondary)
-                    statPill(icon: "checkmark.circle", label: "\(includedFileCount) included", color: .green)
+                    statPill(
+                        icon: "doc.text", label: "\(scannedFileCount) scanned", color: .secondary)
+                    statPill(
+                        icon: "checkmark.circle", label: "\(includedFileCount) included",
+                        color: .green)
                     statPill(
                         icon: "text.quote",
                         label: "\(formatCharacterCount(totalCharacters))",
@@ -380,8 +392,10 @@ struct FolderContextView: View {
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.5),
-                            colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.03),
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.08) : Color.white.opacity(0.5),
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.02) : Color.black.opacity(0.03),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -417,12 +431,16 @@ struct FolderContextView: View {
                                     Section(group.name) {
                                         ForEach(group.models, id: \.self) { model in
                                             Button(action: {
-                                                folderProvider = "Gemini API|\(account.id.uuidString)"
+                                                folderProvider =
+                                                    "Gemini API|\(account.id.uuidString)"
                                                 folderModel = model
                                             }) {
                                                 HStack {
                                                     Text(geminiManager.displayName(for: model))
-                                                    if folderModel == model && folderProvider.contains(account.id.uuidString) {
+                                                    if folderModel == model
+                                                        && folderProvider.contains(
+                                                            account.id.uuidString)
+                                                    {
                                                         Spacer()
                                                         Image(systemName: "checkmark")
                                                     }
@@ -451,7 +469,10 @@ struct FolderContextView: View {
                                             }) {
                                                 HStack {
                                                     Text(model)
-                                                    if folderModel == model && folderProvider.contains(account.id.uuidString) {
+                                                    if folderModel == model
+                                                        && folderProvider.contains(
+                                                            account.id.uuidString)
+                                                    {
                                                         Spacer()
                                                         Image(systemName: "checkmark")
                                                     }
@@ -473,7 +494,10 @@ struct FolderContextView: View {
                                             }) {
                                                 HStack {
                                                     Text(model)
-                                                    if folderModel == model && folderProvider.contains(account.id.uuidString) {
+                                                    if folderModel == model
+                                                        && folderProvider.contains(
+                                                            account.id.uuidString)
+                                                    {
                                                         Spacer()
                                                         Image(systemName: "checkmark")
                                                     }
@@ -514,12 +538,16 @@ struct FolderContextView: View {
                                     Section(group.name) {
                                         ForEach(group.models, id: \.self) { model in
                                             Button(action: {
-                                                folderProvider = "NVIDIA API|\(account.id.uuidString)"
+                                                folderProvider =
+                                                    "NVIDIA API|\(account.id.uuidString)"
                                                 folderModel = model
                                             }) {
                                                 HStack {
                                                     Text(nvidiaManager.displayName(for: model))
-                                                    if folderModel == model && folderProvider.contains(account.id.uuidString) {
+                                                    if folderModel == model
+                                                        && folderProvider.contains(
+                                                            account.id.uuidString)
+                                                    {
                                                         Spacer()
                                                         Image(systemName: "checkmark")
                                                     }
@@ -539,7 +567,8 @@ struct FolderContextView: View {
                     Section("GitHub Copilot") {
                         ForEach(copilotAccounts) { account in
                             let ghUser = copilotService.accountAuthState[account.id]?.userName ?? ""
-                            let label = ghUser.isEmpty ? account.displayName : "GitHub Copilot (\(ghUser))"
+                            let label =
+                                ghUser.isEmpty ? account.displayName : "GitHub Copilot (\(ghUser))"
                             Menu(label) {
                                 ForEach(copilotModelManager.chatModels, id: \.self) { model in
                                     Button(action: {
@@ -548,7 +577,9 @@ struct FolderContextView: View {
                                     }) {
                                         HStack {
                                             Text(copilotModelManager.displayName(for: model))
-                                            if folderModel == model && folderProvider.contains(account.id.uuidString) {
+                                            if folderModel == model
+                                                && folderProvider.contains(account.id.uuidString)
+                                            {
                                                 Spacer()
                                                 Image(systemName: "checkmark")
                                             }
@@ -583,12 +614,15 @@ struct FolderContextView: View {
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
+                        .fill(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .strokeBorder(
-                            colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06),
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.08) : Color.black.opacity(0.06),
                             lineWidth: 0.5
                         )
                 )
@@ -619,7 +653,9 @@ struct FolderContextView: View {
                 .padding(12)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
+                        .fill(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -661,19 +697,24 @@ struct FolderContextView: View {
                         Capsule()
                             .fill(
                                 AnyShapeStyle(
-                                    isLoading || selectedFolderPath.isEmpty || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    isLoading || selectedFolderPath.isEmpty
+                                        || prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                                            .isEmpty
                                         ? AnyShapeStyle(Color.secondary.opacity(0.3))
-                                        : AnyShapeStyle(LinearGradient(
-                                            colors: themeColors,
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ))
+                                        : AnyShapeStyle(
+                                            LinearGradient(
+                                                colors: themeColors,
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ))
                                 )
                             )
                     )
                 }
                 .buttonStyle(.plain)
-                .disabled(isLoading || selectedFolderPath.isEmpty || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(
+                    isLoading || selectedFolderPath.isEmpty
+                        || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 if !response.isEmpty && !isLoading {
                     Button {
@@ -691,7 +732,9 @@ struct FolderContextView: View {
                         .padding(.vertical, 7)
                         .background(
                             Capsule()
-                                .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                         )
                     }
                     .buttonStyle(.plain)
@@ -712,7 +755,9 @@ struct FolderContextView: View {
                         .padding(.vertical, 7)
                         .background(
                             Capsule()
-                                .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                         )
                     }
                     .buttonStyle(.plain)
@@ -731,8 +776,10 @@ struct FolderContextView: View {
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.5),
-                            colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.03),
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.08) : Color.white.opacity(0.5),
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.02) : Color.black.opacity(0.03),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -776,7 +823,9 @@ struct FolderContextView: View {
                         .padding(14)
                         .background(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(colorScheme == .dark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
                         )
                     }
                 }
@@ -790,8 +839,10 @@ struct FolderContextView: View {
                         .strokeBorder(
                             LinearGradient(
                                 colors: [
-                                    colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.5),
-                                    colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.03),
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.08) : Color.white.opacity(0.5),
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.02) : Color.black.opacity(0.03),
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -823,7 +874,9 @@ struct FolderContextView: View {
                             .padding(.vertical, 3)
                             .background(
                                 Capsule()
-                                    .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                    .fill(
+                                        colorScheme == .dark
+                                            ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                             )
                     }
                 }
@@ -841,7 +894,9 @@ struct FolderContextView: View {
                 .padding(.vertical, 7)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+                        .fill(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                 )
             }
             .padding(.horizontal, 14)
@@ -884,7 +939,7 @@ struct FolderContextView: View {
                 ZStack {
                     Divider().opacity(0.3)
                     Color.clear
-                        .frame(height: 14) // invisible grab area
+                        .frame(height: 14)  // invisible grab area
                 }
                 .contentShape(Rectangle())
                 .onHover { isHovering in
@@ -923,8 +978,10 @@ struct FolderContextView: View {
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.5),
-                            colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.03),
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.08) : Color.white.opacity(0.5),
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.02) : Color.black.opacity(0.03),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -988,7 +1045,8 @@ struct FolderContextView: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(
                         isSelected
-                            ? (themeColors.first ?? .blue).opacity(colorScheme == .dark ? 0.15 : 0.08)
+                            ? (themeColors.first ?? .blue).opacity(
+                                colorScheme == .dark ? 0.15 : 0.08)
                             : Color.clear
                     )
             )
@@ -1043,7 +1101,8 @@ struct FolderContextView: View {
             .frame(height: previewHeight)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(colorScheme == .dark ? Color.black.opacity(0.2) : Color.black.opacity(0.03))
+                    .fill(
+                        colorScheme == .dark ? Color.black.opacity(0.2) : Color.black.opacity(0.03))
             )
             .padding(.horizontal, 10)
             .padding(.bottom, 10)
@@ -1063,7 +1122,9 @@ struct FolderContextView: View {
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
+                        .fill(
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                 )
                 .overlay(
                     Capsule()
@@ -1118,8 +1179,8 @@ struct FolderContextView: View {
             let base = parts.first.map(String.init) ?? folderProvider
             if let uuidStr = parts.last, let uuid = UUID(uuidString: String(uuidStr)) {
                 if base == "GitHub Copilot",
-                   let ghUser = copilotService.accountAuthState[uuid]?.userName,
-                   !ghUser.isEmpty
+                    let ghUser = copilotService.accountAuthState[uuid]?.userName,
+                    !ghUser.isEmpty
                 {
                     return "Copilot (\(ghUser))"
                 }
@@ -1221,8 +1282,8 @@ struct FolderContextView: View {
                     let maxPages = min(document.pageCount, 50)
                     for i in 0..<maxPages {
                         if let page = document.page(at: i),
-                           let text = page.string,
-                           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            let text = page.string,
+                            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         {
                             pages.append("[Page \(i + 1)]\n\(text)")
                         }
@@ -1237,8 +1298,8 @@ struct FolderContextView: View {
                     result = "⚠️ Unable to open PDF"
                 }
             } else if let data = try? Data(contentsOf: file.fullURL, options: [.mappedIfSafe]),
-               !data.contains(0),
-               let text = String(data: data, encoding: .utf8)
+                !data.contains(0),
+                let text = String(data: data, encoding: .utf8)
             {
                 result = String(text.prefix(8000))
             } else {
@@ -1360,8 +1421,13 @@ struct FolderContextView: View {
             }
             return text
         case "Gemini API":
-            let apiKey = selectedAccount?.apiKey.isEmpty == false ? selectedAccount!.apiKey : geminiKey
-            guard !apiKey.isEmpty else { throw NSError(domain: "FolderContext", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing Gemini API key"]) }
+            let apiKey =
+                selectedAccount?.apiKey.isEmpty == false ? selectedAccount!.apiKey : geminiKey
+            guard !apiKey.isEmpty else {
+                throw NSError(
+                    domain: "FolderContext", code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "Missing Gemini API key"])
+            }
             let model = folderModel.isEmpty ? geminiModel : folderModel
             var text = ""
             let stream = geminiService.sendMessageStream(
@@ -1376,7 +1442,8 @@ struct FolderContextView: View {
             }
             return text
         case "Ollama":
-            let endpoint = selectedAccount?.endpoint.isEmpty == false ? selectedAccount!.endpoint : ollamaURL
+            let endpoint =
+                selectedAccount?.endpoint.isEmpty == false ? selectedAccount!.endpoint : ollamaURL
             let model = folderModel.isEmpty ? selectedOllamaModel : folderModel
             var text = ""
             for try await (chunk, _) in ollamaService.sendMessageStream(
@@ -1392,8 +1459,13 @@ struct FolderContextView: View {
             }
             return text
         case "NVIDIA API":
-            let apiKey = selectedAccount?.apiKey.isEmpty == false ? selectedAccount!.apiKey : nvidiaKey
-            guard !apiKey.isEmpty else { throw NSError(domain: "FolderContext", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing NVIDIA API key"]) }
+            let apiKey =
+                selectedAccount?.apiKey.isEmpty == false ? selectedAccount!.apiKey : nvidiaKey
+            guard !apiKey.isEmpty else {
+                throw NSError(
+                    domain: "FolderContext", code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Missing NVIDIA API key"])
+            }
             let model = folderModel.isEmpty ? selectedNvidiaModel : folderModel
             var text = ""
             for try await (chunk, _) in nvidiaService.sendMessageStream(
@@ -1422,7 +1494,10 @@ struct FolderContextView: View {
             throw NSError(
                 domain: "FolderContext",
                 code: 3,
-                userInfo: [NSLocalizedDescriptionKey: "Choose Apple Foundation, Gemini API, Ollama, NVIDIA API, or GitHub Copilot before using Folder Context."]
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Choose Apple Foundation, Gemini API, Ollama, NVIDIA API, or GitHub Copilot before using Folder Context."
+                ]
             )
         }
     }

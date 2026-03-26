@@ -2403,12 +2403,14 @@ struct ContentView: View {
                         }
                         .opacity(
                             showCommands || showModelComparison || showQuizMe || showImageGen
-                                || showFileCreator || showFolderContext || showImageGallery || showWebView
+                                || showFileCreator || showFolderContext || showImageGallery
+                                || showWebView
                                 || showBrowserAutomation ? 0 : 1
                         )
                         .allowsHitTesting(
                             !(showCommands || showModelComparison || showQuizMe || showImageGen
-                                || showFileCreator || showFolderContext || showImageGallery || showWebView
+                                || showFileCreator || showFolderContext || showImageGallery
+                                || showWebView
                                 || showBrowserAutomation)
                         )
                         .transaction { t in t.animation = nil }
@@ -7611,111 +7613,111 @@ struct SettingsView: View {
                 tint: .green,
                 description: "Version checks, release channel, and extension update paths."
             ) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Current Version")
-                    Text(updateManager.currentVersion)
-                        .font(.system(.callout, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if updateManager.isChecking {
-                    ProgressView()
-                        .controlSize(.small)
-                } else if updateManager.updateAvailable {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 8, height: 8)
-                        Text("v\(updateManager.latestVersion) available")
-                            .font(.callout)
-                            .foregroundStyle(.green)
-                    }
-                }
-            }
-
-            Toggle(isOn: $enablePreRelease) {
-                Label("Include Pre-Releases", systemImage: "flask")
-            }
-            .toggleStyle(.switch)
-            .onChange(of: enablePreRelease) {
-                Task { await updateManager.checkForUpdates() }
-            }
-
-            LabeledContent {
                 HStack {
-                    TextField("Path", text: $updateManager.chromeExtensionPath)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Browse") {
-                        let panel = NSOpenPanel()
-                        panel.canChooseFiles = false
-                        panel.canChooseDirectories = true
-                        panel.allowsMultipleSelection = false
-                        panel.message =
-                            "Select the folder containing your unpacked Chrome extension"
-                        if panel.runModal() == .OK {
-                            updateManager.chromeExtensionPath = panel.url?.path ?? ""
-                        }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Current Version")
+                        Text(updateManager.currentVersion)
+                            .font(.system(.callout, design: .monospaced))
+                            .foregroundStyle(.secondary)
                     }
-                    if !updateManager.chromeExtensionPath.isEmpty {
-                        Button(action: { updateManager.chromeExtensionPath = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                    Spacer()
+                    if updateManager.isChecking {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if updateManager.updateAvailable {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 8, height: 8)
+                            Text("v\(updateManager.latestVersion) available")
+                                .font(.callout)
+                                .foregroundStyle(.green)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
-            } label: {
-                Label("Chrome Extension Folder", systemImage: "puzzlepiece.extension")
-            }
-            Text("The unpacked Chrome extension folder. Used to auto-update the extension.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
 
-            LabeledContent {
-                HStack {
-                    TextField("Path", text: $updateManager.safariExtensionPath)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Browse") {
-                        let panel = NSOpenPanel()
-                        panel.canChooseFiles = false
-                        panel.canChooseDirectories = true
-                        panel.allowsMultipleSelection = false
-                        panel.message =
-                            "Select the folder containing your Safari extension"
-                        if panel.runModal() == .OK {
-                            updateManager.safariExtensionPath = panel.url?.path ?? ""
-                        }
-                    }
-                    if !updateManager.safariExtensionPath.isEmpty {
-                        Button(action: { updateManager.safariExtensionPath = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                Toggle(isOn: $enablePreRelease) {
+                    Label("Include Pre-Releases", systemImage: "flask")
                 }
-            } label: {
-                Label("Safari Extension Folder", systemImage: "safari")
-            }
-            Text("The Safari extension folder. Used to auto-update the extension.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .toggleStyle(.switch)
+                .onChange(of: enablePreRelease) {
+                    Task { await updateManager.checkForUpdates() }
+                }
 
-            Button {
-                AppDelegate.shared?.showUpdateWindow()
-                Task { await updateManager.checkForUpdates() }
-            } label: {
-                Label("Check for Updates…", systemImage: "arrow.clockwise")
-                    .frame(maxWidth: .infinity)
-            }
-
-            if let error = updateManager.errorMessage {
-                Text(error)
+                LabeledContent {
+                    HStack {
+                        TextField("Path", text: $updateManager.chromeExtensionPath)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Browse") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+                            panel.message =
+                                "Select the folder containing your unpacked Chrome extension"
+                            if panel.runModal() == .OK {
+                                updateManager.chromeExtensionPath = panel.url?.path ?? ""
+                            }
+                        }
+                        if !updateManager.chromeExtensionPath.isEmpty {
+                            Button(action: { updateManager.chromeExtensionPath = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                } label: {
+                    Label("Chrome Extension Folder", systemImage: "puzzlepiece.extension")
+                }
+                Text("The unpacked Chrome extension folder. Used to auto-update the extension.")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.secondary)
+
+                LabeledContent {
+                    HStack {
+                        TextField("Path", text: $updateManager.safariExtensionPath)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Browse") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+                            panel.message =
+                                "Select the folder containing your Safari extension"
+                            if panel.runModal() == .OK {
+                                updateManager.safariExtensionPath = panel.url?.path ?? ""
+                            }
+                        }
+                        if !updateManager.safariExtensionPath.isEmpty {
+                            Button(action: { updateManager.safariExtensionPath = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                } label: {
+                    Label("Safari Extension Folder", systemImage: "safari")
+                }
+                Text("The Safari extension folder. Used to auto-update the extension.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    AppDelegate.shared?.showUpdateWindow()
+                    Task { await updateManager.checkForUpdates() }
+                } label: {
+                    Label("Check for Updates…", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+
+                if let error = updateManager.errorMessage {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
-        }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -7735,79 +7737,79 @@ struct SettingsView: View {
                 tint: .pink,
                 description: "Theme, launch visuals, and background image."
             ) {
-            Toggle(isOn: $showSplashScreen) {
-                Label("Show Splash Screen on Launch", systemImage: "sparkles.rectangle.stack")
-            }
-            .toggleStyle(.switch)
-            LabeledContent {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(AppTheme.allCases) { theme in
-                            VStack(spacing: 4) {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: theme.colors,
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
+                Toggle(isOn: $showSplashScreen) {
+                    Label("Show Splash Screen on Launch", systemImage: "sparkles.rectangle.stack")
+                }
+                .toggleStyle(.switch)
+                LabeledContent {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(AppTheme.allCases) { theme in
+                                VStack(spacing: 4) {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: theme.colors,
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
                                         )
-                                    )
-                                    .frame(width: 22, height: 22)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-                                    )
-                                    .padding(3)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(
-                                                Color.accentColor,
-                                                lineWidth: appTheme == theme ? 2 : 0)
-                                    )
-                                    .onTapGesture {
-                                        appTheme = theme
-                                        IconManager.shared.updateIcon(theme: theme)
-                                    }
+                                        .frame(width: 22, height: 22)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                                        )
+                                        .padding(3)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(
+                                                    Color.accentColor,
+                                                    lineWidth: appTheme == theme ? 2 : 0)
+                                        )
+                                        .onTapGesture {
+                                            appTheme = theme
+                                            IconManager.shared.updateIcon(theme: theme)
+                                        }
 
-                                Text(theme.rawValue)
-                                    .font(.caption2)
-                                    .foregroundStyle(
-                                        appTheme == theme ? Color.secondary : Color.clear
-                                    )
-                                    .fixedSize()
+                                    Text(theme.rawValue)
+                                        .font(.caption2)
+                                        .foregroundStyle(
+                                            appTheme == theme ? Color.secondary : Color.clear
+                                        )
+                                        .fixedSize()
+                                }
                             }
                         }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 2)
                     }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 2)
+                } label: {
+                    Label("Theme Color", systemImage: "circle.lefthalf.filled")
                 }
-            } label: {
-                Label("Theme Color", systemImage: "circle.lefthalf.filled")
-            }
 
-            LabeledContent {
-                HStack {
-                    TextField("Path", text: $backgroundImagePath)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Browse") {
-                        let panel = NSOpenPanel()
-                        panel.allowedContentTypes = [.image]
-                        if panel.runModal() == .OK {
-                            backgroundImagePath = panel.url?.path ?? ""
+                LabeledContent {
+                    HStack {
+                        TextField("Path", text: $backgroundImagePath)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Browse") {
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [.image]
+                            if panel.runModal() == .OK {
+                                backgroundImagePath = panel.url?.path ?? ""
+                            }
+                        }
+                        if !backgroundImagePath.isEmpty {
+                            Button(action: { backgroundImagePath = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                    if !backgroundImagePath.isEmpty {
-                        Button(action: { backgroundImagePath = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                } label: {
+                    Label("Background Image", systemImage: "photo")
                 }
-            } label: {
-                Label("Background Image", systemImage: "photo")
             }
-        }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -7825,28 +7827,28 @@ struct SettingsView: View {
                 tint: .gray,
                 description: "Menu bar presence and click behavior."
             ) {
-            Toggle(isOn: $showMenuBar) {
-                Label("Show Menu Bar Icon", systemImage: "menubar.rectangle")
-            }
-            .toggleStyle(.switch)
-
-            if showMenuBar {
-                Picker("Menu Bar Click Action", selection: $menuBarClickAction) {
-                    Text("Toggle Quick AI").tag("quickAI")
-                    Text("Toggle Quick Tools").tag("quickTools")
-                    Text("Toggle Web Overlay").tag("webOverlay")
+                Toggle(isOn: $showMenuBar) {
+                    Label("Show Menu Bar Icon", systemImage: "menubar.rectangle")
                 }
-                .pickerStyle(.menu)
+                .toggleStyle(.switch)
 
-                Picker("Menu Bar Right Click", selection: $menuBarRightClickAction) {
-                    Text("Off").tag("off")
-                    Text("Toggle Quick AI").tag("quickAI")
-                    Text("Toggle Quick Tools").tag("quickTools")
-                    Text("Toggle Web Overlay").tag("webOverlay")
+                if showMenuBar {
+                    Picker("Menu Bar Click Action", selection: $menuBarClickAction) {
+                        Text("Toggle Quick AI").tag("quickAI")
+                        Text("Toggle Quick Tools").tag("quickTools")
+                        Text("Toggle Web Overlay").tag("webOverlay")
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Menu Bar Right Click", selection: $menuBarRightClickAction) {
+                        Text("Off").tag("off")
+                        Text("Toggle Quick AI").tag("quickAI")
+                        Text("Toggle Quick Tools").tag("quickTools")
+                        Text("Toggle Web Overlay").tag("webOverlay")
+                    }
+                    .pickerStyle(.menu)
                 }
-                .pickerStyle(.menu)
             }
-        }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -7862,88 +7864,88 @@ struct SettingsView: View {
                 tint: .yellow,
                 description: "Choose which tools appear in the app sidebar and reorder them."
             ) {
-            Toggle(isOn: $showCompareTool) {
-                Label("Compare", systemImage: "square.split.2x1")
-            }
-            .toggleStyle(.switch)
-
-            Toggle(isOn: $showCommandsTool) {
-                Label("Commands", systemImage: "command")
-            }
-            .toggleStyle(.switch)
-
-            Toggle(isOn: $showQuizMeTool) {
-                Label("Quiz Me", systemImage: "questionmark.bubble")
-            }
-            .toggleStyle(.switch)
-
-            Toggle(isOn: $showImageGenTool) {
-                Label("Image Generation", systemImage: "paintbrush")
-            }
-            .toggleStyle(.switch)
-
-            Toggle(isOn: $showFileCreatorTool) {
-                Label("File Creator", systemImage: "doc.richtext")
-            }
-            .toggleStyle(.switch)
-
-            Toggle(isOn: $showFolderContextTool) {
-                Label("Folder Context", systemImage: "folder.badge.questionmark")
-            }
-            .toggleStyle(.switch)
-
-            Toggle(isOn: $showWebViewTool) {
-                Label("Web View", systemImage: "globe")
-            }
-            .toggleStyle(.switch)
-
-            Toggle(isOn: $showBrowserAutomationTool) {
-                Label("Browser Automation", systemImage: "cursorarrow.motionlines.click")
-            }
-            .toggleStyle(.switch)
-
-            Divider()
-
-            Text("Drag To Reorder")
-                .font(.callout.weight(.semibold))
-
-            ForEach(toolOrder, id: \.self) { toolId in
-                HStack(spacing: 10) {
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-
-                    Image(systemName: toolIcon(for: toolId))
-                        .font(.system(size: 12))
-                        .frame(width: 16)
-                        .foregroundStyle(.secondary)
-
-                    Text(toolLabel(for: toolId))
-                        .font(.callout)
-
-                    Spacer()
+                Toggle(isOn: $showCompareTool) {
+                    Label("Compare", systemImage: "square.split.2x1")
                 }
-                .padding(.vertical, 6)
-                .padding(.horizontal, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.secondary.opacity(0.08))
-                )
-                .opacity(draggedTool == toolId ? 0.45 : 1.0)
-                .onDrag {
-                    draggedTool = toolId
-                    return NSItemProvider(object: toolId as NSString)
+                .toggleStyle(.switch)
+
+                Toggle(isOn: $showCommandsTool) {
+                    Label("Commands", systemImage: "command")
                 }
-                .onDrop(
-                    of: [.text],
-                    delegate: SettingsToolDropDelegate(
-                        item: toolId,
-                        draggedItem: $draggedTool,
-                        toolOrderRaw: $toolOrderRaw,
-                        toolOrder: toolOrder
-                    ))
+                .toggleStyle(.switch)
+
+                Toggle(isOn: $showQuizMeTool) {
+                    Label("Quiz Me", systemImage: "questionmark.bubble")
+                }
+                .toggleStyle(.switch)
+
+                Toggle(isOn: $showImageGenTool) {
+                    Label("Image Generation", systemImage: "paintbrush")
+                }
+                .toggleStyle(.switch)
+
+                Toggle(isOn: $showFileCreatorTool) {
+                    Label("File Creator", systemImage: "doc.richtext")
+                }
+                .toggleStyle(.switch)
+
+                Toggle(isOn: $showFolderContextTool) {
+                    Label("Folder Context", systemImage: "folder.badge.questionmark")
+                }
+                .toggleStyle(.switch)
+
+                Toggle(isOn: $showWebViewTool) {
+                    Label("Web View", systemImage: "globe")
+                }
+                .toggleStyle(.switch)
+
+                Toggle(isOn: $showBrowserAutomationTool) {
+                    Label("Browser Automation", systemImage: "cursorarrow.motionlines.click")
+                }
+                .toggleStyle(.switch)
+
+                Divider()
+
+                Text("Drag To Reorder")
+                    .font(.callout.weight(.semibold))
+
+                ForEach(toolOrder, id: \.self) { toolId in
+                    HStack(spacing: 10) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+
+                        Image(systemName: toolIcon(for: toolId))
+                            .font(.system(size: 12))
+                            .frame(width: 16)
+                            .foregroundStyle(.secondary)
+
+                        Text(toolLabel(for: toolId))
+                            .font(.callout)
+
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.secondary.opacity(0.08))
+                    )
+                    .opacity(draggedTool == toolId ? 0.45 : 1.0)
+                    .onDrag {
+                        draggedTool = toolId
+                        return NSItemProvider(object: toolId as NSString)
+                    }
+                    .onDrop(
+                        of: [.text],
+                        delegate: SettingsToolDropDelegate(
+                            item: toolId,
+                            draggedItem: $draggedTool,
+                            toolOrderRaw: $toolOrderRaw,
+                            toolOrder: toolOrder
+                        ))
+                }
             }
-        }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -8051,47 +8053,49 @@ struct SettingsView: View {
                 tint: .purple,
                 description: "Floating browser panel behavior, shortcut, and enabled services."
             ) {
-            Toggle(isOn: $enableWebOverlay) {
-                Label("Enable Web Overlay Hotkey", systemImage: "globe")
-            }
-            .toggleStyle(.switch)
-
-            Toggle(isOn: $webOverlayClickOutsideCloses) {
-                Label("Click Outside Closes Web Overlay", systemImage: "cursorarrow.click")
-            }
-            .toggleStyle(.switch)
-
-            if enableWebOverlay {
-                LabeledContent {
-                    KeyboardShortcuts.Recorder(for: .toggleWebOverlay)
-                } label: {
-                    Label("Open Web Overlay", systemImage: "command")
+                Toggle(isOn: $enableWebOverlay) {
+                    Label("Enable Web Overlay Hotkey", systemImage: "globe")
                 }
+                .toggleStyle(.switch)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Enabled Services", systemImage: "checklist")
-                        .font(.headline)
+                Toggle(isOn: $webOverlayClickOutsideCloses) {
+                    Label("Click Outside Closes Web Overlay", systemImage: "cursorarrow.click")
+                }
+                .toggleStyle(.switch)
 
-                    ForEach(WebOverlayService.allCases) { service in
-                        Toggle(
-                            isOn: Binding(
-                                get: { webOverlayManager.isServiceEnabled(service) },
-                                set: { webOverlayManager.setServiceEnabled(service, enabled: $0) }
-                            )
-                        ) {
-                            Label(service.rawValue, systemImage: service.icon)
-                        }
-                        .toggleStyle(.switch)
+                if enableWebOverlay {
+                    LabeledContent {
+                        KeyboardShortcuts.Recorder(for: .toggleWebOverlay)
+                    } label: {
+                        Label("Open Web Overlay", systemImage: "command")
                     }
-                }
-                .padding(.vertical, 4)
 
-                Text(
-                    "Toggle a floating web panel for AI chat services. The overlay stays on top and remembers your sessions."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Enabled Services", systemImage: "checklist")
+                            .font(.headline)
+
+                        ForEach(WebOverlayService.allCases) { service in
+                            Toggle(
+                                isOn: Binding(
+                                    get: { webOverlayManager.isServiceEnabled(service) },
+                                    set: {
+                                        webOverlayManager.setServiceEnabled(service, enabled: $0)
+                                    }
+                                )
+                            ) {
+                                Label(service.rawValue, systemImage: service.icon)
+                            }
+                            .toggleStyle(.switch)
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    Text(
+                        "Toggle a floating web panel for AI chat services. The overlay stays on top and remembers your sessions."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
 
             if enableWebOverlay {
@@ -8101,42 +8105,42 @@ struct SettingsView: View {
                     tint: .indigo,
                     description: "Control the glass treatment and theme tint strength."
                 ) {
-                LabeledContent {
-                    HStack {
-                        Slider(
-                            value: Binding(
-                                get: { webOverlayBackgroundOpacity },
-                                set: { webOverlayBackgroundOpacity = min(max($0, 0.05), 1.0) }
-                            ),
-                            in: 0.05...1.0
-                        )
-                        Text("\(Int(min(max(webOverlayBackgroundOpacity, 0.05), 1.0) * 100))%")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 35, alignment: .trailing)
+                    LabeledContent {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { webOverlayBackgroundOpacity },
+                                    set: { webOverlayBackgroundOpacity = min(max($0, 0.05), 1.0) }
+                                ),
+                                in: 0.05...1.0
+                            )
+                            Text("\(Int(min(max(webOverlayBackgroundOpacity, 0.05), 1.0) * 100))%")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 35, alignment: .trailing)
+                        }
+                    } label: {
+                        Label("Glass Opacity", systemImage: "circle.dotted")
                     }
-                } label: {
-                    Label("Glass Opacity", systemImage: "circle.dotted")
-                }
 
-                LabeledContent {
-                    HStack {
-                        Slider(
-                            value: Binding(
-                                get: { webOverlayTintIntensity },
-                                set: { webOverlayTintIntensity = min(max($0, 0.0), 1.0) }
-                            ),
-                            in: 0.0...1.0
-                        )
-                        Text("\(Int(min(max(webOverlayTintIntensity, 0.0), 1.0) * 100))%")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 35, alignment: .trailing)
+                    LabeledContent {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { webOverlayTintIntensity },
+                                    set: { webOverlayTintIntensity = min(max($0, 0.0), 1.0) }
+                                ),
+                                in: 0.0...1.0
+                            )
+                            Text("\(Int(min(max(webOverlayTintIntensity, 0.0), 1.0) * 100))%")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 35, alignment: .trailing)
+                        }
+                    } label: {
+                        Label("Theme Tint", systemImage: "paintbrush.pointed")
                     }
-                } label: {
-                    Label("Theme Tint", systemImage: "paintbrush.pointed")
                 }
-            }
             }
         }
         .padding(.horizontal, 24)
@@ -8155,23 +8159,23 @@ struct SettingsView: View {
                 tint: .orange,
                 description: "Global shortcut and dismissal behavior for the tools launcher."
             ) {
-            Toggle(isOn: $enableQuickTools) {
-                Label("Enable Quick Tools Hotkey", systemImage: "hammer")
-            }
-            .toggleStyle(.switch)
-
-            if enableQuickTools {
-                LabeledContent {
-                    KeyboardShortcuts.Recorder(for: .toggleQuickTools)
-                } label: {
-                    Label("Global Shortcut", systemImage: "command")
-                }
-
-                Toggle(isOn: $quickToolsClickOutsideCloses) {
-                    Label("Click Outside Closes Quick Tools", systemImage: "cursorarrow.click")
+                Toggle(isOn: $enableQuickTools) {
+                    Label("Enable Quick Tools Hotkey", systemImage: "hammer")
                 }
                 .toggleStyle(.switch)
-            }
+
+                if enableQuickTools {
+                    LabeledContent {
+                        KeyboardShortcuts.Recorder(for: .toggleQuickTools)
+                    } label: {
+                        Label("Global Shortcut", systemImage: "command")
+                    }
+
+                    Toggle(isOn: $quickToolsClickOutsideCloses) {
+                        Label("Click Outside Closes Quick Tools", systemImage: "cursorarrow.click")
+                    }
+                    .toggleStyle(.switch)
+                }
             }
 
             if enableQuickTools {
@@ -8181,42 +8185,42 @@ struct SettingsView: View {
                     tint: .yellow,
                     description: "Adjust the glass opacity and theme tint."
                 ) {
-                LabeledContent {
-                    HStack {
-                        Slider(
-                            value: Binding(
-                                get: { quickToolsBackgroundOpacity },
-                                set: { quickToolsBackgroundOpacity = min(max($0, 0.05), 1.0) }
-                            ),
-                            in: 0.05...1.0
-                        )
-                        Text("\(Int(min(max(quickToolsBackgroundOpacity, 0.05), 1.0) * 100))%")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 35, alignment: .trailing)
+                    LabeledContent {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { quickToolsBackgroundOpacity },
+                                    set: { quickToolsBackgroundOpacity = min(max($0, 0.05), 1.0) }
+                                ),
+                                in: 0.05...1.0
+                            )
+                            Text("\(Int(min(max(quickToolsBackgroundOpacity, 0.05), 1.0) * 100))%")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 35, alignment: .trailing)
+                        }
+                    } label: {
+                        Label("Glass Opacity", systemImage: "circle.dotted")
                     }
-                } label: {
-                    Label("Glass Opacity", systemImage: "circle.dotted")
-                }
 
-                LabeledContent {
-                    HStack {
-                        Slider(
-                            value: Binding(
-                                get: { quickToolsTintIntensity },
-                                set: { quickToolsTintIntensity = min(max($0, 0.0), 1.0) }
-                            ),
-                            in: 0.0...1.0
-                        )
-                        Text("\(Int(min(max(quickToolsTintIntensity, 0.0), 1.0) * 100))%")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 35, alignment: .trailing)
+                    LabeledContent {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { quickToolsTintIntensity },
+                                    set: { quickToolsTintIntensity = min(max($0, 0.0), 1.0) }
+                                ),
+                                in: 0.0...1.0
+                            )
+                            Text("\(Int(min(max(quickToolsTintIntensity, 0.0), 1.0) * 100))%")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 35, alignment: .trailing)
+                        }
+                    } label: {
+                        Label("Theme Tint", systemImage: "paintbrush.pointed")
                     }
-                } label: {
-                    Label("Theme Tint", systemImage: "paintbrush.pointed")
                 }
-            }
             }
         }
         .padding(.horizontal, 24)
@@ -8233,23 +8237,23 @@ struct SettingsView: View {
                 tint: .blue,
                 description: "Shortcut and dismissal behavior for Quick AI."
             ) {
-            Toggle(isOn: $enableQuickAI) {
-                Label("Enable Quick AI Hotkey", systemImage: "bolt.fill")
-            }
-            .toggleStyle(.switch)
-
-            if enableQuickAI {
-                LabeledContent {
-                    KeyboardShortcuts.Recorder(for: .toggleQuickAI)
-                } label: {
-                    Label("Global Shortcut", systemImage: "command")
-                }
-
-                Toggle(isOn: $quickAIClickOutsideCloses) {
-                    Label("Click Outside Closes Quick AI", systemImage: "cursorarrow.click")
+                Toggle(isOn: $enableQuickAI) {
+                    Label("Enable Quick AI Hotkey", systemImage: "bolt.fill")
                 }
                 .toggleStyle(.switch)
-            }
+
+                if enableQuickAI {
+                    LabeledContent {
+                        KeyboardShortcuts.Recorder(for: .toggleQuickAI)
+                    } label: {
+                        Label("Global Shortcut", systemImage: "command")
+                    }
+
+                    Toggle(isOn: $quickAIClickOutsideCloses) {
+                        Label("Click Outside Closes Quick AI", systemImage: "cursorarrow.click")
+                    }
+                    .toggleStyle(.switch)
+                }
             }
 
             settingsCard(
@@ -8258,78 +8262,78 @@ struct SettingsView: View {
                 tint: .cyan,
                 description: "Tune opacity, vibrancy, and tint across the Quick AI surfaces."
             ) {
-            LabeledContent {
-                HStack {
-                    Slider(
-                        value: Binding(
-                            get: { quickAIBackgroundOpacity },
-                            set: { quickAIBackgroundOpacity = min(max($0, 0.05), 1.0) }
-                        ),
-                        in: 0.05...1.0
-                    )
-                    Text("\(Int(min(max(quickAIBackgroundOpacity, 0.05), 1.0) * 100))%")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 35, alignment: .trailing)
+                LabeledContent {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { quickAIBackgroundOpacity },
+                                set: { quickAIBackgroundOpacity = min(max($0, 0.05), 1.0) }
+                            ),
+                            in: 0.05...1.0
+                        )
+                        Text("\(Int(min(max(quickAIBackgroundOpacity, 0.05), 1.0) * 100))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                } label: {
+                    Label("Background Opacity", systemImage: "circle.dotted")
                 }
-            } label: {
-                Label("Background Opacity", systemImage: "circle.dotted")
-            }
 
-            LabeledContent {
-                HStack {
-                    Slider(
-                        value: Binding(
-                            get: { quickAICommandBarVibrancy },
-                            set: { quickAICommandBarVibrancy = min(max($0, 0.05), 1.0) }
-                        ),
-                        in: 0.05...1.0
-                    )
-                    Text("\(Int(min(max(quickAICommandBarVibrancy, 0.05), 1.0) * 100))%")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 35, alignment: .trailing)
+                LabeledContent {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { quickAICommandBarVibrancy },
+                                set: { quickAICommandBarVibrancy = min(max($0, 0.05), 1.0) }
+                            ),
+                            in: 0.05...1.0
+                        )
+                        Text("\(Int(min(max(quickAICommandBarVibrancy, 0.05), 1.0) * 100))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                } label: {
+                    Label("Chat Bar Vibrancy", systemImage: "sparkle")
                 }
-            } label: {
-                Label("Chat Bar Vibrancy", systemImage: "sparkle")
-            }
 
-            LabeledContent {
-                HStack {
-                    Slider(
-                        value: Binding(
-                            get: { quickAIChatBarTintIntensity },
-                            set: { quickAIChatBarTintIntensity = min(max($0, 0.0), 1.0) }
-                        ),
-                        in: 0.0...1.0
-                    )
-                    Text("\(Int(min(max(quickAIChatBarTintIntensity, 0.0), 1.0) * 100))%")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 35, alignment: .trailing)
+                LabeledContent {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { quickAIChatBarTintIntensity },
+                                set: { quickAIChatBarTintIntensity = min(max($0, 0.0), 1.0) }
+                            ),
+                            in: 0.0...1.0
+                        )
+                        Text("\(Int(min(max(quickAIChatBarTintIntensity, 0.0), 1.0) * 100))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                } label: {
+                    Label("Chat Bar Tint", systemImage: "paintbrush.pointed")
                 }
-            } label: {
-                Label("Chat Bar Tint", systemImage: "paintbrush.pointed")
-            }
 
-            LabeledContent {
-                HStack {
-                    Slider(
-                        value: Binding(
-                            get: { quickAITintIntensity },
-                            set: { quickAITintIntensity = min(max($0, 0.0), 1.0) }
-                        ),
-                        in: 0.0...1.0
-                    )
-                    Text("\(Int(min(max(quickAITintIntensity, 0.0), 1.0) * 100))%")
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-                        .frame(width: 35, alignment: .trailing)
+                LabeledContent {
+                    HStack {
+                        Slider(
+                            value: Binding(
+                                get: { quickAITintIntensity },
+                                set: { quickAITintIntensity = min(max($0, 0.0), 1.0) }
+                            ),
+                            in: 0.0...1.0
+                        )
+                        Text("\(Int(min(max(quickAITintIntensity, 0.0), 1.0) * 100))%")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                            .frame(width: 35, alignment: .trailing)
+                    }
+                } label: {
+                    Label("Glass Tint", systemImage: "rectangle.on.rectangle")
                 }
-            } label: {
-                Label("Glass Tint", systemImage: "rectangle.on.rectangle")
             }
-        }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -8381,7 +8385,8 @@ struct SettingsView: View {
         draftAPIKey = ""
         draftAPIEndpoint = ""
         draftProviderCustomModel = ""
-        let currentProvider = provider
+        let currentProvider =
+            provider
             ?? addAPIProviderID.flatMap { APIProviderRegistry.provider(for: $0) }
         draftProviderPresetModel = currentProvider?.presetModels.first ?? ""
         draftModelChoiceMode = currentProvider?.presetModels.isEmpty == true ? "custom" : "preset"
@@ -8394,7 +8399,9 @@ struct SettingsView: View {
             get: { account.apiKey },
             set: { newKey in
                 accountManager.updateAccount(id: account.id, apiKey: newKey)
-                Task { await fetchModelsIfPossible(for: provider, account: account, apiKey: newKey) }
+                Task {
+                    await fetchModelsIfPossible(for: provider, account: account, apiKey: newKey)
+                }
             }
         )
     }
@@ -8515,7 +8522,7 @@ struct SettingsView: View {
                     }
 
                     SecureField("API Key", text: apiKeyBinding(for: account, provider: provider))
-                    .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.roundedBorder)
 
                     if provider.accountType == .customapi {
                         TextField("Base URL", text: endpointBinding(for: account))
@@ -8591,10 +8598,13 @@ struct SettingsView: View {
                 )
             }
 
-            Picker("Default Model", selection: Binding(
-                get: { apiProviderModelStore.selectedModel(for: provider) },
-                set: { apiProviderModelStore.setSelectedModel($0, for: provider) }
-            )) {
+            Picker(
+                "Default Model",
+                selection: Binding(
+                    get: { apiProviderModelStore.selectedModel(for: provider) },
+                    set: { apiProviderModelStore.setSelectedModel($0, for: provider) }
+                )
+            ) {
                 ForEach(apiProviderModelStore.enabledModels(for: provider), id: \.self) { model in
                     Text(model).tag(model)
                 }
@@ -8646,8 +8656,9 @@ struct SettingsView: View {
                         Spacer()
                     }
 
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 10)], spacing: 10)
-                    {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 220), spacing: 10)], spacing: 10
+                    ) {
                         ForEach(models, id: \.self) { model in
                             Button {
                                 apiProviderModelStore.toggleEnabled(model, for: provider)
@@ -8655,19 +8666,22 @@ struct SettingsView: View {
                                 HStack(spacing: 10) {
                                     Image(
                                         systemName: enabledModels.contains(model)
-                                            ? "checkmark.circle.fill" : "circle")
-                                        .foregroundStyle(
-                                            enabledModels.contains(model)
-                                                ? provider.tint : .secondary)
+                                            ? "checkmark.circle.fill" : "circle"
+                                    )
+                                    .foregroundStyle(
+                                        enabledModels.contains(model)
+                                            ? provider.tint : .secondary)
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(model)
                                             .font(
                                                 .system(
                                                     size: 12, weight: .medium,
-                                                    design: .monospaced))
+                                                    design: .monospaced)
+                                            )
                                             .lineLimit(2)
                                         Text(
-                                            apiProviderModelStore.isBuiltInPreset(model, for: provider)
+                                            apiProviderModelStore.isBuiltInPreset(
+                                                model, for: provider)
                                                 ? "Preset"
                                                 : apiProviderModelStore.fetchedModels(for: provider)
                                                     .contains(model) ? "Fetched" : "Custom"
@@ -8762,8 +8776,9 @@ struct SettingsView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            self.colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
-                            provider.tint.opacity(0.08)
+                            self.colorScheme == .dark
+                                ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
+                            provider.tint.opacity(0.08),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -8772,7 +8787,9 @@ struct SettingsView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .stroke(self.colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
+                .stroke(
+                    self.colorScheme == .dark
+                        ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 16, y: 8)
         .task(id: accounts(for: provider).map(\.apiKey).joined(separator: "|")) {
@@ -8788,9 +8805,11 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Cloud APIs")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-                Text("Configured providers only. Add a key, fetch models, then enable what you want.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Configured providers only. Add a key, fetch models, then enable what you want."
+                )
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -8815,7 +8834,8 @@ struct SettingsView: View {
                 }
             }
 
-            ForEach(APIProviderRegistry.providers.filter { providerAccountsExist($0) }) { provider in
+            ForEach(APIProviderRegistry.providers.filter { providerAccountsExist($0) }) {
+                provider in
                 apiProviderCard(provider)
             }
 
@@ -8847,18 +8867,22 @@ struct SettingsView: View {
             .padding(22)
             .background(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [
-                            self.colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
-                            Color.indigo.opacity(0.08)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                self.colorScheme == .dark
+                                    ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
+                                Color.indigo.opacity(0.08),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(self.colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
+                    .stroke(
+                        self.colorScheme == .dark
+                            ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
             )
 
             VStack(alignment: .leading, spacing: 16) {
@@ -8867,18 +8891,22 @@ struct SettingsView: View {
             .padding(22)
             .background(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [
-                            self.colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
-                            Color.green.opacity(0.08)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                self.colorScheme == .dark
+                                    ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
+                                Color.green.opacity(0.08),
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(self.colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
+                    .stroke(
+                        self.colorScheme == .dark
+                            ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
             )
         }
         .padding(.horizontal, 24)
@@ -9398,45 +9426,45 @@ struct SettingsView: View {
                 tint: .teal,
                 description: "Add custom destinations for the Web View tool."
             ) {
-            HStack {
-                Text("Add web-based AI chats to the Web View tool.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(action: { showAddCustomWebView = true }) {
-                    Label("Add Web View", systemImage: "plus")
+                HStack {
+                    Text("Add web-based AI chats to the Web View tool.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button(action: { showAddCustomWebView = true }) {
+                        Label("Add Web View", systemImage: "plus")
+                    }
+                    .buttonStyle(.borderless)
                 }
-                .buttonStyle(.borderless)
-            }
 
-            let webViews = customWebViewsList()
-            if webViews.isEmpty {
-                Text("No custom web views added yet.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(webViews) { webView in
-                    HStack {
-                        Image(systemName: webView.icon ?? "globe")
-                            .foregroundStyle(.secondary)
-                            .frame(width: 18)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(webView.name.isEmpty ? "Untitled" : webView.name)
-                                .font(.body)
-                            Text(webView.url)
-                                .font(.caption)
+                let webViews = customWebViewsList()
+                if webViews.isEmpty {
+                    Text("No custom web views added yet.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(webViews) { webView in
+                        HStack {
+                            Image(systemName: webView.icon ?? "globe")
                                 .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                                .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(webView.name.isEmpty ? "Untitled" : webView.name)
+                                    .font(.body)
+                                Text(webView.url)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Button(action: { removeCustomWebView(id: webView.id) }) {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.borderless)
                         }
-                        Spacer()
-                        Button(action: { removeCustomWebView(id: webView.id) }) {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
-                        }
-                        .buttonStyle(.borderless)
                     }
                 }
-            }
             }
         }
         .padding(.horizontal, 24)
@@ -9581,16 +9609,16 @@ struct SettingsView: View {
                 tint: .yellow,
                 description: "Global instructions applied across chats."
             ) {
-            TextEditor(text: $systemPrompt)
-                .font(.system(.body, design: .monospaced))
-                .frame(height: 80)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4).stroke(
-                        Color.gray.opacity(0.2), lineWidth: 1))
-            Text("Instructions for how the AI should behave across all chats.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
+                TextEditor(text: $systemPrompt)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(height: 80)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4).stroke(
+                            Color.gray.opacity(0.2), lineWidth: 1))
+                Text("Instructions for how the AI should behave across all chats.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -9608,30 +9636,30 @@ struct SettingsView: View {
                 tint: .mint,
                 description: "Enable autocomplete and control its shortcut."
             ) {
-            Toggle(
-                isOn: Binding(
-                    get: { enableAutocomplete },
-                    set: { newValue in
-                        enableAutocomplete = newValue
-                        if newValue {
-                            AutocompleteManager.shared.setup()
-                        } else {
-                            AutocompleteManager.shared.stop()
+                Toggle(
+                    isOn: Binding(
+                        get: { enableAutocomplete },
+                        set: { newValue in
+                            enableAutocomplete = newValue
+                            if newValue {
+                                AutocompleteManager.shared.setup()
+                            } else {
+                                AutocompleteManager.shared.stop()
+                            }
                         }
-                    }
-                )
-            ) {
-                Label("Enable AI Autocomplete", systemImage: "sparkles")
-            }
-            .toggleStyle(.switch)
-
-            if enableAutocomplete {
-                LabeledContent {
-                    KeyboardShortcuts.Recorder(for: .toggleAIAutocomplete)
-                } label: {
-                    Label("Toggle Shortcut", systemImage: "command")
+                    )
+                ) {
+                    Label("Enable AI Autocomplete", systemImage: "sparkles")
                 }
-            }
+                .toggleStyle(.switch)
+
+                if enableAutocomplete {
+                    LabeledContent {
+                        KeyboardShortcuts.Recorder(for: .toggleAIAutocomplete)
+                    } label: {
+                        Label("Toggle Shortcut", systemImage: "command")
+                    }
+                }
             }
 
             if enableAutocomplete {
@@ -9641,41 +9669,42 @@ struct SettingsView: View {
                     tint: .blue,
                     description: "Choose the backend and model used for completions."
                 ) {
-                Picker(selection: $autocompleteBackend) {
-                    ForEach(AutocompleteService.Backend.allCases) { backend in
-                        Text(backend.rawValue).tag(backend.rawValue)
-                    }
-                } label: {
-                    Label("AI Backend", systemImage: "server.rack")
-                }
-
-                if autocompleteBackend != "Apple Intelligence" {
-                    LabeledContent {
-                        Picker("Model", selection: $autocompleteModel) {
-                            if autocompleteModel.isEmpty {
-                                Text("Select a model...").tag("")
-                            }
-                            if autocompleteBackend == "Ollama" {
-                                ForEach(OllamaModelManager.shared.allModels, id: \.self) { model in
-                                    Text(model).tag(model)
-                                }
-                            } else if autocompleteBackend == "Gemini" {
-                                ForEach(GeminiModelManager.shared.availableModels, id: \.self) {
-                                    model in
-                                    Text(GeminiModelManager.shared.displayName(for: model)).tag(
-                                        model)
-                                }
-                            }
+                    Picker(selection: $autocompleteBackend) {
+                        ForEach(AutocompleteService.Backend.allCases) { backend in
+                            Text(backend.rawValue).tag(backend.rawValue)
                         }
-                        .pickerStyle(.menu)
-                        .frame(maxWidth: 180)
                     } label: {
-                        Label("Model Name", systemImage: "brain.head.profile")
+                        Label("AI Backend", systemImage: "server.rack")
                     }
-                    Text("Select the model used for completions.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+
+                    if autocompleteBackend != "Apple Intelligence" {
+                        LabeledContent {
+                            Picker("Model", selection: $autocompleteModel) {
+                                if autocompleteModel.isEmpty {
+                                    Text("Select a model...").tag("")
+                                }
+                                if autocompleteBackend == "Ollama" {
+                                    ForEach(OllamaModelManager.shared.allModels, id: \.self) {
+                                        model in
+                                        Text(model).tag(model)
+                                    }
+                                } else if autocompleteBackend == "Gemini" {
+                                    ForEach(GeminiModelManager.shared.availableModels, id: \.self) {
+                                        model in
+                                        Text(GeminiModelManager.shared.displayName(for: model)).tag(
+                                            model)
+                                    }
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 180)
+                        } label: {
+                            Label("Model Name", systemImage: "brain.head.profile")
+                        }
+                        Text("Select the model used for completions.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 settingsCard(
@@ -9684,19 +9713,22 @@ struct SettingsView: View {
                     tint: .indigo,
                     description: "Control how long generated completions can be."
                 ) {
-                Picker(selection: $autocompleteCompletionLength) {
-                    ForEach(
-                        ["Short (~ 1 - 2 words)", "Medium (~ 2 - 4 words)", "Long (~ 5+ words)"],
-                        id: \.self
-                    ) { length in
-                        Text(length).tag(length)
+                    Picker(selection: $autocompleteCompletionLength) {
+                        ForEach(
+                            [
+                                "Short (~ 1 - 2 words)", "Medium (~ 2 - 4 words)",
+                                "Long (~ 5+ words)",
+                            ],
+                            id: \.self
+                        ) { length in
+                            Text(length).tag(length)
+                        }
+                    } label: {
+                        Label("Maximum Length", systemImage: "ruler")
                     }
-                } label: {
-                    Label("Maximum Length", systemImage: "ruler")
-                }
-                Text("Controls how long generated completions can be.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text("Controls how long generated completions can be.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 settingsCard(
@@ -9705,114 +9737,115 @@ struct SettingsView: View {
                     tint: .purple,
                     description: "Delay, persona, and per-app exclusions."
                 ) {
-                LabeledContent {
-                    HStack {
-                        Slider(
-                            value: Binding(
-                                get: { Double(autocompleteDebounceMs) },
-                                set: { autocompleteDebounceMs = Int($0) }
-                            ),
-                            in: 0...1500,
-                            step: 50
-                        )
-                        Text("\(autocompleteDebounceMs)ms")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                            .frame(width: 55, alignment: .trailing)
+                    LabeledContent {
+                        HStack {
+                            Slider(
+                                value: Binding(
+                                    get: { Double(autocompleteDebounceMs) },
+                                    set: { autocompleteDebounceMs = Int($0) }
+                                ),
+                                in: 0...1500,
+                                step: 50
+                            )
+                            Text("\(autocompleteDebounceMs)ms")
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 55, alignment: .trailing)
+                        }
+                    } label: {
+                        Label("Prediction Delay", systemImage: "timer")
                     }
-                } label: {
-                    Label("Prediction Delay", systemImage: "timer")
-                }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Custom Instructions", systemImage: "text.quote")
-                    TextEditor(text: $autocompletePersona)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(height: 80)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 4).stroke(
-                                Color.gray.opacity(0.2), lineWidth: 1))
-                    Text("Additional instructions or persona for autocomplete to follow.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("App Blocklist", systemImage: "xmark.app")
-
-                    let blacklistedApps: [String] = {
-                        guard let data = autocompleteBlacklist.data(using: .utf8),
-                            let arr = try? JSONDecoder().decode([String].self, from: data)
-                        else { return [] }
-                        return arr
-                    }()
-
-                    if blacklistedApps.isEmpty {
-                        Text("No apps blocked.")
-                            .font(.callout)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Custom Instructions", systemImage: "text.quote")
+                        TextEditor(text: $autocompletePersona)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(height: 80)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4).stroke(
+                                    Color.gray.opacity(0.2), lineWidth: 1))
+                        Text("Additional instructions or persona for autocomplete to follow.")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
-                            .padding(.vertical, 2)
-                    } else {
-                        VStack(spacing: 4) {
-                            ForEach(blacklistedApps, id: \.self) { bundleId in
-                                HStack {
-                                    Text(bundleId)
-                                        .font(.system(.callout, design: .monospaced))
-                                    Spacer()
-                                    Button(action: {
-                                        var apps = blacklistedApps
-                                        apps.removeAll { $0 == bundleId }
+                    }
+                    .padding(.vertical, 4)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("App Blocklist", systemImage: "xmark.app")
+
+                        let blacklistedApps: [String] = {
+                            guard let data = autocompleteBlacklist.data(using: .utf8),
+                                let arr = try? JSONDecoder().decode([String].self, from: data)
+                            else { return [] }
+                            return arr
+                        }()
+
+                        if blacklistedApps.isEmpty {
+                            Text("No apps blocked.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 2)
+                        } else {
+                            VStack(spacing: 4) {
+                                ForEach(blacklistedApps, id: \.self) { bundleId in
+                                    HStack {
+                                        Text(bundleId)
+                                            .font(.system(.callout, design: .monospaced))
+                                        Spacer()
+                                        Button(action: {
+                                            var apps = blacklistedApps
+                                            apps.removeAll { $0 == bundleId }
+                                            if let data = try? JSONEncoder().encode(apps),
+                                                let json = String(data: data, encoding: .utf8)
+                                            {
+                                                autocompleteBlacklist = json
+                                            }
+                                        }) {
+                                            Image(systemName: "minus.circle.fill")
+                                                .foregroundColor(.red.opacity(0.8))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .padding(6)
+                                    .background(Color(NSColor.controlBackgroundColor))
+                                    .cornerRadius(6)
+                                }
+                            }
+                        }
+
+                        Button(action: {
+                            let panel = NSOpenPanel()
+                            panel.allowedContentTypes = [UTType.application]
+                            panel.allowsMultipleSelection = false
+                            panel.canChooseDirectories = false
+                            panel.canChooseFiles = true
+                            panel.directoryURL = URL(fileURLWithPath: "/Applications")
+
+                            if panel.runModal() == .OK, let url = panel.url {
+                                if let bundle = Bundle(url: url),
+                                    let bundleId = bundle.bundleIdentifier
+                                {
+                                    var apps = blacklistedApps
+                                    if !apps.contains(bundleId) {
+                                        apps.append(bundleId)
                                         if let data = try? JSONEncoder().encode(apps),
                                             let json = String(data: data, encoding: .utf8)
                                         {
                                             autocompleteBlacklist = json
                                         }
-                                    }) {
-                                        Image(systemName: "minus.circle.fill")
-                                            .foregroundColor(.red.opacity(0.8))
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                                .padding(6)
-                                .background(Color(NSColor.controlBackgroundColor))
-                                .cornerRadius(6)
-                            }
-                        }
-                    }
-
-                    Button(action: {
-                        let panel = NSOpenPanel()
-                        panel.allowedContentTypes = [UTType.application]
-                        panel.allowsMultipleSelection = false
-                        panel.canChooseDirectories = false
-                        panel.canChooseFiles = true
-                        panel.directoryURL = URL(fileURLWithPath: "/Applications")
-
-                        if panel.runModal() == .OK, let url = panel.url {
-                            if let bundle = Bundle(url: url), let bundleId = bundle.bundleIdentifier
-                            {
-                                var apps = blacklistedApps
-                                if !apps.contains(bundleId) {
-                                    apps.append(bundleId)
-                                    if let data = try? JSONEncoder().encode(apps),
-                                        let json = String(data: data, encoding: .utf8)
-                                    {
-                                        autocompleteBlacklist = json
                                     }
                                 }
                             }
+                        }) {
+                            Label("Add App...", systemImage: "plus.circle")
                         }
-                    }) {
-                        Label("Add App...", systemImage: "plus.circle")
-                    }
-                    .padding(.top, 4)
+                        .padding(.top, 4)
 
-                    Text("Disable autocomplete in specific apps by selecting them.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
+                        Text("Disable autocomplete in specific apps by selecting them.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
 
                 settingsCard(
@@ -9821,31 +9854,31 @@ struct SettingsView: View {
                     tint: .orange,
                     description: "Store accepted suggestions temporarily to match your style."
                 ) {
-                Toggle(isOn: $autocompleteMemory) {
-                    Label("Learn Writing Style", systemImage: "memorychip")
-                }
-                .toggleStyle(.switch)
+                    Toggle(isOn: $autocompleteMemory) {
+                        Label("Learn Writing Style", systemImage: "memorychip")
+                    }
+                    .toggleStyle(.switch)
 
-                Text(
-                    "Remembers accepted suggestions to match your style. Auto-expires after 7 days."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                    Text(
+                        "Remembers accepted suggestions to match your style. Auto-expires after 7 days."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-                if autocompleteMemory {
-                    HStack {
-                        Label("\(WritingMemory.shared.count) samples", systemImage: "doc.text")
-                            .foregroundStyle(.secondary)
-                            .font(.callout)
-                        Spacer()
-                        Button(role: .destructive) {
-                            WritingMemory.shared.clearAll()
-                        } label: {
-                            Label("Clear Memory", systemImage: "trash")
+                    if autocompleteMemory {
+                        HStack {
+                            Label("\(WritingMemory.shared.count) samples", systemImage: "doc.text")
+                                .foregroundStyle(.secondary)
+                                .font(.callout)
+                            Spacer()
+                            Button(role: .destructive) {
+                                WritingMemory.shared.clearAll()
+                            } label: {
+                                Label("Clear Memory", systemImage: "trash")
+                            }
                         }
                     }
                 }
-            }
             }
         }
         .padding(.horizontal, 24)
@@ -9864,36 +9897,36 @@ struct SettingsView: View {
                 tint: .blue,
                 description: "Choose where generated files are saved."
             ) {
-            LabeledContent {
-                HStack {
-                    TextField("", text: $imageDownloadPath)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Browse") {
-                        let panel = NSOpenPanel()
-                        panel.canChooseFiles = false
-                        panel.canChooseDirectories = true
-                        panel.allowsMultipleSelection = false
-                        if panel.runModal() == .OK {
-                            imageDownloadPath = panel.url?.path ?? ""
+                LabeledContent {
+                    HStack {
+                        TextField("", text: $imageDownloadPath)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Browse") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+                            if panel.runModal() == .OK {
+                                imageDownloadPath = panel.url?.path ?? ""
+                            }
+                        }
+                        if !imageDownloadPath.isEmpty {
+                            Button(action: { imageDownloadPath = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                    if !imageDownloadPath.isEmpty {
-                        Button(action: { imageDownloadPath = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                } label: {
+                    Label("Save Path", systemImage: "folder")
                 }
-            } label: {
-                Label("Save Path", systemImage: "folder")
+                Text(
+                    "Generated files will be instantly saved to this folder. Leave empty to disable."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
-            Text(
-                "Generated files will be instantly saved to this folder. Leave empty to disable."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -9911,42 +9944,43 @@ struct SettingsView: View {
                 tint: .orange,
                 description: "Point Prism at a custom BrowserAutomation server checkout."
             ) {
-            LabeledContent {
-                HStack {
-                    TextField("", text: $browserAutomationPath)
-                        .textFieldStyle(.roundedBorder)
-                    Button("Browse") {
-                        let panel = NSOpenPanel()
-                        panel.canChooseFiles = false
-                        panel.canChooseDirectories = true
-                        panel.allowsMultipleSelection = false
-                        panel.message = "Choose the BrowserAutomation folder containing server.js"
-                        if panel.runModal() == .OK {
-                            browserAutomationPath = panel.url?.path ?? ""
-                            BrowserAutomationManager.shared.setBrowserAutomationPath(
-                                browserAutomationPath)
+                LabeledContent {
+                    HStack {
+                        TextField("", text: $browserAutomationPath)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Browse") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+                            panel.message =
+                                "Choose the BrowserAutomation folder containing server.js"
+                            if panel.runModal() == .OK {
+                                browserAutomationPath = panel.url?.path ?? ""
+                                BrowserAutomationManager.shared.setBrowserAutomationPath(
+                                    browserAutomationPath)
+                            }
+                        }
+                        if !browserAutomationPath.isEmpty {
+                            Button(action: {
+                                browserAutomationPath = ""
+                                BrowserAutomationManager.shared.setBrowserAutomationPath("")
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                    if !browserAutomationPath.isEmpty {
-                        Button(action: {
-                            browserAutomationPath = ""
-                            BrowserAutomationManager.shared.setBrowserAutomationPath("")
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                } label: {
+                    Label("Path", systemImage: "folder")
                 }
-            } label: {
-                Label("Path", systemImage: "folder")
+                Text(
+                    "Set a custom path for the Browser Automation server files if you prefer to use your own clone."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
-            Text(
-                "Set a custom path for the Browser Automation server files if you prefer to use your own clone."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -9964,37 +9998,37 @@ struct SettingsView: View {
                 tint: .gray,
                 description: "Names Prism uses to target your installed Shortcuts."
             ) {
-            LabeledContent {
-                TextField("", text: $shortcutPrivateCloud)
-                    .textFieldStyle(.roundedBorder)
-            } label: {
-                Label("Private Cloud", systemImage: "cloud.fill")
+                LabeledContent {
+                    TextField("", text: $shortcutPrivateCloud)
+                        .textFieldStyle(.roundedBorder)
+                } label: {
+                    Label("Private Cloud", systemImage: "cloud.fill")
+                }
+                LabeledContent {
+                    TextField("", text: $shortcutOnDevice)
+                        .textFieldStyle(.roundedBorder)
+                } label: {
+                    Label("On-Device", systemImage: "iphone")
+                }
+                LabeledContent {
+                    TextField("", text: $shortcutChatGPT)
+                        .textFieldStyle(.roundedBorder)
+                } label: {
+                    Label("ChatGPT", systemImage: "bubble.left.fill")
+                }
+                LabeledContent {
+                    TextField("", text: $shortcutImageGen)
+                        .textFieldStyle(.roundedBorder)
+                } label: {
+                    Label("Image Gen", systemImage: "photo.fill")
+                }
+                LabeledContent {
+                    TextField("", text: $shortcutImageGenChatGPT)
+                        .textFieldStyle(.roundedBorder)
+                } label: {
+                    Label("Image Gen (ChatGPT)", systemImage: "photo.badge.plus")
+                }
             }
-            LabeledContent {
-                TextField("", text: $shortcutOnDevice)
-                    .textFieldStyle(.roundedBorder)
-            } label: {
-                Label("On-Device", systemImage: "iphone")
-            }
-            LabeledContent {
-                TextField("", text: $shortcutChatGPT)
-                    .textFieldStyle(.roundedBorder)
-            } label: {
-                Label("ChatGPT", systemImage: "bubble.left.fill")
-            }
-            LabeledContent {
-                TextField("", text: $shortcutImageGen)
-                    .textFieldStyle(.roundedBorder)
-            } label: {
-                Label("Image Gen", systemImage: "photo.fill")
-            }
-            LabeledContent {
-                TextField("", text: $shortcutImageGenChatGPT)
-                    .textFieldStyle(.roundedBorder)
-            } label: {
-                Label("Image Gen (ChatGPT)", systemImage: "photo.badge.plus")
-            }
-        }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -10012,13 +10046,13 @@ struct SettingsView: View {
                 tint: .red,
                 description: "Local data controls and destructive cleanup actions."
             ) {
-            Button(role: .destructive) {
-                chatManager.deleteAllSessions()
-            } label: {
-                Label("Clear All Chat History", systemImage: "trash")
-                    .frame(maxWidth: .infinity)
+                Button(role: .destructive) {
+                    chatManager.deleteAllSessions()
+                } label: {
+                    Label("Clear All Chat History", systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
             }
-        }
         }
         .padding(.horizontal, 24)
         .padding(.top, 10)
@@ -10084,8 +10118,9 @@ struct SettingsView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
-                            tint.opacity(0.08)
+                            colorScheme == .dark
+                                ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
+                            tint.opacity(0.08),
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -10094,7 +10129,9 @@ struct SettingsView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .stroke(colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
+                .stroke(
+                    colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.42),
+                    lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 16, y: 8)
     }
