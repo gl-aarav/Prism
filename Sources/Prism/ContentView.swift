@@ -8761,7 +8761,10 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.74), provider.tint.opacity(0.08)],
+                        colors: [
+                            self.colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
+                            provider.tint.opacity(0.08)
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -8769,7 +8772,7 @@ struct SettingsView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .stroke(Color.white.opacity(0.42), lineWidth: 1)
+                .stroke(self.colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 16, y: 8)
         .task(id: accounts(for: provider).map(\.apiKey).joined(separator: "|")) {
@@ -8845,14 +8848,17 @@ struct SettingsView: View {
             .background(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
                     .fill(LinearGradient(
-                        colors: [Color.white.opacity(0.74), Color.indigo.opacity(0.08)],
+                        colors: [
+                            self.colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
+                            Color.indigo.opacity(0.08)
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(Color.white.opacity(0.42), lineWidth: 1)
+                    .stroke(self.colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
             )
 
             VStack(alignment: .leading, spacing: 16) {
@@ -8862,14 +8868,17 @@ struct SettingsView: View {
             .background(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
                     .fill(LinearGradient(
-                        colors: [Color.white.opacity(0.74), Color.green.opacity(0.08)],
+                        colors: [
+                            self.colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
+                            Color.green.opacity(0.08)
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(Color.white.opacity(0.42), lineWidth: 1)
+                    .stroke(self.colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
             )
         }
         .padding(.horizontal, 24)
@@ -10026,6 +10035,7 @@ struct SettingsView: View {
         (appTheme.colors.last ?? .green).opacity(0.1)
     }
 
+    @Environment(\.colorScheme) private var colorScheme
     @ViewBuilder
     private func settingsCard<Content: View>(
         _ title: String,
@@ -10073,7 +10083,10 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.74), tint.opacity(0.08)],
+                        colors: [
+                            colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.74),
+                            tint.opacity(0.08)
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -10081,7 +10094,7 @@ struct SettingsView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 30, style: .continuous)
-                .stroke(Color.white.opacity(0.42), lineWidth: 1)
+                .stroke(colorScheme == .dark ? Color.white.opacity(0.15) : Color.white.opacity(0.42), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 16, y: 8)
     }

@@ -1274,9 +1274,11 @@ struct FolderContextView: View {
         guard !selectedFolderPath.isEmpty else { return }
         isScanning = true
 
+        let currentFolderPath = selectedFolderPath
+
         Task {
             let snapshot = await Task.detached(priority: .userInitiated) {
-                FolderSnapshotBuilder.build(for: URL(fileURLWithPath: selectedFolderPath))
+                FolderSnapshotBuilder.build(for: URL(fileURLWithPath: currentFolderPath))
             }.value
 
             await MainActor.run {
