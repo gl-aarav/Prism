@@ -195,7 +195,8 @@ final class APIProviderModelStore: ObservableObject {
         if !stored.isEmpty {
             return stored
         }
-        return provider.defaultModel.isEmpty ? combinedModels(for: provider).first ?? "" : provider.defaultModel
+        return provider.defaultModel.isEmpty
+            ? combinedModels(for: provider).first ?? "" : provider.defaultModel
     }
 
     func setSelectedModel(_ model: String, for provider: APIProviderDefinition) {
@@ -219,7 +220,8 @@ final class APIProviderModelStore: ObservableObject {
     }
 
     func selectAll(for provider: APIProviderDefinition) {
-        saveArray(combinedModels(for: provider), forKey: "\(provider.storageKeyPrefix)EnabledModels")
+        saveArray(
+            combinedModels(for: provider), forKey: "\(provider.storageKeyPrefix)EnabledModels")
     }
 
     func unselectAll(for provider: APIProviderDefinition) {
@@ -274,14 +276,16 @@ final class APIProviderModelStore: ObservableObject {
         }
 
         if selectedModel(for: provider) == model {
-            setSelectedModel(combinedModels(for: provider).first ?? provider.defaultModel, for: provider)
+            setSelectedModel(
+                combinedModels(for: provider).first ?? provider.defaultModel, for: provider)
         } else if didChange {
             objectWillChange.send()
         }
     }
 
     func replaceFetchedModels(_ models: [String], for provider: APIProviderDefinition) {
-        let cleaned = models
+        let cleaned =
+            models
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .sorted()
@@ -299,7 +303,9 @@ final class APIProviderModelStore: ObservableObject {
 
         let currentSelected = selectedModel(for: provider)
         if currentSelected.isEmpty || !combined.contains(currentSelected) {
-            defaults.set(combined.first ?? provider.defaultModel, forKey: "\(provider.storageKeyPrefix)SelectedModel")
+            defaults.set(
+                combined.first ?? provider.defaultModel,
+                forKey: "\(provider.storageKeyPrefix)SelectedModel")
         }
         objectWillChange.send()
     }
@@ -349,12 +355,13 @@ final class APIModelFetcher {
         guard !trimmedKey.isEmpty else { return [] }
 
         switch provider.fetchStrategy {
-        case let .openAICompatible(baseURL):
+        case .openAICompatible(let baseURL):
             let origin = endpointOverride.isEmpty ? baseURL : endpointOverride
             let urlString = origin.trimmingCharacters(in: .whitespacesAndNewlines)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            let finalURLString = urlString.hasSuffix("/v1") ? urlString + "/models" : urlString + "/v1/models"
-            
+            let finalURLString =
+                urlString.hasSuffix("/v1") ? urlString + "/models" : urlString + "/v1/models"
+
             let url = URL(string: finalURLString)!
             var request = URLRequest(url: url)
             request.addValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
@@ -372,7 +379,8 @@ final class APIModelFetcher {
             return response.data.map(\.id)
 
         case .gemini:
-            var components = URLComponents(string: "https://generativelanguage.googleapis.com/v1beta/models")!
+            var components = URLComponents(
+                string: "https://generativelanguage.googleapis.com/v1beta/models")!
             components.queryItems = [URLQueryItem(name: "key", value: trimmedKey)]
             let (data, _) = try await session.data(from: components.url!)
             let response = try JSONDecoder().decode(GeminiModelListResponse.self, from: data)

@@ -8756,15 +8756,21 @@ struct SettingsView: View {
                 }
 
                 Spacer()
-                
+
                 if let firstAccount = accounts(for: provider).first {
                     Button(action: {
                         Task { await fetchModelsIfPossible(for: provider, account: firstAccount) }
                     }) {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 16))
-                            .rotationEffect(.degrees(fetchingProviders.contains(provider.id) ? 360 : 0))
-                            .animation(fetchingProviders.contains(provider.id) ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: fetchingProviders.contains(provider.id))
+                            .rotationEffect(
+                                .degrees(fetchingProviders.contains(provider.id) ? 360 : 0)
+                            )
+                            .animation(
+                                fetchingProviders.contains(provider.id)
+                                    ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                    : .default, value: fetchingProviders.contains(provider.id)
+                            )
                             .foregroundStyle(.secondary)
                             .padding(8)
                             .background(Circle().fill(Color.secondary.opacity(0.1)))
