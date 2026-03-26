@@ -216,8 +216,8 @@ struct FolderContextView: View {
     @State private var fileSearchQuery: String = ""
     @State private var showFilesExpanded: Bool = false
 
-    @AppStorage("FolderContextSidebarWidth") private var sidebarWidth: Double = 320
-    @State private var dragInitialWidth: Double? = nil
+    @AppStorage("FolderContextPreviewHeight") private var previewHeight: Double = 180
+    @State private var previewDragInitialHeight: Double? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -246,48 +246,11 @@ struct FolderContextView: View {
             }
             .frame(minWidth: 480)
 
-            if showFilesExpanded {
-                ZStack {
-                    Color.clear
-                        .frame(width: 14) // invisible grab area
-                    Divider()
-                        .frame(width: 1)
-                        .padding(.vertical, 20)
-                }
-                .contentShape(Rectangle())
-                .onHover { isHovering in
-                    if isHovering {
-                        NSCursor.resizeLeftRight.push()
-                    } else {
-                        NSCursor.pop()
-                    }
-                }
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            if dragInitialWidth == nil {
-                                dragInitialWidth = sidebarWidth
-                            }
-                            if let initial = dragInitialWidth {
-                                let newWidth = initial - value.translation.width
-                                sidebarWidth = max(240, min(800, newWidth))
-                            }
-                        }
-                        .onEnded { _ in
-                            dragInitialWidth = nil
-                        }
-                )
-                .zIndex(1)
-            }
-
             // File sidebar
-            HStack(spacing: 0) {
-                fileSidebar
-                    .frame(width: sidebarWidth)
-            }
-            .frame(width: showFilesExpanded ? sidebarWidth : 0)
-            .clipped()
-            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showFilesExpanded)
+            fileSidebar
+                .frame(width: showFilesExpanded ? 320 : 0)
+                .clipped()
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showFilesExpanded)
         }
         .onAppear {
             if !selectedFolderPath.isEmpty {
@@ -918,7 +881,36 @@ struct FolderContextView: View {
 
             // File preview pane
             if let file = selectedFileForPreview {
-                Divider().opacity(0.3)
+                ZStack {
+                    Divider().opacity(0.3)
+                    Color.clear
+                        .frame(height: 14) // invisible grab area
+                }
+                .contentShape(Rectangle())
+                .onHover { isHovering in
+                    if isHovering {
+                        NSCursor.resizeUpDown.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            if previewDragInitialHeight == nil {
+                                previewDragInitialHeight = previewHeight
+                            }
+                            if let initial = previewDragInitialHeight {
+                                let newHeight = initial - value.translation.height
+                                previewHeight = max(100, min(600, newHeight))
+                            }
+                        }
+                        .onEnded { _ in
+                            previewDragInitialHeight = nil
+                        }
+                )
+                .zIndex(1)
+
                 filePreviewPane(file)
             }
         }
@@ -1048,7 +1040,7 @@ struct FolderContextView: View {
                     .textSelection(.enabled)
                     .padding(10)
             }
-            .frame(height: 180)
+            .frame(height: previewHeight)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(colorScheme == .dark ? Color.black.opacity(0.2) : Color.black.opacity(0.03))
