@@ -8816,16 +8816,6 @@ struct SettingsView: View {
     @ViewBuilder
     private var apisSection: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Cloud APIs")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                Text(
-                    "Configured providers only. Add a key, fetch models, then enable what you want."
-                )
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-            }
-
             ForEach(APIProviderRegistry.providers.filter { providerAccountsExist($0) }) {
                 provider in
                 apiProviderCard(provider)
@@ -8867,14 +8857,6 @@ struct SettingsView: View {
     @ViewBuilder
     private var cliSection: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("CLI Providers")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                Text("Local and developer-adjacent providers live here now.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-            }
-
             VStack(alignment: .leading, spacing: 16) {
                 copilotSection
             }
