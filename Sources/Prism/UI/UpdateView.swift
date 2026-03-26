@@ -208,13 +208,6 @@ struct UpdateView: View {
                         .padding(.top, 12)
                 }
 
-                // Safari extension update (independent of app update)
-                if updateManager.safariUpdateAvailable {
-                    safariExtensionSection
-                        .opacity(contentOpacity)
-                        .padding(.top, 12)
-                }
-
                 if updateManager.browserAutomationUpdateAvailable {
                     browserAutomationSection
                         .opacity(contentOpacity)
@@ -553,86 +546,6 @@ struct UpdateView: View {
     }
 
     // MARK: - Action Buttons
-
-    @ViewBuilder
-    private var safariExtensionSection: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 10) {
-                Image(systemName: "safari")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(themeColors.first ?? .white)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 4) {
-                        Text("Safari Extension")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.8))
-                        if !updateManager.latestSafariVersion.isEmpty {
-                            Text("v\(updateManager.latestSafariVersion)")
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.4))
-                        }
-                    }
-
-                    if updateManager.safariExtensionPath.isEmpty {
-                        Text("Set folder in Settings")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.orange.opacity(0.7))
-                    } else if updateManager.safariExtensionUpdated {
-                        Text("Updated \u{2014} reload in Safari Extensions")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.green.opacity(0.8))
-                    } else if updateManager.isDownloadingSafari {
-                        Text("\(Int(updateManager.safariDownloadProgress * 100))%")
-                            .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            .foregroundStyle(themeColors.first ?? .white)
-                    }
-                }
-
-                Spacer()
-
-                if updateManager.safariExtensionUpdated {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.system(size: 14))
-                } else if updateManager.isDownloadingSafari {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.white.opacity(0.5))
-                } else {
-                    Button {
-                        updateManager.downloadSafariExtension()
-                    } label: {
-                        Text("Update")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule().fill(Color.white.opacity(0.1))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(updateManager.safariExtensionPath.isEmpty)
-                }
-            }
-            .padding(10)
-            .background {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.white.opacity(0.04))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
-                    )
-            }
-
-            if let err = updateManager.safariErrorMessage {
-                Text(err)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.red.opacity(0.7))
-            }
-        }
-    }
 
     @ViewBuilder
     private var browserAutomationSection: some View {

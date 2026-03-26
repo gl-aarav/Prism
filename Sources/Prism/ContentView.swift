@@ -7675,36 +7675,6 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                LabeledContent {
-                    HStack {
-                        TextField("Path", text: $updateManager.safariExtensionPath)
-                            .textFieldStyle(.roundedBorder)
-                        Button("Browse") {
-                            let panel = NSOpenPanel()
-                            panel.canChooseFiles = false
-                            panel.canChooseDirectories = true
-                            panel.allowsMultipleSelection = false
-                            panel.message =
-                                "Select the folder containing your Safari extension"
-                            if panel.runModal() == .OK {
-                                updateManager.safariExtensionPath = panel.url?.path ?? ""
-                            }
-                        }
-                        if !updateManager.safariExtensionPath.isEmpty {
-                            Button(action: { updateManager.safariExtensionPath = "" }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                } label: {
-                    Label("Safari Extension Folder", systemImage: "safari")
-                }
-                Text("The Safari extension folder. Used to auto-update the extension.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
                 Button {
                     AppDelegate.shared?.showUpdateWindow()
                     Task { await updateManager.checkForUpdates() }
