@@ -7447,7 +7447,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var iconColor: Color {
         switch self {
         case .general: return .gray
-        case .sidebarTools: return .gray
+        case .sidebarTools: return .yellow
         case .appearance: return .pink
         case .quickAI: return .blue
         case .quickTools: return .orange
@@ -7845,7 +7845,7 @@ struct SettingsView: View {
             settingsCard(
                 "Sidebar Tools",
                 systemImage: "slider.horizontal.3",
-                tint: .orange,
+                tint: .yellow,
                 description: "Choose which tools appear in the app sidebar and reorder them."
             ) {
             Toggle(isOn: $showCompareTool) {
@@ -10005,10 +10005,6 @@ struct SettingsView: View {
         (appTheme.colors.last ?? .green).opacity(0.1)
     }
 
-    private var settingsSidebarTint: Color {
-        Color(red: 0.96, green: 0.79, blue: 0.28)
-    }
-
     @ViewBuilder
     private func settingsCard<Content: View>(
         _ title: String,
@@ -10142,8 +10138,8 @@ struct SettingsView: View {
         .background(
             LinearGradient(
                 colors: [
-                    settingsSidebarTint.opacity(0.30),
-                    settingsSidebarTint.opacity(0.12),
+                    Color.white.opacity(0.38),
+                    Color.white.opacity(0.18),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
