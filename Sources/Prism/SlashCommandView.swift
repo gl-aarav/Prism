@@ -74,14 +74,7 @@ struct SlashCommandRow: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(isSelected ? Color.white : commandColor(command))
                 .frame(width: 28, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(
-                            isSelected
-                                ? commandColor(command)
-                                : commandColor(command).opacity(0.12)
-                        )
-                )
+                .glassEffect(.regular, in: .circle)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(command.trigger)
@@ -110,33 +103,17 @@ struct SlashCommandRow: View {
                     )
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(
-                        Capsule()
-                            .fill(
-                                isSelected
-                                    ? Color.white.opacity(0.15)
-                                    : Color.secondary.opacity(0.08)
-                            )
-                    )
+                    .glassEffect(.regular, in: .capsule)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(
-                    isSelected
-                        ? LinearGradient(
-                            colors: [Color.accentColor, Color.accentColor.opacity(0.8)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        : LinearGradient(
-                            colors: [Color.clear, Color.clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                )
+            Group {
+                if isSelected {
+                    Color.clear.glassEffect(.regular, in: .capsule)
+                }
+            }
         )
         .contentShape(Rectangle())
     }
@@ -223,18 +200,7 @@ struct CommandsManagementView: View {
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(
-                                        colorScheme == .dark
-                                            ? Color.white.opacity(0.06)
-                                            : Color.black.opacity(0.04)
-                                    )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
-                            )
+                            .glassEffect(.regular, in: .capsule)
                         }
                         .menuStyle(.borderlessButton)
                         .menuIndicator(.hidden)
@@ -269,18 +235,7 @@ struct CommandsManagementView: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.06)
-                                        : Color.black.opacity(0.04)
-                                )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
-                        )
+                        .glassEffect(.regular, in: .capsule)
                     }
                     .frame(maxWidth: .infinity)
 
@@ -294,18 +249,7 @@ struct CommandsManagementView: View {
                             .font(.system(size: 14))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(
-                                        colorScheme == .dark
-                                            ? Color.white.opacity(0.06)
-                                            : Color.black.opacity(0.04)
-                                    )
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
-                            )
+                            .glassEffect(.regular, in: .capsule)
                     }
                     .frame(maxWidth: .infinity)
 
@@ -456,14 +400,7 @@ struct CommandListRow: View {
                                 .foregroundStyle(.secondary)
                         }
                         .frame(width: 38, height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.08)
-                                        : Color.black.opacity(0.04)
-                                )
-                        )
+                        .glassEffect(.regular, in: .capsule)
                     }
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
@@ -493,14 +430,7 @@ struct CommandListRow: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(
-                                colorScheme == .dark
-                                    ? Color.white.opacity(0.08)
-                                    : Color.black.opacity(0.04)
-                            )
-                    )
+                    .glassEffect(.regular, in: .capsule)
                     .frame(maxWidth: 160)
 
                     TextField("Expansion text...", text: $editExpansion)
@@ -508,14 +438,7 @@ struct CommandListRow: View {
                         .font(.system(size: 13))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.08)
-                                        : Color.black.opacity(0.04)
-                                )
-                        )
+                        .glassEffect(.regular, in: .capsule)
 
                     Button(action: onSave) {
                         Image(systemName: "checkmark.circle.fill")
@@ -535,10 +458,7 @@ struct CommandListRow: View {
                     .font(.system(size: 13))
                     .foregroundStyle(commandColor(command))
                     .frame(width: 26, height: 26)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(commandColor(command).opacity(0.12))
-                    )
+                    .glassEffect(.regular, in: .circle)
 
                 Text(command.trigger)
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
@@ -585,14 +505,11 @@ struct CommandListRow: View {
         .padding(.vertical, 8)
         .contentShape(Rectangle())
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(
-                    isHovered
-                        ? (colorScheme == .dark
-                            ? Color.white.opacity(0.05)
-                            : Color.black.opacity(0.03))
-                        : Color.clear
-                )
+            Group {
+                if isHovered {
+                    Color.clear.glassEffect(.regular, in: .capsule)
+                }
+            }
         )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
