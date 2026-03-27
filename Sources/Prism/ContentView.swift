@@ -2533,7 +2533,7 @@ struct ContentView: View {
                                             showModelComparison = false
                                             showImageGallery = false
                                             showBrowserAutomation = false
-                                            chatManager.currentSessionId = nil
+
                                         }
                                     },
                                     onNewChat: chatManager.createNewSession,
@@ -4081,7 +4081,7 @@ struct SidebarView: View {
                     showFolderContext = false
                     showWebView = false
                     showBrowserAutomation = false
-                    chatManager.currentSessionId = nil
+
                 }
             }
 
@@ -4119,7 +4119,7 @@ struct SidebarView: View {
                             showFolderContext = false
                             showWebView = false
                             showBrowserAutomation = false
-                            chatManager.currentSessionId = nil
+
                         }
                     }
                 } else if toolId == "commands" && showCommandsTool {
@@ -4134,7 +4134,7 @@ struct SidebarView: View {
                             showFolderContext = false
                             showWebView = false
                             showBrowserAutomation = false
-                            chatManager.currentSessionId = nil
+
                         }
                     }
                 } else if toolId == "quizme" && showQuizMeTool {
@@ -4151,7 +4151,7 @@ struct SidebarView: View {
                             showFolderContext = false
                             showWebView = false
                             showBrowserAutomation = false
-                            chatManager.currentSessionId = nil
+
                         }
                     }
                 } else if toolId == "imagegen" && showImageGenTool {
@@ -4168,7 +4168,7 @@ struct SidebarView: View {
                             showFolderContext = false
                             showWebView = false
                             showBrowserAutomation = false
-                            chatManager.currentSessionId = nil
+
                         }
                     }
                 } else if toolId == "filecreator" && showFileCreatorTool {
@@ -4185,7 +4185,7 @@ struct SidebarView: View {
                             showFolderContext = false
                             showWebView = false
                             showBrowserAutomation = false
-                            chatManager.currentSessionId = nil
+
                         }
                     }
                 } else if toolId == "foldercontext" && showFolderContextTool {
@@ -4204,7 +4204,7 @@ struct SidebarView: View {
                             showImageGallery = false
                             showWebView = false
                             showBrowserAutomation = false
-                            chatManager.currentSessionId = nil
+
                         }
                     }
                 } else if toolId == "webview" && showWebViewTool {
@@ -4221,7 +4221,7 @@ struct SidebarView: View {
                             showModelComparison = false
                             showImageGallery = false
                             showBrowserAutomation = false
-                            chatManager.currentSessionId = nil
+
                         }
                     }
                 } else if toolId == "browserautomation" && showBrowserAutomationTool {
@@ -4240,7 +4240,7 @@ struct SidebarView: View {
                             showCommands = false
                             showModelComparison = false
                             showImageGallery = false
-                            chatManager.currentSessionId = nil
+
                         }
                     }
                 }

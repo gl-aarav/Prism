@@ -287,7 +287,6 @@ struct QuickAIView: View {
     private func resetToolAccessContextIfNeeded() {
         guard !activeToolName.isEmpty else { return }
         activeToolName = ""
-        chatManager.createNewSession()
     }
 
     func getProviderIcon(_ provider: String) -> String {
