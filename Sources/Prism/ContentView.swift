@@ -1926,6 +1926,196 @@ class ShortcutService {
 
 // MARK: - Views
 
+// MARK: - Web View Tool Manager
+
+class WebViewToolManager: ObservableObject {
+    static let shared = WebViewToolManager()
+
+    @Published var canGoBack: Bool = false
+    @Published var canGoForward: Bool = false
+
+    private var webViews: [URL: WKWebView] = [:]
+    private var coordinators: [URL: WebViewToolCoordinator] = [:]
+    private var backObservers: [URL: NSKeyValueObservation] = [:]
+    private var forwardObservers: [URL: NSKeyValueObservation] = [:]
+
+    private(set) var currentURL: URL?
+
+    func getWebView(for url: URL) -> WKWebView {
+        if let existing = webViews[url] {
+            return existing
+        }
+
+        let config = WKWebViewConfiguration()
+        let pagePrefs = WKWebpagePreferences()
+        pagePrefs.allowsContentJavaScript = true
+        config.defaultWebpagePreferences = pagePrefs
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
+
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.customUserAgent =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+
+        let coordinator = WebViewToolCoordinator()
+        coordinators[url] = coordinator
+        webView.navigationDelegate = coordinator
+        webView.uiDelegate = coordinator
+
+        webView.load(URLRequest(url: url))
+        webViews[url] = webView
+
+        backObservers[url] = webView.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.updateNavigationState()
+            }
+        }
+        forwardObservers[url] = webView.observe(\.canGoForward, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.updateNavigationState()
+            }
+        }
+
+        return webView
+    }
+
+    func switchTo(url: URL) {
+        currentURL = url
+        updateNavigationState()
+    }
+
+    private func updateNavigationState() {
+        guard let url = currentURL, let webView = webViews[url] else {
+            canGoBack = false
+            canGoForward = false
+            return
+        }
+        canGoBack = webView.canGoBack
+        canGoForward = webView.canGoForward
+    }
+
+    func goBack() {
+        guard let url = currentURL else { return }
+        webViews[url]?.goBack()
+    }
+
+    func goForward() {
+        guard let url = currentURL else { return }
+        webViews[url]?.goForward()
+    }
+
+    func reload() {
+        guard let url = currentURL else { return }
+        webViews[url]?.reload()
+    }
+
+    func navigateHome() {
+        guard let url = currentURL else { return }
+        webViews[url]?.load(URLRequest(url: url))
+    }
+}
+
+// MARK: - Web View Tool Coordinator
+
+class WebViewToolCoordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    func webView(
+        _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        let popupWebView = WKWebView(frame: .zero, configuration: configuration)
+        popupWebView.navigationDelegate = self
+        popupWebView.uiDelegate = self
+        popupWebView.customUserAgent =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
+
+        let popupWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        popupWindow.center()
+        popupWindow.title = "Sign In"
+        popupWindow.contentView = popupWebView
+        popupWindow.makeKeyAndOrderFront(nil)
+
+        return popupWebView
+    }
+
+    func webViewDidClose(_ webView: WKWebView) {
+        webView.window?.close()
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runOpenPanelWith parameters: WKOpenPanelParameters,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping ([URL]?) -> Void
+    ) {
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = false
+        openPanel.allowsMultipleSelection = parameters.allowsMultipleSelection
+
+        if let window = webView.window {
+            openPanel.beginSheetModal(for: window) { response in
+                if response == .OK {
+                    completionHandler(openPanel.urls)
+                } else {
+                    completionHandler(nil)
+                }
+            }
+        } else {
+            let response = openPanel.runModal()
+            if response == .OK {
+                completionHandler(openPanel.urls)
+            } else {
+                completionHandler(nil)
+            }
+        }
+    }
+}
+
+// MARK: - Managed Web View (NSViewRepresentable)
+
+struct ManagedWebView: NSViewRepresentable {
+    let url: URL
+    let manager: WebViewToolManager
+
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView()
+        container.autoresizesSubviews = true
+        let webView = manager.getWebView(for: url)
+        webView.frame = container.bounds
+        webView.autoresizingMask = [.width, .height]
+        container.addSubview(webView)
+        manager.switchTo(url: url)
+        return container
+    }
+
+    func updateNSView(_ container: NSView, context: Context) {
+        let targetWebView = manager.getWebView(for: url)
+
+        // Remove any existing subviews that aren't our target
+        for subview in container.subviews where subview !== targetWebView {
+            subview.removeFromSuperview()
+        }
+
+        // Add target if not already in container
+        if targetWebView.superview !== container {
+            targetWebView.frame = container.bounds
+            targetWebView.autoresizingMask = [.width, .height]
+            container.addSubview(targetWebView)
+        }
+
+        // Only switch if URL changed to avoid redundant publishes
+        if manager.currentURL != url {
+            manager.switchTo(url: url)
+        }
+    }
+}
+
+// MARK: - Legacy WebView (for other uses)
+
 struct WebView: NSViewRepresentable {
     let url: URL
 
@@ -1969,7 +2159,6 @@ struct WebView: NSViewRepresentable {
             _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
             for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures
         ) -> WKWebView? {
-            // Create a new window for popups (essential for Google Sign-In)
             let popupWebView = WKWebView(frame: .zero, configuration: configuration)
             popupWebView.navigationDelegate = self
             popupWebView.uiDelegate = self
@@ -2154,6 +2343,7 @@ struct ContentView: View {
     @ObservedObject private var copilotService = GitHubCopilotService.shared
     @ObservedObject private var accountManager = AccountManager.shared
     @ObservedObject private var nvidiaManager = NvidiaModelManager.shared
+    @ObservedObject private var webViewToolManager = WebViewToolManager.shared
 
     var thinkingMode: ThinkingMode {
         if selectedProvider == "Gemini API" || selectedProvider.hasPrefix("Gemini API|") {
@@ -2582,15 +2772,36 @@ struct ContentView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 18) {
-                // Header — just the picker pill, no other buttons
+                // Header — nav buttons left, picker right
                 HStack(spacing: 10) {
+                    // Navigation buttons
+                    webViewNavButton(icon: "chevron.left", enabled: webViewToolManager.canGoBack) {
+                        webViewToolManager.goBack()
+                    }
+                    .help("Back")
+
+                    webViewNavButton(icon: "chevron.right", enabled: webViewToolManager.canGoForward) {
+                        webViewToolManager.goForward()
+                    }
+                    .help("Forward")
+
+                    webViewNavButton(icon: "arrow.clockwise", enabled: true) {
+                        webViewToolManager.reload()
+                    }
+                    .help("Reload")
+
+                    webViewNavButton(icon: "plus.message", enabled: true) {
+                        webViewToolManager.navigateHome()
+                    }
+                    .help("New Chat")
+
                     Spacer()
                     webViewPickerPill
                 }
 
                 // Web content
                 if let url = getWebURL(for: toolSelectedWebView) {
-                    WebView(url: url)
+                    ManagedWebView(url: url, manager: webViewToolManager)
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -2619,6 +2830,25 @@ struct ContentView: View {
             }
             .padding(26)
         }
+    }
+
+    private func webViewNavButton(icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(enabled ? .secondary : .quaternary)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                )
+                .glassEffect(.regular, in: .circle)
+                .overlay(
+                    Circle().stroke(Color.white.opacity(0.16), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
     }
 
     private var webViewPickerPill: some View {

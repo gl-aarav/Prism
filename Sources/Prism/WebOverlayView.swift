@@ -29,7 +29,7 @@ struct WebOverlayView: View {
             // Service picker bar
             serviceBar
                 .padding(.horizontal, 12)
-                .padding(.top, 2)
+                .padding(.top, 12)
                 .padding(.bottom, 8)
 
             // Web content — use ZStack to keep all webviews alive, only showing the active one
