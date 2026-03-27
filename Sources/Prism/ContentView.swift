@@ -2520,6 +2520,21 @@ struct ContentView: View {
                             .safeAreaInset(edge: .top) {
                                 HeaderView(
                                     selectedProvider: $selectedProvider,
+                                    onWebViewSelected: { webProvider in
+                                        toolSelectedWebView = webProvider
+                                        withAnimation {
+                                            showWebView = true
+                                            showFileCreator = false
+                                            showFolderContext = false
+                                            showImageGen = false
+                                            showQuizMe = false
+                                            showCommands = false
+                                            showModelComparison = false
+                                            showImageGallery = false
+                                            showBrowserAutomation = false
+                                            chatManager.currentSessionId = nil
+                                        }
+                                    },
                                     onNewChat: chatManager.createNewSession,
                                     chatManager: chatManager,
                                     columnVisibility: columnVisibility
@@ -4572,6 +4587,7 @@ struct SidebarRow: View {
 
 struct HeaderView: View {
     @Binding var selectedProvider: String
+    var onWebViewSelected: ((String) -> Void)? = nil
     var onNewChat: () -> Void
     @ObservedObject var chatManager: ChatManager
     var columnVisibility: NavigationSplitViewVisibility = .automatic
@@ -4667,19 +4683,29 @@ struct HeaderView: View {
                 }
 
                 Section("Web View") {
-                    Button(action: { selectedProvider = "ChatGPT Web" }) {
+                    Button(action: {
+                        if let onWebViewSelected = onWebViewSelected { onWebViewSelected("ChatGPT Web") } else { selectedProvider = "ChatGPT Web" }
+                    }) {
                         Label("ChatGPT Web", systemImage: getProviderIcon("ChatGPT Web"))
                     }
-                    Button(action: { selectedProvider = "Claude Web" }) {
+                    Button(action: {
+                        if let onWebViewSelected = onWebViewSelected { onWebViewSelected("Claude Web") } else { selectedProvider = "Claude Web" }
+                    }) {
                         Label("Claude Web", systemImage: getProviderIcon("Claude Web"))
                     }
-                    Button(action: { selectedProvider = "Gemini Web" }) {
+                    Button(action: {
+                        if let onWebViewSelected = onWebViewSelected { onWebViewSelected("Gemini Web") } else { selectedProvider = "Gemini Web" }
+                    }) {
                         Label("Gemini Web", systemImage: getProviderIcon("Gemini Web"))
                     }
-                    Button(action: { selectedProvider = "Perplexity Web" }) {
+                    Button(action: {
+                        if let onWebViewSelected = onWebViewSelected { onWebViewSelected("Perplexity Web") } else { selectedProvider = "Perplexity Web" }
+                    }) {
                         Label("Perplexity Web", systemImage: getProviderIcon("Perplexity Web"))
                     }
-                    Button(action: { selectedProvider = "Grok Web" }) {
+                    Button(action: {
+                        if let onWebViewSelected = onWebViewSelected { onWebViewSelected("Grok Web") } else { selectedProvider = "Grok Web" }
+                    }) {
                         Label("Grok Web", systemImage: getProviderIcon("Grok Web"))
                     }
 
@@ -4687,7 +4713,9 @@ struct HeaderView: View {
                         Divider()
                         ForEach(customWebViews) { webView in
                             let provider = "CustomWebView:\(webView.url)"
-                            Button(action: { selectedProvider = provider }) {
+                            Button(action: {
+                                if let onWebViewSelected = onWebViewSelected { onWebViewSelected(provider) } else { selectedProvider = provider }
+                            }) {
                                 Label(
                                     webView.name.isEmpty ? webView.url : webView.name,
                                     systemImage: getProviderIcon(provider)
