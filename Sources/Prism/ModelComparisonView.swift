@@ -787,9 +787,7 @@ struct ModelComparisonView: View {
                         .foregroundStyle(.red)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(
-                            Capsule().fill(Color.red.opacity(0.1))
-                        )
+                        .glassEffect(.regular, in: .capsule)
                     }
                     .buttonStyle(.plain)
                 } else {
@@ -808,7 +806,7 @@ struct ModelComparisonView: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(Color.secondary.opacity(0.08)))
+                            .glassEffect(.regular, in: .capsule)
                         }
                         .buttonStyle(.plain)
                         Button(action: {
@@ -825,7 +823,7 @@ struct ModelComparisonView: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(Color.secondary.opacity(0.08)))
+                            .glassEffect(.regular, in: .capsule)
                         }
                         .buttonStyle(.plain)
                     }
@@ -855,10 +853,7 @@ struct ModelComparisonView: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(
-                                Capsule()
-                                    .fill(Color.secondary.opacity(0.08))
-                            )
+                            .glassEffect(.regular, in: .capsule)
                         }
                         .menuStyle(.borderlessButton)
                         .buttonStyle(.plain)
@@ -884,13 +879,7 @@ struct ModelComparisonView: View {
                             )
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
-                            .background(
-                                Capsule()
-                                    .fill(
-                                        synthesizeWebSearchEnabled
-                                            ? Color.blue.opacity(0.1)
-                                            : Color.secondary.opacity(0.08))
-                            )
+                            .glassEffect(.regular, in: .capsule)
                         }
                         .buttonStyle(.plain)
                     }
@@ -1927,10 +1916,7 @@ struct ComparisonCard: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(accentColor.opacity(0.8))
                             .padding(5)
-                            .background(
-                                Circle()
-                                    .fill(accentColor.opacity(0.1))
-                            )
+                            .glassEffect(.regular, in: .circle)
                     }
                     .menuStyle(.borderlessButton)
                     .buttonStyle(.plain)
@@ -1948,13 +1934,7 @@ struct ComparisonCard: View {
                                 slot.webSearchEnabled ? Color.blue : Color.secondary.opacity(0.6)
                             )
                             .padding(5)
-                            .background(
-                                Circle()
-                                    .fill(
-                                        slot.webSearchEnabled
-                                            ? Color.blue.opacity(0.12)
-                                            : Color.secondary.opacity(0.08))
-                            )
+                            .glassEffect(.regular, in: .circle)
                     }
                     .buttonStyle(.plain)
                     .help(slot.webSearchEnabled ? "Web Search: On" : "Web Search: Off")
@@ -1973,9 +1953,7 @@ struct ComparisonCard: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(
-                            Capsule().fill(Color.secondary.opacity(0.1))
-                        )
+                        .glassEffect(.regular, in: .capsule)
                 }
 
                 if let onRemove = onRemove {
@@ -1984,7 +1962,7 @@ struct ComparisonCard: View {
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(.secondary.opacity(0.6))
                             .padding(6)
-                            .background(Circle().fill(Color.secondary.opacity(0.08)))
+                            .glassEffect(.regular, in: .circle)
                     }
                     .buttonStyle(.plain)
                 }
@@ -2331,11 +2309,7 @@ struct ComparisonCard: View {
                         .foregroundStyle(showCopied ? Color.green : Color.secondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(
-                            Capsule().fill(
-                                showCopied
-                                    ? Color.green.opacity(0.1) : Color.secondary.opacity(0.08))
-                        )
+                        .glassEffect(.regular, in: .capsule)
                         .animation(.easeInOut(duration: 0.2), value: showCopied)
                     }
                     .buttonStyle(.plain)
