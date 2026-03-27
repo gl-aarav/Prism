@@ -2448,43 +2448,8 @@ struct ContentView: View {
                             .transition(.opacity)
                         }
                         if showWebView {
-                            GeometryReader { webGeometry in
-                                ZStack {
-                                    // Web content fills underneath
-                                    ZStack(alignment: .top) {
-                                        if let url = getWebURL(for: toolSelectedWebView) {
-                                            WebView(url: url)
-                                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                        } else {
-                                            VStack(spacing: 16) {
-                                                Image(systemName: "globe")
-                                                    .font(.system(size: 48))
-                                                    .foregroundStyle(.secondary.opacity(0.3))
-                                                Text(
-                                                    "Valid Web View URL not found"
-                                                )
-                                                .font(.system(size: 14))
-                                                .foregroundStyle(.secondary)
-                                            }
-                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                        }
-                                    }
-                                    webViewPickerPill
-                                        .frame(
-                                            maxWidth: .infinity,
-                                            maxHeight: .infinity,
-                                            alignment: webViewPillSnapPoint.alignment
-                                        )
-                                        .padding(webViewPillSnapPoint.edgeInsets(base: 16))
-                                        .offset(webViewPillDragOffset)
-                                        .simultaneousGesture(
-                                            webViewPillDragGesture(in: webGeometry.size)
-                                        )
-                                        .zIndex(10)
-                                }
-                                .coordinateSpace(name: "WebViewToolSpace")
-                            }
-                            .transition(.opacity)
+                            webViewToolContent
+                                .transition(.opacity)
                         }
                         if showBrowserAutomation {
                             BrowserAutomationView()
@@ -2604,6 +2569,58 @@ struct ContentView: View {
         }
     }
 
+    private var webViewToolContent: some View {
+        let tintStart = (appTheme.colors.first ?? .blue).opacity(0.15)
+        let tintEnd = (appTheme.colors.last ?? .green).opacity(0.12)
+
+        return ZStack {
+            LinearGradient(
+                colors: [tintStart, tintEnd],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                // Header — just the picker pill, no other buttons
+                HStack(spacing: 10) {
+                    Spacer()
+                    webViewPickerPill
+                }
+
+                // Web content
+                if let url = getWebURL(for: toolSelectedWebView) {
+                    WebView(url: url)
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                        )
+                } else {
+                    VStack(spacing: 16) {
+                        Image(systemName: "globe")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.secondary.opacity(0.3))
+                        Text("Valid Web View URL not found")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    )
+                    .glassEffect(.regular, in: .rect(cornerRadius: 22))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                }
+            }
+            .padding(26)
+        }
+    }
+
     private var webViewPickerPill: some View {
         Picker("Web View", selection: $toolSelectedWebView) {
             Label("ChatGPT", systemImage: "bubble.left.and.bubble.right")
@@ -2629,27 +2646,16 @@ struct ContentView: View {
         }
         .pickerStyle(.menu)
         .fixedSize()
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
         )
         .glassEffect(.regular, in: .capsule)
         .overlay(
-            Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 1)
+            Capsule().stroke(Color.white.opacity(0.16), lineWidth: 1)
         )
-        .background {
-            GeometryReader { pillGeometry in
-                Color.clear
-                    .onAppear {
-                        webViewPillSize = pillGeometry.size
-                    }
-                    .onChange(of: pillGeometry.size) { _, newSize in
-                        webViewPillSize = newSize
-                    }
-            }
-        }
     }
 
     private func webViewPillDragGesture(in containerSize: CGSize) -> some Gesture {

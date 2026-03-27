@@ -1264,6 +1264,7 @@ struct FileCreatorView: View {
     @State private var pdfWebSearchEnabled: Bool = false
     @State private var isPromptFocused: Bool = false
     @State private var selectedFormat: String = "pdf"
+    @State private var generatingRingRotation: Double = 0
 
     private let pageSizes = ["Letter", "A4", "Legal"]
     private let geminiService = GeminiService()
@@ -1646,69 +1647,128 @@ struct FileCreatorView: View {
         let endColor = colors.last ?? .purple
 
         return ZStack {
-            // Ambient background glow
+            // Ambient background glow — multiple layers
             RadialGradient(
-                colors: [startColor.opacity(0.08), Color.clear],
-                center: .center, startRadius: 0, endRadius: 200
+                colors: [startColor.opacity(0.10), Color.clear],
+                center: .init(x: 0.35, y: 0.3), startRadius: 0, endRadius: 280
+            )
+            .blur(radius: 50)
+            .allowsHitTesting(false)
+
+            RadialGradient(
+                colors: [endColor.opacity(0.06), Color.clear],
+                center: .init(x: 0.7, y: 0.7), startRadius: 0, endRadius: 220
             )
             .blur(radius: 40)
             .allowsHitTesting(false)
 
-            VStack(spacing: 18) {
+            VStack(spacing: 20) {
                 Spacer()
 
-                // ── Main generating card ───────────────────────────────────
-                HStack(spacing: 0) {
+                // ── Main generating card (vertical layout) ─────────────────
+                VStack(spacing: 0) {
+                    // Top section: orb + status
+                    VStack(spacing: 14) {
+                        // Orb with progress ring
+                        ZStack {
+                            // Pulsing ring
+                            Circle()
+                                .strokeBorder(
+                                    AngularGradient(
+                                        colors: [startColor.opacity(0.5), endColor.opacity(0.5), startColor.opacity(0.1), Color.clear, startColor.opacity(0.5)],
+                                        center: .center
+                                    ),
+                                    lineWidth: 2.5
+                                )
+                                .frame(width: 76, height: 76)
+                                .rotationEffect(.degrees(generatingRingRotation))
 
-                    // Left panel: animated orb + prompt description
-                    HStack(alignment: .center, spacing: 16) {
-                        GeneratingOrbView(startColor: startColor, endColor: endColor)
-                            .frame(width: 58, height: 58)
+                            GeneratingOrbView(startColor: startColor, endColor: endColor)
+                                .frame(width: 54, height: 54)
+                        }
+                        .padding(.top, 6)
 
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(prompt.prefix(80) + (prompt.count > 80 ? "…" : ""))
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(2)
-                                .fixedSize(horizontal: false, vertical: true)
+                        // Prompt text
+                        Text(prompt.prefix(120) + (prompt.count > 120 ? "…" : ""))
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary.opacity(0.85))
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 20)
 
-                            HStack(spacing: 5) {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundStyle(startColor)
-                                Text("Generating \(selectedFormat.uppercased())")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(.secondary)
+                        // Status badge
+                        HStack(spacing: 6) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [startColor, endColor],
+                                        startPoint: .leading, endPoint: .trailing
+                                    )
+                                )
+
+                            Text("Generating \(selectedFormat.uppercased())")
+                                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.secondary)
+
+                            // Live character count
+                            if !generatingPreviewText.isEmpty {
+                                Text("·")
+                                    .foregroundStyle(.quaternary)
+                                Text("\(generatingPreviewText.count) chars")
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.tertiary)
                             }
                         }
-
-                        Spacer(minLength: 0)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background {
+                            Capsule().fill(Color.primary.opacity(0.04))
+                        }
                     }
-                    .padding(.horizontal, 20)
                     .padding(.vertical, 18)
                     .frame(maxWidth: .infinity)
 
-                    // Vertical separator
+                    // Horizontal separator
                     Rectangle()
-                        .fill(Color.primary.opacity(0.07))
-                        .frame(width: 1)
-                        .padding(.vertical, 14)
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(height: 1)
+                        .padding(.horizontal, 16)
 
-                    // Right panel: streaming code preview — always dark
+                    // Code preview panel — always dark
                     ZStack(alignment: .topLeading) {
-                        Color(red: 0.13, green: 0.14, blue: 0.15)
+                        Color(red: 0.11, green: 0.12, blue: 0.14)
+
+                        // Line number gutter decoration
+                        HStack(spacing: 0) {
+                            Rectangle()
+                                .fill(Color.white.opacity(0.03))
+                                .frame(width: 32)
+                            Rectangle()
+                                .fill(Color.white.opacity(0.06))
+                                .frame(width: 1)
+                            Spacer()
+                        }
 
                         ScrollViewReader { proxy in
                             ScrollView(.vertical, showsIndicators: false) {
                                 Group {
                                     if generatingPreviewText.isEmpty {
-                                        Text("Waiting for response…")
-                                            .font(.system(size: 11, design: .monospaced))
-                                            .foregroundStyle(Color.white.opacity(0.25))
+                                        VStack(spacing: 10) {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                                .tint(.white.opacity(0.3))
+                                            Text("Waiting for response…")
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundStyle(Color.white.opacity(0.25))
+                                        }
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                        .padding(.top, 40)
                                     } else {
                                         Text(
                                             SyntaxHighlighter.shared.highlight(
-                                                String(generatingPreviewText.suffix(1400)),
+                                                String(generatingPreviewText.suffix(2000)),
                                                 language: selectedFormat,
                                                 isDark: true
                                             )
@@ -1716,7 +1776,9 @@ struct FileCreatorView: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(14)
+                                .padding(.leading, 40)
+                                .padding(.trailing, 14)
+                                .padding(.vertical, 14)
                                 .id("genEnd")
                             }
                             .onChange(of: generatingPreviewText) {
@@ -1726,29 +1788,47 @@ struct FileCreatorView: View {
                             }
                         }
                     }
-                    .frame(width: 290)
+                    .frame(minHeight: 140, maxHeight: 200)
+                    .clipShape(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 0, bottomLeadingRadius: 16,
+                            bottomTrailingRadius: 16, topTrailingRadius: 0
+                        )
+                    )
                 }
-                .frame(height: 110)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(
                             colorScheme == .dark
-                                ? Color(nsColor: .controlBackgroundColor).opacity(0.65)
-                                : Color(nsColor: .windowBackgroundColor).opacity(0.9)
+                                ? Color(nsColor: .controlBackgroundColor).opacity(0.6)
+                                : Color(nsColor: .windowBackgroundColor).opacity(0.92)
                         )
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    startColor.opacity(0.2),
+                                    endColor.opacity(0.1),
+                                    Color.primary.opacity(0.06),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .shadow(
-                    color: colorScheme == .dark
-                        ? Color.black.opacity(0.4)
-                        : Color.black.opacity(0.1),
-                    radius: 28, x: 0, y: 10
+                    color: startColor.opacity(colorScheme == .dark ? 0.15 : 0.08),
+                    radius: 30, x: 0, y: 12
                 )
-                .frame(maxWidth: 700)
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.06),
+                    radius: 16, x: 0, y: 6
+                )
+                .frame(maxWidth: 560)
                 .padding(.horizontal, 28)
                 // ── End main card ──────────────────────────────────────────
 
@@ -1762,10 +1842,10 @@ struct FileCreatorView: View {
                         Image(systemName: "stop.fill")
                             .font(.system(size: 9))
                         Text("Cancel")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
                     }
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 18)
                     .padding(.vertical, 8)
                     .glassEffect(.regular, in: .capsule)
                 }
@@ -1776,6 +1856,14 @@ struct FileCreatorView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
+                generatingRingRotation = 360
+            }
+        }
+        .onDisappear {
+            generatingRingRotation = 0
+        }
     }
 
     // MARK: - Main Content (Document List)

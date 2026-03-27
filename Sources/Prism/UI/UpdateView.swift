@@ -397,13 +397,39 @@ struct UpdateView: View {
             .foregroundStyle(themeColors.first ?? .white)
 
             ScrollView(.vertical, showsIndicators: true) {
-                Text(updateManager.releaseNotes)
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(
+                        Array(
+                            parseReleaseNotes(updateManager.releaseNotes).enumerated()
+                        ), id: \.offset
+                    ) { _, line in
+                        if line.type == .heading {
+                            Text(line.text)
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.85))
+                                .padding(.top, line.offset > 0 ? 4 : 0)
+                        } else if line.type == .bullet {
+                            HStack(alignment: .top, spacing: 6) {
+                                Text("•")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(themeColors.first?.opacity(0.8) ?? .white.opacity(0.6))
+                                    .padding(.top, 0.5)
+                                Text(MarkdownParser.shared.parse(line.text))
+                                    .font(.system(size: 11, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                    .textSelection(.enabled)
+                            }
+                        } else {
+                            Text(MarkdownParser.shared.parse(line.text))
+                                .font(.system(size: 11, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.55))
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(minHeight: 52, maxHeight: 130)
+            .frame(minHeight: 52, maxHeight: 150)
         }
         .padding(12)
         .background {
@@ -414,6 +440,46 @@ struct UpdateView: View {
                         .strokeBorder(Color.white.opacity(0.06), lineWidth: 1)
                 )
         }
+    }
+
+    // MARK: - Release Notes Parser
+
+    private enum ReleaseNoteLineType {
+        case heading
+        case bullet
+        case text
+    }
+
+    private struct ReleaseNoteLine {
+        let type: ReleaseNoteLineType
+        let text: String
+        let offset: Int
+    }
+
+    private func parseReleaseNotes(_ notes: String) -> [ReleaseNoteLine] {
+        let lines = notes.components(separatedBy: "\n")
+        var result: [ReleaseNoteLine] = []
+        for (index, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+
+            if trimmed.hasPrefix("### ") {
+                let text = String(trimmed.dropFirst(4))
+                result.append(ReleaseNoteLine(type: .heading, text: text, offset: index))
+            } else if trimmed.hasPrefix("## ") {
+                let text = String(trimmed.dropFirst(3))
+                result.append(ReleaseNoteLine(type: .heading, text: text, offset: index))
+            } else if trimmed.hasPrefix("# ") {
+                let text = String(trimmed.dropFirst(2))
+                result.append(ReleaseNoteLine(type: .heading, text: text, offset: index))
+            } else if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
+                let text = String(trimmed.dropFirst(2))
+                result.append(ReleaseNoteLine(type: .bullet, text: text, offset: index))
+            } else {
+                result.append(ReleaseNoteLine(type: .text, text: trimmed, offset: index))
+            }
+        }
+        return result
     }
 
     // MARK: - Download Progress
