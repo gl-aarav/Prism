@@ -417,6 +417,7 @@ struct QuickAIView: View {
                 withAnimation(collapseAnimation) {
                     isExpanded = false
                 }
+                QuickAIManager.shared.requestRestoreCompactPositionAfterNewChat()
             case "/quit":
                 NSApplication.shared.terminate(nil)
             case "/new":
@@ -425,6 +426,7 @@ struct QuickAIView: View {
                 withAnimation(collapseAnimation) {
                     isExpanded = false
                 }
+                QuickAIManager.shared.requestRestoreCompactPositionAfterNewChat()
             default:
                 break
             }
@@ -2063,6 +2065,7 @@ extension QuickAIView {
                 withAnimation(collapseAnimation) {
                     isExpanded = false
                 }
+                QuickAIManager.shared.requestRestoreCompactPositionAfterNewChat()
             }) {
                 Image(systemName: "square.and.pencil")
                     .foregroundStyle(colorScheme == .dark ? Color.white : Color.black)

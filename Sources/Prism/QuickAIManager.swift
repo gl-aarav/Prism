@@ -9,8 +9,26 @@ class QuickAIManager: ObservableObject {
     private var pendingResize: CGSize?
     private var isApplyingResize = false
     private let debounceInterval: TimeInterval = 0.18
+    private var moveObserver: NSObjectProtocol?
+    private var isProgrammaticMove = false
+    private var preferredOrigin: NSPoint?
+    private var compactOriginBeforeShift: NSPoint?
+    private var shouldRestoreCompactPosition = false
 
-    private init() {}
+    private let compactHeightThreshold: CGFloat = 130
+    private let originXDefaultsKey = "QuickAIOverlayOriginX"
+    private let originYDefaultsKey = "QuickAIOverlayOriginY"
+
+    private init() {
+        if UserDefaults.standard.object(forKey: originXDefaultsKey) != nil,
+            UserDefaults.standard.object(forKey: originYDefaultsKey) != nil
+        {
+            preferredOrigin = NSPoint(
+                x: UserDefaults.standard.double(forKey: originXDefaultsKey),
+                y: UserDefaults.standard.double(forKey: originYDefaultsKey)
+            )
+        }
+    }
 
     func setup() {
         let panel = QuickAIPanel(
@@ -64,6 +82,7 @@ class QuickAIManager: ObservableObject {
         panel.contentView = containerView
         // We do NOT use contentViewController to avoid interfering with the window frame.
         self.panel = panel
+        registerMoveObserver(for: panel)
     }
 
     func toggle() {
@@ -104,17 +123,17 @@ class QuickAIManager: ObservableObject {
 
             // Switch to accessory mode if no other windows are visible to avoid Dock/Menu bar activation
 
-            if let screen = NSScreen.main {
-                let screenRect = screen.visibleFrame
-                let panelSize = panel.frame.size
-                let x = screenRect.midX - (panelSize.width / 2)
-                let y = screenRect.maxY - 200 - panelSize.height
-                panel.setFrameOrigin(NSPoint(x: x, y: y))
-            } else {
-                panel.center()
-            }
+            positionPanelForOpening(panel)
 
             panel.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    func requestRestoreCompactPositionAfterNewChat() {
+        shouldRestoreCompactPosition = true
+        guard let panel = panel else { return }
+        if panel.frame.height <= compactHeightThreshold {
+            restoreCompactPositionIfNeeded(panel: panel)
         }
     }
 
@@ -183,9 +202,36 @@ class QuickAIManager: ObservableObject {
             }
 
             let currentFrame = panel.frame
-            let newY = currentFrame.maxY - targetSize
+            var newX = currentFrame.minX
+            var newY = currentFrame.minY  // Keep chat bar anchored unless top overflow forces shift.
+
+            // Cache compact origin before a large expansion so we can restore it on New Chat.
+            if targetSize > currentFrame.height + 1, self.compactOriginBeforeShift == nil {
+                self.compactOriginBeforeShift = currentFrame.origin
+            }
+
+            if let screen = panel.screen ?? NSScreen.main {
+                let visible = screen.visibleFrame
+
+                let maxYForTargetHeight = visible.maxY - targetSize
+                if newY > maxYForTargetHeight {
+                    newY = maxYForTargetHeight
+                }
+                if newY < visible.minY {
+                    newY = visible.minY
+                }
+
+                let maxX = visible.maxX - currentFrame.width
+                if newX > maxX {
+                    newX = maxX
+                }
+                if newX < visible.minX {
+                    newX = visible.minX
+                }
+            }
+
             let newFrame = NSRect(
-                x: currentFrame.minX,
+                x: newX,
                 y: newY,
                 width: currentFrame.width,  // keep width fixed; only grow vertically
                 height: targetSize)
@@ -211,6 +257,14 @@ class QuickAIManager: ObservableObject {
                 // Ensure final frame is set correctly (only if panel is still valid)
                 panel?.setFrame(newFrame, display: true)
                 _ = self  // prevent unused capture warning
+
+                if let self = self, let panel = panel {
+                    if self.shouldRestoreCompactPosition
+                        && panel.frame.height <= self.compactHeightThreshold
+                    {
+                        self.restoreCompactPositionIfNeeded(panel: panel)
+                    }
+                }
             }
 
             self.isApplyingResize = false
@@ -221,6 +275,97 @@ class QuickAIManager: ObservableObject {
                 self.scheduleResize(to: next, panel: panel)
             }
         }
+    }
+
+    private func registerMoveObserver(for panel: QuickAIPanel) {
+        if let observer = moveObserver {
+            NotificationCenter.default.removeObserver(observer)
+            moveObserver = nil
+        }
+
+        moveObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didMoveNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self, weak panel] _ in
+            guard let self = self, let panel = panel else { return }
+            guard !self.isProgrammaticMove else { return }
+            self.preferredOrigin = panel.frame.origin
+            UserDefaults.standard.set(panel.frame.origin.x, forKey: self.originXDefaultsKey)
+            UserDefaults.standard.set(panel.frame.origin.y, forKey: self.originYDefaultsKey)
+
+            if panel.frame.height <= self.compactHeightThreshold {
+                self.compactOriginBeforeShift = panel.frame.origin
+            }
+        }
+    }
+
+    private func positionPanelForOpening(_ panel: QuickAIPanel) {
+        guard let screen = NSScreen.main else {
+            panel.center()
+            return
+        }
+
+        let visible = screen.visibleFrame
+        let panelSize = panel.frame.size
+
+        let defaultTopOrigin = NSPoint(
+            x: visible.midX - (panelSize.width / 2),
+            y: visible.maxY - 200 - panelSize.height
+        )
+
+        let targetOrigin = preferredOrigin ?? defaultTopOrigin
+        let clamped = clampOrigin(targetOrigin, panelSize: panelSize, visibleFrame: visible)
+        setFrameOrigin(panel: panel, origin: clamped)
+
+        if panel.frame.height <= compactHeightThreshold {
+            compactOriginBeforeShift = clamped
+        }
+    }
+
+    private func restoreCompactPositionIfNeeded(panel: QuickAIPanel) {
+        guard shouldRestoreCompactPosition else { return }
+        shouldRestoreCompactPosition = false
+
+        guard let target = compactOriginBeforeShift ?? preferredOrigin else { return }
+        let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame
+        let finalOrigin: NSPoint
+        if let screenFrame = screenFrame {
+            finalOrigin = clampOrigin(target, panelSize: panel.frame.size, visibleFrame: screenFrame)
+        } else {
+            finalOrigin = target
+        }
+
+        isProgrammaticMove = true
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1.0)
+            context.allowsImplicitAnimation = true
+            panel.animator().setFrameOrigin(finalOrigin)
+        } completionHandler: { [weak self, weak panel] in
+            guard let self = self, let panel = panel else { return }
+            panel.setFrameOrigin(finalOrigin)
+            self.isProgrammaticMove = false
+            self.preferredOrigin = finalOrigin
+            UserDefaults.standard.set(finalOrigin.x, forKey: self.originXDefaultsKey)
+            UserDefaults.standard.set(finalOrigin.y, forKey: self.originYDefaultsKey)
+        }
+    }
+
+    private func setFrameOrigin(panel: QuickAIPanel, origin: NSPoint) {
+        isProgrammaticMove = true
+        panel.setFrameOrigin(origin)
+        isProgrammaticMove = false
+    }
+
+    private func clampOrigin(_ origin: NSPoint, panelSize: CGSize, visibleFrame: NSRect) -> NSPoint {
+        let maxX = max(visibleFrame.minX, visibleFrame.maxX - panelSize.width)
+        let maxY = max(visibleFrame.minY, visibleFrame.maxY - panelSize.height)
+
+        return NSPoint(
+            x: min(max(origin.x, visibleFrame.minX), maxX),
+            y: min(max(origin.y, visibleFrame.minY), maxY)
+        )
     }
 }
 
