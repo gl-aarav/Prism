@@ -23,7 +23,7 @@ class QuickAIManager: ObservableObject {
 
     private let compactHeightThreshold: CGFloat = 130
     private let minPanelWidth: CGFloat = 520
-    private let maxPanelWidth: CGFloat = 1200
+    private let maxPanelWidth: CGFloat = 700
     private let minPanelHeight: CGFloat = 72
     private let maxPanelHeight: CGFloat = 1200
     private let originXDefaultsKey = "QuickAIOverlayOriginX"
@@ -43,7 +43,8 @@ class QuickAIManager: ObservableObject {
 
     func setup() {
         let savedWidth = UserDefaults.standard.double(forKey: widthDefaultsKey)
-        let initialWidth: CGFloat = savedWidth > 0 ? CGFloat(savedWidth) : 700
+        let restoredWidth: CGFloat = savedWidth > 0 ? CGFloat(savedWidth) : 700
+        let initialWidth: CGFloat = min(max(restoredWidth, minPanelWidth), maxPanelWidth)
 
         let panel = QuickAIPanel(
             contentRect: NSRect(x: 0, y: 0, width: initialWidth, height: 80),

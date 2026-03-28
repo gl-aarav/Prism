@@ -252,7 +252,7 @@ struct QuickAIView: View {
     }
 
     func recalcPanelSize() {
-        let baseWidth = max(min(QuickAIManager.shared.panel?.frame.width ?? 700, 1200), 520)
+        let baseWidth = max(min(QuickAIManager.shared.panel?.frame.width ?? 700, 700), 520)
 
         let font = NSFont.systemFont(ofSize: 16)
         let textToMeasure = inputText.isEmpty ? "Request..." : inputText
