@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    static let quickAIOverlayWidthDidChange = Notification.Name("QuickAIOverlayWidthDidChange")
+}
+
 class QuickAIManager: ObservableObject {
     static let shared = QuickAIManager()
     var panel: QuickAIPanel?
@@ -10,14 +14,21 @@ class QuickAIManager: ObservableObject {
     private var isApplyingResize = false
     private let debounceInterval: TimeInterval = 0.18
     private var moveObserver: NSObjectProtocol?
+    private var resizeObserver: NSObjectProtocol?
     private var isProgrammaticMove = false
+    private var lastKnownPanelWidth: CGFloat = 700
     private var preferredOrigin: NSPoint?
     private var compactOriginBeforeShift: NSPoint?
     private var shouldRestoreCompactPosition = false
 
     private let compactHeightThreshold: CGFloat = 130
+    private let minPanelWidth: CGFloat = 520
+    private let maxPanelWidth: CGFloat = 1200
+    private let minPanelHeight: CGFloat = 72
+    private let maxPanelHeight: CGFloat = 1200
     private let originXDefaultsKey = "QuickAIOverlayOriginX"
     private let originYDefaultsKey = "QuickAIOverlayOriginY"
+    private let widthDefaultsKey = "QuickAIOverlayWidth"
 
     private init() {
         if UserDefaults.standard.object(forKey: originXDefaultsKey) != nil,
@@ -31,9 +42,12 @@ class QuickAIManager: ObservableObject {
     }
 
     func setup() {
+        let savedWidth = UserDefaults.standard.double(forKey: widthDefaultsKey)
+        let initialWidth: CGFloat = savedWidth > 0 ? CGFloat(savedWidth) : 700
+
         let panel = QuickAIPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 80),
-            styleMask: [.borderless, .nonactivatingPanel],
+            contentRect: NSRect(x: 0, y: 0, width: initialWidth, height: 80),
+            styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -44,6 +58,9 @@ class QuickAIManager: ObservableObject {
         panel.hasShadow = false
         panel.isReleasedWhenClosed = false
         panel.isMovableByWindowBackground = true
+        panel.minSize = NSSize(width: minPanelWidth, height: minPanelHeight)
+        panel.maxSize = NSSize(width: maxPanelWidth, height: maxPanelHeight)
+        lastKnownPanelWidth = panel.frame.width
 
         let rootView = QuickAIView(
             onResize: { [weak self, weak panel] size in
@@ -71,7 +88,7 @@ class QuickAIManager: ObservableObject {
         // Use a container NSView to isolate SwiftUI hosting from the NSPanel's direct content view logic.
         // This decouples the layout engine and prevents auto-resizing crashes (SIGABRT in _postWindowNeedsUpdateConstraints)
         // caused by NSHostingView or NSHostingController fighting with the manual setFrame calls.
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 700, height: 80))
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: initialWidth, height: 80))
         containerView.autoresizingMask = [.width, .height]
 
         let hostingView = NSHostingView(rootView: rootView)
@@ -83,6 +100,7 @@ class QuickAIManager: ObservableObject {
         // We do NOT use contentViewController to avoid interfering with the window frame.
         self.panel = panel
         registerMoveObserver(for: panel)
+        registerResizeObserver(for: panel)
     }
 
     func toggle() {
@@ -296,6 +314,39 @@ class QuickAIManager: ObservableObject {
 
             if panel.frame.height <= self.compactHeightThreshold {
                 self.compactOriginBeforeShift = panel.frame.origin
+            }
+        }
+    }
+
+    private func registerResizeObserver(for panel: QuickAIPanel) {
+        if let observer = resizeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            resizeObserver = nil
+        }
+
+        resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self, weak panel] _ in
+            guard let self = self, let panel = panel else { return }
+
+            let newWidth = panel.frame.width
+            UserDefaults.standard.set(Double(newWidth), forKey: self.widthDefaultsKey)
+
+            if abs(newWidth - self.lastKnownPanelWidth) > 0.5 {
+                self.lastKnownPanelWidth = newWidth
+                NotificationCenter.default.post(name: .quickAIOverlayWidthDidChange, object: nil)
+            }
+
+            if !self.isProgrammaticMove {
+                self.preferredOrigin = panel.frame.origin
+                UserDefaults.standard.set(panel.frame.origin.x, forKey: self.originXDefaultsKey)
+                UserDefaults.standard.set(panel.frame.origin.y, forKey: self.originYDefaultsKey)
+
+                if panel.frame.height <= self.compactHeightThreshold {
+                    self.compactOriginBeforeShift = panel.frame.origin
+                }
             }
         }
     }

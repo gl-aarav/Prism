@@ -157,7 +157,7 @@ struct QuickAIView: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .frame(width: 700)
+        .frame(maxWidth: .infinity)
         .onAppear {
             isFocused = true
             resetToolAccessContextIfNeeded()
@@ -216,6 +216,9 @@ struct QuickAIView: View {
             }
             recalcPanelSize()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .quickAIOverlayWidthDidChange)) { _ in
+            recalcPanelSize()
+        }
         .focusEffectDisabled()
     }
 
@@ -249,7 +252,7 @@ struct QuickAIView: View {
     }
 
     func recalcPanelSize() {
-        let baseWidth: CGFloat = 700
+        let baseWidth = max(min(QuickAIManager.shared.panel?.frame.width ?? 700, 1200), 520)
 
         let font = NSFont.systemFont(ofSize: 16)
         let textToMeasure = inputText.isEmpty ? "Request..." : inputText
