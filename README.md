@@ -33,10 +33,9 @@ Prism includes a localized Node.js web automation server to control browsers age
 5. Open your web browser and navigate to `http://localhost:9090` to access the Browser Automation dashboard and WebSocket stream.
 6. Toggle between the **Playwright** and **Puppeteer** engines based on website compatibility.
 
-### 🧩 Browser Extensions (Chrome & Safari)
+### 🧩 Browser Extension (Chrome)
 Bring Prism's intelligence directly into your browser to enhance pages, extract context, and enable seamless agentic browser control.
 *   **Chrome Extension**: Located in `Extensions/Chrome/`. Go to `chrome://extensions/`, enable "Developer mode", and click "Load unpacked" pointing to the folder.
-*   **Safari Extension**: Located in `Extensions/Safari/`. Built seamlessly alongside the codebase with support for macOS native extension features.
 
 ### ⚡ Apple Shortcuts Integration
 Automate your workflows! Prism embeds Shortcuts actions directly into macOS.
@@ -50,7 +49,7 @@ Prism adapts to how you work with multiple entry points, all **synchronized** in
 2.  **Menu Bar App**: Always one click away for quick questions and status checks.
 3.  **Quick AI Panel** (`Ctrl + Space`): A Spotlight-like floating search bar. Summon it instantly from anywhere to ask a question, then dismiss it just as fast.
 4.  **Interactive Web Overlay**: A dedicated, floating web view panel for quick internet access and searches alongside your AI.
-5.  **Browser Extensions (Chrome & Safari)**: Bring Prism's intelligence directly into your browser. Enhance web pages, extract content, and enable seamless agentic browser control.
+5.  **Browser Extension (Chrome)**: Bring Prism's intelligence directly into your browser. Enhance web pages, extract content, and enable seamless agentic browser control.
 
 ### 🔀 Model Comparison Mode
 *   **Side-by-Side Comparison**: Send the same prompt to multiple AI models simultaneously and compare their responses.
@@ -108,9 +107,9 @@ Prism adapts to how you work with multiple entry points, all **synchronized** in
 
 ### Option 2: Clone & Build from Source
 If you prefer to build the project yourself or contribute to development, you can clone the repository:
-* **HTTPS**: `git clone https://github.com/gl-aarav/PrismApp.git`
-* **SSH**: `git clone git@github.com:gl-aarav/PrismApp.git`
-* **GitHub CLI**: `gh repo clone gl-aarav/PrismApp`
+* **HTTPS**: `git clone https://github.com/gl-aarav/Prism.git`
+* **SSH**: `git clone git@github.com:gl-aarav/Prism.git`
+* **GitHub CLI**: `gh repo clone gl-aarav/Prism`
 
 Once cloned, open `Package.swift` or the project directory in Xcode, wait for Swift Package dependencies to resolve, and build (`Cmd + R`).
 
