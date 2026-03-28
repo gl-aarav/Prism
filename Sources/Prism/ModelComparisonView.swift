@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Comparison Slot Model
 
@@ -84,6 +85,8 @@ struct ModelComparisonView: View {
     @State private var currentTasks: [UUID: Task<Void, Never>] = [:]
     @State private var isInputFocused: Bool = false
     @Environment(\.colorScheme) private var colorScheme
+    @State private var selectedAttachments: [Attachment] = []
+    @StateObject private var pasteMonitor = PasteMonitor()
 
     // Synthesize state
     @State private var isSynthesizing: Bool = false
@@ -376,9 +379,49 @@ struct ModelComparisonView: View {
 
     // MARK: - Input Bar
 
+    private var imagePreview: some View {
+        Group {
+            if !selectedAttachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(selectedAttachments) { attachment in
+                            AttachmentPreview(attachment: attachment) {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    selectedAttachments.removeAll { $0.id == attachment.id }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                }
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                .padding(.bottom, 6)
+            }
+        }
+    }
+
     private var comparisonInputBar: some View {
         VStack(spacing: 0) {
+            imagePreview
+
             HStack(spacing: 10) {
+                // Left action button
+                Button(action: selectAttachment) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 34, height: 34)
+                        .background(
+                            Circle()
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.08)
+                                        : Color.black.opacity(0.04))
+                        )
+                }
+                .buttonStyle(.plain)
+
                 // Prompt field
                 ZStack(alignment: .leading) {
                     if prompt.isEmpty && !isInputFocused {
@@ -399,6 +442,13 @@ struct ModelComparisonView: View {
                         }
                     )
                     .fixedSize(horizontal: false, vertical: true)
+                    .onChange(of: isInputFocused) { _, newValue in
+                        if newValue {
+                            pasteMonitor.start()
+                        } else {
+                            pasteMonitor.stop()
+                        }
+                    }
                 }
 
                 // Send/Stop Button — Liquid Glass orb
@@ -415,7 +465,7 @@ struct ModelComparisonView: View {
                                 LinearGradient(
                                     colors: isComparing
                                         ? [.red.opacity(0.8), .red.opacity(0.5)]
-                                        : prompt.isEmpty
+                                        : (prompt.isEmpty && selectedAttachments.isEmpty)
                                             ? [
                                                 Color.secondary.opacity(0.3),
                                                 Color.secondary.opacity(0.15),
@@ -452,7 +502,7 @@ struct ModelComparisonView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(prompt.isEmpty && !isComparing)
+                .disabled((prompt.isEmpty && selectedAttachments.isEmpty) && !isComparing)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -471,6 +521,13 @@ struct ModelComparisonView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.clear)
+        .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
+            handlePaste(providers)
+            return true
+        }
+        .onAppear {
+            setupMonitor()
+        }
     }
 
     // MARK: - Inline Synthesis Panel
@@ -1297,7 +1354,29 @@ struct ModelComparisonView: View {
 
     private func startComparison() {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty || !selectedAttachments.isEmpty else { return }
+
+        // Convert to MessageAttachment
+        let msgAttachments = selectedAttachments.map {
+            let typeStr: String
+            switch $0.type {
+            case .image: typeStr = "image"
+            case .pdf: typeStr = "pdf"
+            case .text: typeStr = "text"
+            }
+            return MessageAttachment(type: typeStr, data: $0.data, fileName: $0.fileName)
+        }
+        let currentAttachments = selectedAttachments
+        selectedAttachments = []
+
+        // For text attachments, append file contents to the input text
+        var augmentedInput = trimmed
+        for attachment in currentAttachments where attachment.type == .text {
+            if let text = String(data: attachment.data, encoding: .utf8) {
+                let name = attachment.fileName ?? "file"
+                augmentedInput += "\n\n--- Contents of \(name) ---\n\(text)\n--- End of \(name) ---"
+            }
+        }
 
         // Clear the input field
         prompt = ""
@@ -1313,8 +1392,14 @@ struct ModelComparisonView: View {
         }
 
         // Build a minimal history with just the user message
-        let userMsg = Message(content: trimmed, isUser: true)
+        let userMsg = Message(
+            content: augmentedInput,
+            attachments: msgAttachments.isEmpty ? nil : msgAttachments,
+            isUser: true)
         let history = [userMsg]
+        let comparisonImage = msgAttachments.first { $0.type == "image" }.flatMap {
+            NSImage(data: $0.data)
+        }
 
         // Launch parallel tasks for each slot
         for i in state.slots.indices {
@@ -1558,7 +1643,7 @@ struct ModelComparisonView: View {
                     case "ChatGPT":
                         let shortcutName = self.shortcutChatGPT
                         let result = try await shortcutService.runShortcut(
-                            name: shortcutName, input: trimmed, image: nil)
+                            name: shortcutName, input: augmentedInput, image: comparisonImage)
                         let elapsed = Date().timeIntervalSince(startTime)
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
@@ -1571,7 +1656,7 @@ struct ModelComparisonView: View {
                     case "Private Cloud":
                         let shortcutName = self.shortcutPrivateCloud
                         let result = try await shortcutService.runShortcut(
-                            name: shortcutName, input: trimmed, image: nil)
+                            name: shortcutName, input: augmentedInput, image: comparisonImage)
                         let elapsed = Date().timeIntervalSince(startTime)
                         await MainActor.run {
                             if let idx = slots.firstIndex(where: { $0.id == slotId }) {
@@ -1612,6 +1697,116 @@ struct ModelComparisonView: View {
             }
 
             currentTasks[slotId] = task
+        }
+    }
+
+    private func selectAttachment() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [
+            .image, .pdf,
+            .plainText, .sourceCode, .json, .xml, .html, .yaml,
+            .commaSeparatedText,
+            UTType(filenameExtension: "md") ?? .plainText,
+            UTType(filenameExtension: "log") ?? .plainText,
+            UTType(filenameExtension: "csv") ?? .plainText,
+            UTType(filenameExtension: "toml") ?? .plainText,
+            .rtf,
+        ]
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                let ext = url.pathExtension.lowercased()
+                if ext == "pdf" {
+                    if let data = try? Data(contentsOf: url) {
+                        selectedAttachments.append(Attachment(type: .pdf, data: data))
+                    }
+                } else if ["png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic"].contains(ext)
+                {
+                    if let data = try? Data(contentsOf: url) {
+                        selectedAttachments.append(Attachment(type: .image, data: data))
+                    }
+                } else {
+                    if let data = try? Data(contentsOf: url) {
+                        selectedAttachments.append(
+                            Attachment(type: .text, data: data, fileName: url.lastPathComponent))
+                    }
+                }
+            }
+        }
+    }
+
+    private func handlePaste(_ providers: [NSItemProvider]) {
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier("com.adobe.pdf") {
+                provider.loadItem(forTypeIdentifier: "com.adobe.pdf", options: nil) { urlData, _ in
+                    if let urlData = urlData as? Data,
+                        let url = URL(dataRepresentation: urlData, relativeTo: nil),
+                        let data = try? Data(contentsOf: url)
+                    {
+                        DispatchQueue.main.async {
+                            self.selectedAttachments.append(Attachment(type: .pdf, data: data))
+                        }
+                    }
+                }
+            } else if provider.canLoadObject(ofClass: NSImage.self) {
+                provider.loadObject(ofClass: NSImage.self) { image, _ in
+                    if let image = image as? NSImage, let tiff = image.tiffRepresentation {
+                        DispatchQueue.main.async {
+                            self.selectedAttachments.append(Attachment(type: .image, data: tiff))
+                        }
+                    }
+                }
+            } else if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) {
+                    urlData, _ in
+                    if let urlData = urlData as? Data,
+                        let url = URL(dataRepresentation: urlData, relativeTo: nil)
+                    {
+                        if url.pathExtension.lowercased() == "pdf" {
+                            if let data = try? Data(contentsOf: url) {
+                                DispatchQueue.main.async {
+                                    self.selectedAttachments.append(
+                                        Attachment(type: .pdf, data: data))
+                                }
+                                return
+                            }
+                        }
+
+                        let imageExtensions = [
+                            "png", "jpg", "jpeg", "tiff", "gif", "bmp", "webp", "heic",
+                        ]
+                        if imageExtensions.contains(url.pathExtension.lowercased()) {
+                            if let data = try? Data(contentsOf: url) {
+                                DispatchQueue.main.async {
+                                    self.selectedAttachments.append(
+                                        Attachment(type: .image, data: data))
+                                }
+                                return
+                            }
+                        }
+
+                        if let data = try? Data(contentsOf: url) {
+                            DispatchQueue.main.async {
+                                self.selectedAttachments.append(
+                                    Attachment(
+                                        type: .text, data: data, fileName: url.lastPathComponent))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func setupMonitor() {
+        pasteMonitor.onPaste = { attachments in
+            DispatchQueue.main.async {
+                self.selectedAttachments.append(contentsOf: attachments)
+            }
+        }
+        if isInputFocused {
+            pasteMonitor.start()
         }
     }
 }
