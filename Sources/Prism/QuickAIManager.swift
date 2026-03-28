@@ -331,7 +331,8 @@ class QuickAIManager: ObservableObject {
         let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame
         let finalOrigin: NSPoint
         if let screenFrame = screenFrame {
-            finalOrigin = clampOrigin(target, panelSize: panel.frame.size, visibleFrame: screenFrame)
+            finalOrigin = clampOrigin(
+                target, panelSize: panel.frame.size, visibleFrame: screenFrame)
         } else {
             finalOrigin = target
         }
@@ -358,7 +359,8 @@ class QuickAIManager: ObservableObject {
         isProgrammaticMove = false
     }
 
-    private func clampOrigin(_ origin: NSPoint, panelSize: CGSize, visibleFrame: NSRect) -> NSPoint {
+    private func clampOrigin(_ origin: NSPoint, panelSize: CGSize, visibleFrame: NSRect) -> NSPoint
+    {
         let maxX = max(visibleFrame.minX, visibleFrame.maxX - panelSize.width)
         let maxY = max(visibleFrame.minY, visibleFrame.maxY - panelSize.height)
 
