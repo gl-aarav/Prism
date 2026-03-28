@@ -219,15 +219,16 @@ struct QuickAIView: View {
         .onReceive(NotificationCenter.default.publisher(for: .quickAIOverlayWidthDidChange)) { _ in
             recalcPanelSize()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .quickAIOverlayHeightDidChange)) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: .quickAIOverlayHeightDidChange)) {
+            notification in
             guard let newTotalHeight = notification.object as? CGFloat else { return }
-            
+
             // Calculate dynamic height additions
             let font = NSFont.systemFont(ofSize: 16)
             let lineHeight = max(1, font.ascender - font.descender + font.leading)
             let extraHeightPerLine = lineHeight * 0.82
             var extraHeight = CGFloat(max(0, inputLineCount - 1)) * extraHeightPerLine
-            
+
             if !selectedAttachments.isEmpty {
                 extraHeight += 100
             }
@@ -235,11 +236,11 @@ struct QuickAIView: View {
                 let autocompleteHeight = min(CGFloat(slashMatches.count) * 44 + 40, 280)
                 extraHeight += autocompleteHeight
             }
-            
+
             // Derive the user's intent for base height by subtracting the dynamic elements
             var intendedBaseHeight = newTotalHeight - extraHeight
-            intendedBaseHeight = max(intendedBaseHeight, 200) // minimum reasonable expanded height
-            
+            intendedBaseHeight = max(intendedBaseHeight, 200)  // minimum reasonable expanded height
+
             QuickAIManager.shared.userExpandedHeight = intendedBaseHeight
             recalcPanelSize()
         }

@@ -283,7 +283,7 @@ class QuickAIManager: ObservableObject {
                         controlPoints: 0.25, 0.1, 0.25, 1.0)  // Smooth ease
                 }
                 context.allowsImplicitAnimation = true
-                self.isProgrammaticMove = true // Ensure observers ignore this programmatic resize
+                self.isProgrammaticMove = true  // Ensure observers ignore this programmatic resize
                 panel.animator().setFrame(newFrame, display: true)
             } completionHandler: { [weak self, weak panel] in
                 // Ensure final frame is set correctly (only if panel is still valid)
@@ -293,7 +293,7 @@ class QuickAIManager: ObservableObject {
                 if let self = self, let panel = panel {
                     self.isProgrammaticMove = false
                     self.isApplyingResize = false
-                    
+
                     if self.shouldRestoreCompactPosition
                         && panel.frame.height <= self.compactHeightThreshold
                     {
@@ -352,7 +352,8 @@ class QuickAIManager: ObservableObject {
 
             if !self.isProgrammaticMove && newHeight > self.compactHeightThreshold {
                 // We broadcast the new height so the view can adjust its own base height
-                NotificationCenter.default.post(name: Notification.Name("QuickAIOverlayHeightDidChange"), object: newHeight)
+                NotificationCenter.default.post(
+                    name: Notification.Name("QuickAIOverlayHeightDidChange"), object: newHeight)
             }
 
             if abs(newWidth - self.lastKnownPanelWidth) > 0.5 {
