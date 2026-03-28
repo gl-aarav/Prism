@@ -1749,21 +1749,31 @@ struct ComparisonCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Card Header
-            cardHeader
+        VStack(alignment: .leading, spacing: 8) {
+            // Header separated into pills
+            HStack(spacing: 8) {
+                // Provider/Model pill
+                modelHeaderPill
 
-            Divider()
-                .opacity(0.3)
+                Spacer()
+
+                // Status/Actions pill (with X)
+                actionPill
+            }
+            .padding(.horizontal, 4)
 
             // Card Body
-            cardBody
+            VStack(alignment: .leading, spacing: 0) {
+                cardBody
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            .shadow(
+                color: Color.black.opacity(isHovered ? 0.12 : 0.06), radius: isHovered ? 16 : 8,
+                x: 0,
+                y: 4
+            )
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 16))
-        .shadow(
-            color: Color.black.opacity(isHovered ? 0.12 : 0.06), radius: isHovered ? 16 : 8, x: 0,
-            y: 4
-        )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
                 isHovered = hovering
@@ -1771,9 +1781,9 @@ struct ComparisonCard: View {
         }
     }
 
-    // MARK: - Card Header
+    // MARK: - Separated Headers
 
-    private var cardHeader: some View {
+    private var modelHeaderPill: some View {
         HStack(spacing: 10) {
             // Provider icon with accent
             ZStack {
@@ -1791,185 +1801,199 @@ struct ComparisonCard: View {
                 modelLabel
             }
 
-            Spacer()
-
             // Thinking & web search controls
-            HStack(spacing: 6) {
-                if slotThinkingMode != .none {
-                    Menu {
-                        if slotThinkingMode == .binary {
-                            Button {
-                                onChangeThinkingLevel("high")
-                            } label: {
-                                if slot.thinkingLevel == "high" {
-                                    Label("Reasoning: On", systemImage: "checkmark")
-                                } else {
-                                    Text("Reasoning: On")
+            if slotThinkingMode != .none || slotCanWebSearch {
+                Divider()
+                    .frame(height: 20)
+                    .opacity(0.5)
+
+                HStack(spacing: 6) {
+                    if slotThinkingMode != .none {
+                        Menu {
+                            if slotThinkingMode == .binary {
+                                Button {
+                                    onChangeThinkingLevel("high")
+                                } label: {
+                                    if slot.thinkingLevel == "high" {
+                                        Label("Reasoning: On", systemImage: "checkmark")
+                                    } else {
+                                        Text("Reasoning: On")
+                                    }
+                                }
+                                Button {
+                                    onChangeThinkingLevel("low")
+                                } label: {
+                                    if slot.thinkingLevel != "high" {
+                                        Label("Reasoning: Off", systemImage: "checkmark")
+                                    } else {
+                                        Text("Reasoning: Off")
+                                    }
+                                }
+                            } else if slotThinkingMode == .geminiPro {
+                                Button {
+                                    onChangeThinkingLevel("auto")
+                                } label: {
+                                    if slot.thinkingLevel == "auto" {
+                                        Label("Auto", systemImage: "checkmark")
+                                    } else {
+                                        Text("Auto")
+                                    }
+                                }
+                                Button {
+                                    onChangeThinkingLevel("low")
+                                } label: {
+                                    if slot.thinkingLevel == "low" {
+                                        Label("Low", systemImage: "checkmark")
+                                    } else {
+                                        Text("Low")
+                                    }
+                                }
+                                Button {
+                                    onChangeThinkingLevel("high")
+                                } label: {
+                                    if slot.thinkingLevel == "high" {
+                                        Label("High", systemImage: "checkmark")
+                                    } else {
+                                        Text("High")
+                                    }
+                                }
+                            } else if slotThinkingMode == .geminiFlash {
+                                Button {
+                                    onChangeThinkingLevel("auto")
+                                } label: {
+                                    if slot.thinkingLevel == "auto" {
+                                        Label("Auto", systemImage: "checkmark")
+                                    } else {
+                                        Text("Auto")
+                                    }
+                                }
+                                Button {
+                                    onChangeThinkingLevel("low")
+                                } label: {
+                                    if slot.thinkingLevel == "low" {
+                                        Label("Low", systemImage: "checkmark")
+                                    } else {
+                                        Text("Low")
+                                    }
+                                }
+                                Button {
+                                    onChangeThinkingLevel("medium")
+                                } label: {
+                                    if slot.thinkingLevel == "medium" {
+                                        Label("Medium", systemImage: "checkmark")
+                                    } else {
+                                        Text("Medium")
+                                    }
+                                }
+                                Button {
+                                    onChangeThinkingLevel("high")
+                                } label: {
+                                    if slot.thinkingLevel == "high" {
+                                        Label("High", systemImage: "checkmark")
+                                    } else {
+                                        Text("High")
+                                    }
+                                }
+                            } else {
+                                // threeState (Ollama gpt-oss)
+                                Button {
+                                    onChangeThinkingLevel("low")
+                                } label: {
+                                    if slot.thinkingLevel == "low" {
+                                        Label("Low", systemImage: "checkmark")
+                                    } else {
+                                        Text("Low")
+                                    }
+                                }
+                                Button {
+                                    onChangeThinkingLevel("medium")
+                                } label: {
+                                    if slot.thinkingLevel == "medium" {
+                                        Label("Medium", systemImage: "checkmark")
+                                    } else {
+                                        Text("Medium")
+                                    }
+                                }
+                                Button {
+                                    onChangeThinkingLevel("high")
+                                } label: {
+                                    if slot.thinkingLevel == "high" {
+                                        Label("High", systemImage: "checkmark")
+                                    } else {
+                                        Text("High")
+                                    }
                                 }
                             }
-                            Button {
-                                onChangeThinkingLevel("low")
-                            } label: {
-                                if slot.thinkingLevel != "high" {
-                                    Label("Reasoning: Off", systemImage: "checkmark")
-                                } else {
-                                    Text("Reasoning: Off")
-                                }
-                            }
-                        } else if slotThinkingMode == .geminiPro {
-                            Button {
-                                onChangeThinkingLevel("auto")
-                            } label: {
-                                if slot.thinkingLevel == "auto" {
-                                    Label("Auto", systemImage: "checkmark")
-                                } else {
-                                    Text("Auto")
-                                }
-                            }
-                            Button {
-                                onChangeThinkingLevel("low")
-                            } label: {
-                                if slot.thinkingLevel == "low" {
-                                    Label("Low", systemImage: "checkmark")
-                                } else {
-                                    Text("Low")
-                                }
-                            }
-                            Button {
-                                onChangeThinkingLevel("high")
-                            } label: {
-                                if slot.thinkingLevel == "high" {
-                                    Label("High", systemImage: "checkmark")
-                                } else {
-                                    Text("High")
-                                }
-                            }
-                        } else if slotThinkingMode == .geminiFlash {
-                            Button {
-                                onChangeThinkingLevel("auto")
-                            } label: {
-                                if slot.thinkingLevel == "auto" {
-                                    Label("Auto", systemImage: "checkmark")
-                                } else {
-                                    Text("Auto")
-                                }
-                            }
-                            Button {
-                                onChangeThinkingLevel("low")
-                            } label: {
-                                if slot.thinkingLevel == "low" {
-                                    Label("Low", systemImage: "checkmark")
-                                } else {
-                                    Text("Low")
-                                }
-                            }
-                            Button {
-                                onChangeThinkingLevel("medium")
-                            } label: {
-                                if slot.thinkingLevel == "medium" {
-                                    Label("Medium", systemImage: "checkmark")
-                                } else {
-                                    Text("Medium")
-                                }
-                            }
-                            Button {
-                                onChangeThinkingLevel("high")
-                            } label: {
-                                if slot.thinkingLevel == "high" {
-                                    Label("High", systemImage: "checkmark")
-                                } else {
-                                    Text("High")
-                                }
-                            }
-                        } else {
-                            // threeState (Ollama gpt-oss)
-                            Button {
-                                onChangeThinkingLevel("low")
-                            } label: {
-                                if slot.thinkingLevel == "low" {
-                                    Label("Low", systemImage: "checkmark")
-                                } else {
-                                    Text("Low")
-                                }
-                            }
-                            Button {
-                                onChangeThinkingLevel("medium")
-                            } label: {
-                                if slot.thinkingLevel == "medium" {
-                                    Label("Medium", systemImage: "checkmark")
-                                } else {
-                                    Text("Medium")
-                                }
-                            }
-                            Button {
-                                onChangeThinkingLevel("high")
-                            } label: {
-                                if slot.thinkingLevel == "high" {
-                                    Label("High", systemImage: "checkmark")
-                                } else {
-                                    Text("High")
-                                }
-                            }
+                        } label: {
+                            Image(systemName: "brain")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(accentColor.opacity(0.8))
+                                .padding(5)
+                                .glassEffect(.regular, in: .circle)
                         }
-                    } label: {
-                        Image(systemName: "brain")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(accentColor.opacity(0.8))
-                            .padding(5)
-                            .glassEffect(.regular, in: .circle)
+                        .menuStyle(.borderlessButton)
+                        .buttonStyle(.plain)
+                        .focusable(false)
+                        .focusEffectDisabled()
+                        .fixedSize()
+                        .help("Reasoning: \(slot.thinkingLevel.capitalized)")
                     }
-                    .menuStyle(.borderlessButton)
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .focusEffectDisabled()
-                    .fixedSize()
-                    .help("Reasoning: \(slot.thinkingLevel.capitalized)")
-                }
 
-                if slotCanWebSearch {
-                    Button(action: { onChangeWebSearch(!slot.webSearchEnabled) }) {
-                        Image(systemName: "globe")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(
-                                slot.webSearchEnabled ? Color.blue : Color.secondary.opacity(0.6)
-                            )
-                            .padding(5)
-                            .glassEffect(.regular, in: .circle)
+                    if slotCanWebSearch {
+                        Button(action: { onChangeWebSearch(!slot.webSearchEnabled) }) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(
+                                    slot.webSearchEnabled
+                                        ? Color.blue : Color.secondary.opacity(0.6)
+                                )
+                                .padding(5)
+                                .glassEffect(.regular, in: .circle)
+                        }
+                        .buttonStyle(.plain)
+                        .help(slot.webSearchEnabled ? "Web Search: On" : "Web Search: Off")
                     }
-                    .buttonStyle(.plain)
-                    .help(slot.webSearchEnabled ? "Web Search: On" : "Web Search: Off")
-                }
-            }
-
-            // Status & actions
-            HStack(spacing: 8) {
-                if slot.isLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                        .scaleEffect(0.8)
-                } else if let elapsed = slot.elapsedTime {
-                    Text(String(format: "%.1fs", elapsed))
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .glassEffect(.regular, in: .capsule)
-                }
-
-                if let onRemove = onRemove {
-                    Button(action: onRemove) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.secondary.opacity(0.6))
-                            .padding(6)
-                            .glassEffect(.regular, in: .circle)
-                    }
-                    .buttonStyle(.plain)
                 }
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
+        .glassEffect(.regular, in: .capsule)
+    }
+
+    private var actionPill: some View {
+        HStack(spacing: 8) {
+            if slot.isLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.8)
+                    .padding(.leading, 8)
+            } else if let elapsed = slot.elapsedTime {
+                Text(String(format: "%.1fs", elapsed))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 10)
+            }
+
+            if let onRemove = onRemove {
+                if slot.isLoading || slot.elapsedTime != nil {
+                    Divider()
+                        .frame(height: 14)
+                        .opacity(0.5)
+                }
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary.opacity(0.7))
+                        .frame(width: 24, height: 24)
+                        .background(Color.secondary.opacity(0.15))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .glassEffect(.regular, in: .capsule)
     }
 
     // MARK: - Provider Menu
