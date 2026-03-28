@@ -3,6 +3,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let quickAIOverlayWidthDidChange = Notification.Name("QuickAIOverlayWidthDidChange")
+    static let quickAIOverlayHeightDidChange = Notification.Name("QuickAIOverlayHeightDidChange")
 }
 
 class QuickAIManager: ObservableObject {
@@ -25,10 +26,21 @@ class QuickAIManager: ObservableObject {
     private let minPanelWidth: CGFloat = 520
     private let maxPanelWidth: CGFloat = 700
     private let minPanelHeight: CGFloat = 72
-    private let maxPanelHeight: CGFloat = 1200
+    private let maxPanelHeight: CGFloat = 850
     private let originXDefaultsKey = "QuickAIOverlayOriginX"
     private let originYDefaultsKey = "QuickAIOverlayOriginY"
     private let widthDefaultsKey = "QuickAIOverlayWidth"
+    private let heightDefaultsKey = "QuickAIOverlayHeight"
+
+    var userExpandedHeight: CGFloat {
+        get {
+            let saved = UserDefaults.standard.double(forKey: heightDefaultsKey)
+            return saved > 0 ? CGFloat(saved) : 550
+        }
+        set {
+            UserDefaults.standard.set(Double(newValue), forKey: heightDefaultsKey)
+        }
+    }
 
     private init() {
         if UserDefaults.standard.object(forKey: originXDefaultsKey) != nil,
@@ -271,6 +283,7 @@ class QuickAIManager: ObservableObject {
                         controlPoints: 0.25, 0.1, 0.25, 1.0)  // Smooth ease
                 }
                 context.allowsImplicitAnimation = true
+                self.isProgrammaticMove = true // Ensure observers ignore this programmatic resize
                 panel.animator().setFrame(newFrame, display: true)
             } completionHandler: { [weak self, weak panel] in
                 // Ensure final frame is set correctly (only if panel is still valid)
@@ -278,20 +291,21 @@ class QuickAIManager: ObservableObject {
                 _ = self  // prevent unused capture warning
 
                 if let self = self, let panel = panel {
+                    self.isProgrammaticMove = false
+                    self.isApplyingResize = false
+                    
                     if self.shouldRestoreCompactPosition
                         && panel.frame.height <= self.compactHeightThreshold
                     {
                         self.restoreCompactPositionIfNeeded(panel: panel)
                     }
+
+                    // If another resize was queued while applying, run it once.
+                    if let next = self.pendingResize {
+                        self.pendingResize = nil
+                        self.scheduleResize(to: next, panel: panel)
+                    }
                 }
-            }
-
-            self.isApplyingResize = false
-
-            // If another resize was queued while applying, run it once.
-            if let next = self.pendingResize {
-                self.pendingResize = nil
-                self.scheduleResize(to: next, panel: panel)
             }
         }
     }
@@ -333,7 +347,13 @@ class QuickAIManager: ObservableObject {
             guard let self = self, let panel = panel else { return }
 
             let newWidth = panel.frame.width
+            let newHeight = panel.frame.height
             UserDefaults.standard.set(Double(newWidth), forKey: self.widthDefaultsKey)
+
+            if !self.isProgrammaticMove && newHeight > self.compactHeightThreshold {
+                // We broadcast the new height so the view can adjust its own base height
+                NotificationCenter.default.post(name: Notification.Name("QuickAIOverlayHeightDidChange"), object: newHeight)
+            }
 
             if abs(newWidth - self.lastKnownPanelWidth) > 0.5 {
                 self.lastKnownPanelWidth = newWidth
@@ -363,7 +383,7 @@ class QuickAIManager: ObservableObject {
 
         let defaultTopOrigin = NSPoint(
             x: visible.midX - (panelSize.width / 2),
-            y: visible.maxY - 200 - panelSize.height
+            y: visible.midY - (panelSize.height / 2)
         )
 
         let targetOrigin = preferredOrigin ?? defaultTopOrigin

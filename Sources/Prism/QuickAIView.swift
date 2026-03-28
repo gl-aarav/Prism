@@ -219,6 +219,30 @@ struct QuickAIView: View {
         .onReceive(NotificationCenter.default.publisher(for: .quickAIOverlayWidthDidChange)) { _ in
             recalcPanelSize()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .quickAIOverlayHeightDidChange)) { notification in
+            guard let newTotalHeight = notification.object as? CGFloat else { return }
+            
+            // Calculate dynamic height additions
+            let font = NSFont.systemFont(ofSize: 16)
+            let lineHeight = max(1, font.ascender - font.descender + font.leading)
+            let extraHeightPerLine = lineHeight * 0.82
+            var extraHeight = CGFloat(max(0, inputLineCount - 1)) * extraHeightPerLine
+            
+            if !selectedAttachments.isEmpty {
+                extraHeight += 100
+            }
+            if showSlashAutocomplete && !slashMatches.isEmpty {
+                let autocompleteHeight = min(CGFloat(slashMatches.count) * 44 + 40, 280)
+                extraHeight += autocompleteHeight
+            }
+            
+            // Derive the user's intent for base height by subtracting the dynamic elements
+            var intendedBaseHeight = newTotalHeight - extraHeight
+            intendedBaseHeight = max(intendedBaseHeight, 200) // minimum reasonable expanded height
+            
+            QuickAIManager.shared.userExpandedHeight = intendedBaseHeight
+            recalcPanelSize()
+        }
         .focusEffectDisabled()
     }
 
@@ -268,9 +292,10 @@ struct QuickAIView: View {
         let lines = min(6, max(1, Int(ceil(bounding.height / max(1, lineHeight)))))
         inputLineCount = lines
 
+        let maxHeight: CGFloat = 850
         let extraHeightPerLine = lineHeight * 0.82
-        // Increased base heights to accommodate shadows and prevent clipping
-        let baseHeight: CGFloat = isExpanded ? 550 : 110
+        // Use user's last manually resized height instead of hardcoded 550
+        let baseHeight: CGFloat = isExpanded ? QuickAIManager.shared.userExpandedHeight : 110
         var targetHeight = baseHeight + CGFloat(max(0, lines - 1)) * extraHeightPerLine
 
         // Add extra height for attachment previews
@@ -283,6 +308,9 @@ struct QuickAIView: View {
             let autocompleteHeight = min(CGFloat(slashMatches.count) * 44 + 40, 280)
             targetHeight += autocompleteHeight
         }
+
+        // Enforce maximum height for the window
+        targetHeight = min(targetHeight, maxHeight)
 
         onResize?(CGSize(width: baseWidth, height: targetHeight))
     }
