@@ -375,7 +375,10 @@ class QuickAIManager: ObservableObject {
             y: visible.maxY - panelSize.height - defaultTopInset
         )
 
-        let targetOrigin = preferredOrigin ?? defaultTopOrigin
+        let centerX = visible.midX - (panelSize.width / 2)
+        let targetY = preferredOrigin?.y ?? defaultTopOrigin.y
+        let targetOrigin = NSPoint(x: centerX, y: targetY)
+
         let clamped = clampOrigin(targetOrigin, panelSize: panelSize, visibleFrame: visible)
         setFrameOrigin(panel: panel, origin: clamped)
 
