@@ -21,12 +21,16 @@ class QuickAIManager: ObservableObject {
     private var preferredOrigin: NSPoint?
     private var compactOriginBeforeShift: NSPoint?
     private var shouldRestoreCompactPosition = false
+    private var isClosingPanel = false
+    private var isOpeningPanel = false
 
     private let compactHeightThreshold: CGFloat = 130
     private let minPanelWidth: CGFloat = 520
     private let maxPanelWidth: CGFloat = 700
     private let minPanelHeight: CGFloat = 72
     private let maxPanelHeight: CGFloat = 850
+    private let compactPanelHeight: CGFloat = 110
+    private let defaultTopInset: CGFloat = 84
     private let originXDefaultsKey = "QuickAIOverlayOriginX"
     private let originYDefaultsKey = "QuickAIOverlayOriginY"
     private let widthDefaultsKey = "QuickAIOverlayWidth"
@@ -59,7 +63,7 @@ class QuickAIManager: ObservableObject {
         let initialWidth: CGFloat = min(max(restoredWidth, minPanelWidth), maxPanelWidth)
 
         let panel = QuickAIPanel(
-            contentRect: NSRect(x: 0, y: 0, width: initialWidth, height: 80),
+            contentRect: NSRect(x: 0, y: 0, width: initialWidth, height: compactPanelHeight),
             styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered,
             defer: false
@@ -80,19 +84,8 @@ class QuickAIManager: ObservableObject {
                 guard let self = self, let panel = panel else { return }
                 self.scheduleResize(to: size, panel: panel)
             },
-            onClose: { [weak panel] in
-                panel?.orderOut(nil)
-
-                // If no other windows are visible, hide the app to return focus to previous app
-                let otherWindowsVisible = NSApp.windows.contains { $0 != panel && $0.isVisible }
-                if !otherWindowsVisible {
-                    if let previousApp = QuickAIManager.shared.previousApp {
-                        previousApp.activate(options: [])
-                        QuickAIManager.shared.previousApp = nil
-                    } else {
-                        NSApp.hide(nil)
-                    }
-                }
+            onClose: { [weak self] in
+                self?.closePanel(usingClickOutsideSemantics: false)
             }
         )
         // Ensure SwiftUI view covers the edges
@@ -101,7 +94,9 @@ class QuickAIManager: ObservableObject {
         // Use a container NSView to isolate SwiftUI hosting from the NSPanel's direct content view logic.
         // This decouples the layout engine and prevents auto-resizing crashes (SIGABRT in _postWindowNeedsUpdateConstraints)
         // caused by NSHostingView or NSHostingController fighting with the manual setFrame calls.
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: initialWidth, height: 80))
+        let containerView = NSView(
+            frame: NSRect(x: 0, y: 0, width: initialWidth, height: compactPanelHeight)
+        )
         containerView.autoresizingMask = [.width, .height]
 
         let hostingView = NSHostingView(rootView: rootView)
@@ -120,16 +115,7 @@ class QuickAIManager: ObservableObject {
         guard let panel = panel else { return }
 
         if panel.isVisible && panel.isKeyWindow {
-            panel.orderOut(nil)
-            let otherWindowsVisible = NSApp.windows.contains { $0 != panel && $0.isVisible }
-            if !otherWindowsVisible {
-                if let previousApp = previousApp {
-                    previousApp.activate(options: [])
-                    self.previousApp = nil
-                } else {
-                    NSApp.hide(nil)
-                }
-            }
+            closePanel(usingClickOutsideSemantics: false)
         } else {
             // If app is not active, we are coming from outside.
             // We should ensure the main window doesn't pop up and distract.
@@ -156,8 +142,20 @@ class QuickAIManager: ObservableObject {
 
             positionPanelForOpening(panel)
 
-            panel.makeKeyAndOrderFront(nil)
+            presentPanel(panel)
         }
+    }
+
+    func closePanel(usingClickOutsideSemantics: Bool) {
+        guard let panel = panel else { return }
+
+        if usingClickOutsideSemantics
+            && !UserDefaults.standard.bool(forKey: "QuickAIClickOutsideCloses")
+        {
+            return
+        }
+
+        animateAndClose(panel)
     }
 
     func requestRestoreCompactPositionAfterNewChat() {
@@ -384,7 +382,7 @@ class QuickAIManager: ObservableObject {
 
         let defaultTopOrigin = NSPoint(
             x: visible.midX - (panelSize.width / 2),
-            y: visible.midY - (panelSize.height / 2)
+            y: visible.maxY - panelSize.height - defaultTopInset
         )
 
         let targetOrigin = preferredOrigin ?? defaultTopOrigin
@@ -430,6 +428,80 @@ class QuickAIManager: ObservableObject {
         isProgrammaticMove = true
         panel.setFrameOrigin(origin)
         isProgrammaticMove = false
+    }
+
+    private func presentPanel(_ panel: QuickAIPanel) {
+        guard !isOpeningPanel else { return }
+        isOpeningPanel = true
+
+        let finalFrame = panel.frame
+        let startFrame = NSRect(
+            x: finalFrame.minX,
+            y: finalFrame.minY - 18,
+            width: finalFrame.width,
+            height: max(minPanelHeight, finalFrame.height - 10)
+        )
+
+        panel.alphaValue = 0
+        panel.setFrame(startFrame, display: true)
+        panel.makeKeyAndOrderFront(nil)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.2, 1.0)
+            context.allowsImplicitAnimation = true
+            self.isProgrammaticMove = true
+            panel.animator().alphaValue = 1
+            panel.animator().setFrame(finalFrame, display: true)
+        } completionHandler: { [weak self, weak panel] in
+            guard let self = self, let panel = panel else { return }
+            panel.alphaValue = 1
+            panel.setFrame(finalFrame, display: true)
+            self.isProgrammaticMove = false
+            self.isOpeningPanel = false
+        }
+    }
+
+    private func animateAndClose(_ panel: QuickAIPanel) {
+        guard !isClosingPanel else { return }
+        isClosingPanel = true
+
+        let currentFrame = panel.frame
+        let targetFrame = NSRect(
+            x: currentFrame.minX,
+            y: currentFrame.minY - 14,
+            width: currentFrame.width,
+            height: max(minPanelHeight, currentFrame.height - 8)
+        )
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 0.2, 1.0)
+            context.allowsImplicitAnimation = true
+            self.isProgrammaticMove = true
+            panel.animator().alphaValue = 0
+            panel.animator().setFrame(targetFrame, display: true)
+        } completionHandler: { [weak self, weak panel] in
+            guard let self = self, let panel = panel else { return }
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+            panel.setFrame(currentFrame, display: true)
+            self.isProgrammaticMove = false
+            self.isClosingPanel = false
+            self.restoreFocusIfNeeded(afterClosing: panel)
+        }
+    }
+
+    private func restoreFocusIfNeeded(afterClosing panel: NSPanel) {
+        let otherWindowsVisible = NSApp.windows.contains { $0 != panel && $0.isVisible }
+        if !otherWindowsVisible {
+            if let previousApp = previousApp {
+                previousApp.activate(options: [])
+                self.previousApp = nil
+            } else {
+                NSApp.hide(nil)
+            }
+        }
     }
 
     private func clampOrigin(_ origin: NSPoint, panelSize: CGSize, visibleFrame: NSRect) -> NSPoint
@@ -503,19 +575,12 @@ class QuickAIPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
+    override func cancelOperation(_ sender: Any?) {
+        QuickAIManager.shared.closePanel(usingClickOutsideSemantics: false)
+    }
+
     override func resignKey() {
         super.resignKey()
-        if UserDefaults.standard.bool(forKey: "QuickAIClickOutsideCloses") {
-            orderOut(nil)
-            let otherWindowsVisible = NSApp.windows.contains { $0 != self && $0.isVisible }
-            if !otherWindowsVisible {
-                if let previousApp = QuickAIManager.shared.previousApp {
-                    previousApp.activate(options: [])
-                    QuickAIManager.shared.previousApp = nil
-                } else {
-                    NSApp.hide(nil)
-                }
-            }
-        }
+        QuickAIManager.shared.closePanel(usingClickOutsideSemantics: true)
     }
 }

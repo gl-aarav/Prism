@@ -18,6 +18,11 @@ struct QuickAIView: View {
     @State private var messagesOffset: CGFloat = 30
     @State private var backgroundScale: CGFloat = 0.92
     @State private var backgroundBlur: CGFloat = 0
+    @State private var shellOpacity: Double = 0
+    @State private var shellOffset: CGFloat = 18
+    @State private var shellScale: CGFloat = 0.985
+    @State private var inputBarOffset: CGFloat = 14
+    @State private var inputBarOpacity: Double = 0
     @State private var selectedAttachments: [Attachment] = []
     @State private var isFocused: Bool = false
     @Environment(\.colorScheme) var colorScheme
@@ -83,6 +88,10 @@ struct QuickAIView: View {
 
     private var collapseAnimation: Animation {
         .spring(response: 0.42, dampingFraction: 0.88, blendDuration: 0.05)
+    }
+
+    private var shellAnimation: Animation {
+        .spring(response: 0.32, dampingFraction: 0.86, blendDuration: 0.06)
     }
 
     private var geminiDropdownModels: [String] {
@@ -154,10 +163,18 @@ struct QuickAIView: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, isExpanded ? 72 : 62)
                 }
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: 10)),
+                        removal: .opacity.combined(with: .offset(y: 6))
+                    )
+                )
             }
         }
         .frame(maxWidth: .infinity)
+        .opacity(shellOpacity)
+        .scaleEffect(shellScale, anchor: .bottom)
+        .offset(y: shellOffset)
         .onAppear {
             isFocused = true
             resetToolAccessContextIfNeeded()
@@ -168,6 +185,7 @@ struct QuickAIView: View {
 
             recalcPanelSize()
             updateOllamaModels()
+            runInitialPresentation()
         }
         .onChange(of: selectedProvider) { _, _ in
             updateOllamaModels()
@@ -245,6 +263,35 @@ struct QuickAIView: View {
             recalcPanelSize()
         }
         .focusEffectDisabled()
+        .animation(shellAnimation, value: showSlashAutocomplete)
+        .animation(shellAnimation, value: slashMatches.count)
+    }
+
+    private func runInitialPresentation() {
+        shellOpacity = 0
+        shellOffset = 18
+        shellScale = 0.985
+        inputBarOffset = 14
+        inputBarOpacity = 0
+
+        withAnimation(shellAnimation) {
+            shellOpacity = 1
+            shellOffset = 0
+            shellScale = 1
+        }
+
+        withAnimation(shellAnimation.delay(0.03)) {
+            inputBarOffset = 0
+            inputBarOpacity = 1
+        }
+
+        if isExpanded {
+            expandedContentOpacity = 1
+            headerOffset = 0
+            messagesOffset = 0
+            backgroundScale = 1
+            backgroundBlur = 0
+        }
     }
 
     func sendButtonStyle(darkened: Bool = false) -> AnyShapeStyle {
@@ -2117,6 +2164,8 @@ extension QuickAIView {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 6)
+        .opacity(expandedContentOpacity)
+        .offset(y: headerOffset)
     }
 
     private var messagesSection: some View {
@@ -2936,6 +2985,8 @@ extension QuickAIView {
             .padding(16)
             .background(CommandBarBackground(cornerRadius: 20))
         }
+        .opacity(inputBarOpacity)
+        .offset(y: inputBarOffset)
     }
 }
 
