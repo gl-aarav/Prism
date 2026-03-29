@@ -24,7 +24,6 @@ class QuickAIManager: ObservableObject {
     private var shouldRestoreCompactPosition = false
     private var isClosingPanel = false
     private var isOpeningPanel = false
-    private var snappedToCenterX = false
 
     private let compactHeightThreshold: CGFloat = 130
     private let minPanelWidth: CGFloat = 520
@@ -33,7 +32,6 @@ class QuickAIManager: ObservableObject {
     private let maxPanelHeight: CGFloat = 850
     private let compactPanelHeight: CGFloat = 110
     private let defaultTopInset: CGFloat = 84
-    private let centerSnapThreshold: CGFloat = 22
     private let originXDefaultsKey = "QuickAIOverlayOriginX"
     private let originYDefaultsKey = "QuickAIOverlayOriginY"
     private let widthDefaultsKey = "QuickAIOverlayWidth"
@@ -325,8 +323,7 @@ class QuickAIManager: ObservableObject {
         ) { [weak self, weak panel] _ in
             guard let self = self, let panel = panel else { return }
             guard !self.isProgrammaticMove else { return }
-            let adjustedOrigin = self.applyCenterSnapIfNeeded(for: panel)
-            self.persistOrigin(adjustedOrigin, panelHeight: panel.frame.height)
+            self.persistOrigin(panel.frame.origin, panelHeight: panel.frame.height)
         }
     }
 
@@ -433,34 +430,6 @@ class QuickAIManager: ObservableObject {
             compactOriginBeforeShift = origin
             lastCompactOrigin = origin
         }
-    }
-
-    private func applyCenterSnapIfNeeded(for panel: QuickAIPanel) -> NSPoint {
-        guard let screen = panel.screen ?? NSScreen.main else {
-            snappedToCenterX = false
-            return panel.frame.origin
-        }
-
-        let visibleFrame = screen.visibleFrame
-        let centeredX = visibleFrame.midX - (panel.frame.width / 2)
-        let currentOrigin = panel.frame.origin
-        let delta = abs(currentOrigin.x - centeredX)
-
-        guard delta <= centerSnapThreshold else {
-            snappedToCenterX = false
-            return currentOrigin
-        }
-
-        let snappedOrigin = NSPoint(x: centeredX, y: currentOrigin.y)
-        if !snappedToCenterX {
-            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
-            snappedToCenterX = true
-        }
-
-        isProgrammaticMove = true
-        panel.setFrameOrigin(snappedOrigin)
-        isProgrammaticMove = false
-        return snappedOrigin
     }
 
     private func presentPanel(_ panel: QuickAIPanel) {
