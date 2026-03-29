@@ -20,9 +20,11 @@ class QuickAIManager: ObservableObject {
     private var lastKnownPanelWidth: CGFloat = 700
     private var preferredOrigin: NSPoint?
     private var compactOriginBeforeShift: NSPoint?
+    private var lastCompactOrigin: NSPoint?
     private var shouldRestoreCompactPosition = false
     private var isClosingPanel = false
     private var isOpeningPanel = false
+    private var snappedToCenterX = false
 
     private let compactHeightThreshold: CGFloat = 130
     private let minPanelWidth: CGFloat = 520
@@ -31,6 +33,7 @@ class QuickAIManager: ObservableObject {
     private let maxPanelHeight: CGFloat = 850
     private let compactPanelHeight: CGFloat = 110
     private let defaultTopInset: CGFloat = 84
+    private let centerSnapThreshold: CGFloat = 22
     private let originXDefaultsKey = "QuickAIOverlayOriginX"
     private let originYDefaultsKey = "QuickAIOverlayOriginY"
     private let widthDefaultsKey = "QuickAIOverlayWidth"
@@ -54,6 +57,7 @@ class QuickAIManager: ObservableObject {
                 x: UserDefaults.standard.double(forKey: originXDefaultsKey),
                 y: UserDefaults.standard.double(forKey: originYDefaultsKey)
             )
+            lastCompactOrigin = preferredOrigin
         }
     }
 
@@ -321,13 +325,8 @@ class QuickAIManager: ObservableObject {
         ) { [weak self, weak panel] _ in
             guard let self = self, let panel = panel else { return }
             guard !self.isProgrammaticMove else { return }
-            self.preferredOrigin = panel.frame.origin
-            UserDefaults.standard.set(panel.frame.origin.x, forKey: self.originXDefaultsKey)
-            UserDefaults.standard.set(panel.frame.origin.y, forKey: self.originYDefaultsKey)
-
-            if panel.frame.height <= self.compactHeightThreshold {
-                self.compactOriginBeforeShift = panel.frame.origin
-            }
+            let adjustedOrigin = self.applyCenterSnapIfNeeded(for: panel)
+            self.persistOrigin(adjustedOrigin, panelHeight: panel.frame.height)
         }
     }
 
@@ -360,13 +359,7 @@ class QuickAIManager: ObservableObject {
             }
 
             if !self.isProgrammaticMove {
-                self.preferredOrigin = panel.frame.origin
-                UserDefaults.standard.set(panel.frame.origin.x, forKey: self.originXDefaultsKey)
-                UserDefaults.standard.set(panel.frame.origin.y, forKey: self.originYDefaultsKey)
-
-                if panel.frame.height <= self.compactHeightThreshold {
-                    self.compactOriginBeforeShift = panel.frame.origin
-                }
+                self.persistOrigin(panel.frame.origin, panelHeight: panel.frame.height)
             }
         }
     }
@@ -391,6 +384,7 @@ class QuickAIManager: ObservableObject {
 
         if panel.frame.height <= compactHeightThreshold {
             compactOriginBeforeShift = clamped
+            lastCompactOrigin = clamped
         }
     }
 
@@ -398,7 +392,9 @@ class QuickAIManager: ObservableObject {
         guard shouldRestoreCompactPosition else { return }
         shouldRestoreCompactPosition = false
 
-        guard let target = compactOriginBeforeShift ?? preferredOrigin else { return }
+        guard let target = compactOriginBeforeShift ?? lastCompactOrigin ?? preferredOrigin else {
+            return
+        }
         let screenFrame = (panel.screen ?? NSScreen.main)?.visibleFrame
         let finalOrigin: NSPoint
         if let screenFrame = screenFrame {
@@ -418,9 +414,7 @@ class QuickAIManager: ObservableObject {
             guard let self = self, let panel = panel else { return }
             panel.setFrameOrigin(finalOrigin)
             self.isProgrammaticMove = false
-            self.preferredOrigin = finalOrigin
-            UserDefaults.standard.set(finalOrigin.x, forKey: self.originXDefaultsKey)
-            UserDefaults.standard.set(finalOrigin.y, forKey: self.originYDefaultsKey)
+            self.persistOrigin(finalOrigin, panelHeight: panel.frame.height)
         }
     }
 
@@ -428,6 +422,45 @@ class QuickAIManager: ObservableObject {
         isProgrammaticMove = true
         panel.setFrameOrigin(origin)
         isProgrammaticMove = false
+    }
+
+    private func persistOrigin(_ origin: NSPoint, panelHeight: CGFloat) {
+        preferredOrigin = origin
+        UserDefaults.standard.set(origin.x, forKey: originXDefaultsKey)
+        UserDefaults.standard.set(origin.y, forKey: originYDefaultsKey)
+
+        if panelHeight <= compactHeightThreshold {
+            compactOriginBeforeShift = origin
+            lastCompactOrigin = origin
+        }
+    }
+
+    private func applyCenterSnapIfNeeded(for panel: QuickAIPanel) -> NSPoint {
+        guard let screen = panel.screen ?? NSScreen.main else {
+            snappedToCenterX = false
+            return panel.frame.origin
+        }
+
+        let visibleFrame = screen.visibleFrame
+        let centeredX = visibleFrame.midX - (panel.frame.width / 2)
+        let currentOrigin = panel.frame.origin
+        let delta = abs(currentOrigin.x - centeredX)
+
+        guard delta <= centerSnapThreshold else {
+            snappedToCenterX = false
+            return currentOrigin
+        }
+
+        let snappedOrigin = NSPoint(x: centeredX, y: currentOrigin.y)
+        if !snappedToCenterX {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            snappedToCenterX = true
+        }
+
+        isProgrammaticMove = true
+        panel.setFrameOrigin(snappedOrigin)
+        isProgrammaticMove = false
+        return snappedOrigin
     }
 
     private func presentPanel(_ panel: QuickAIPanel) {
