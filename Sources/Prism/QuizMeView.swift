@@ -1381,7 +1381,7 @@ struct QuizMeView: View {
                                             quizProvider = "Ollama|\(account.id.uuidString)"
                                             quizModel = model
                                         }) {
-                                            Text(model)
+                                            Text(ModelNameFormatter.format(name: model))
                                         }
                                     }
                                 }
@@ -1394,7 +1394,7 @@ struct QuizMeView: View {
                                     quizProvider = "Ollama"
                                     quizModel = model
                                 }) {
-                                    Text(model)
+                                    Text(ModelNameFormatter.format(name: model))
                                 }
                             }
                         }

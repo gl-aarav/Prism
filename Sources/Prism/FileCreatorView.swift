@@ -2172,7 +2172,7 @@ struct FileCreatorView: View {
                                             pdfProvider = "Ollama|\(account.id.uuidString)"
                                             pdfModel = model
                                         }) {
-                                            Text(model)
+                                            Text(ModelNameFormatter.format(name: model))
                                         }
                                     }
                                 }
@@ -2185,7 +2185,7 @@ struct FileCreatorView: View {
                                     pdfProvider = "Ollama"
                                     pdfModel = model
                                 }) {
-                                    Text(model)
+                                    Text(ModelNameFormatter.format(name: model))
                                 }
                             }
                         }

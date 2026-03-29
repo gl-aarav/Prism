@@ -191,13 +191,13 @@ class NvidiaModelManager: ObservableObject {
     }
 
     func displayName(for model: String) -> String {
+        var baseName = model
         if let name = NvidiaModelManager.displayNames[model] {
-            return name
+            baseName = name
+        } else if let slashIndex = model.firstIndex(of: "/") {
+            baseName = String(model[model.index(after: slashIndex)...])
         }
-        if let slashIndex = model.firstIndex(of: "/") {
-            return String(model[model.index(after: slashIndex)...])
-        }
-        return model
+        return ModelNameFormatter.format(name: baseName)
     }
 
     var favoriteModels: [String] {

@@ -439,7 +439,7 @@ struct FolderContextView: View {
                                                 folderModel = model
                                             }) {
                                                 HStack {
-                                                    Text(model)
+                                                    Text(ModelNameFormatter.format(name: model))
                                                     if folderModel == model
                                                         && folderProvider.contains(
                                                             account.id.uuidString)
@@ -464,7 +464,7 @@ struct FolderContextView: View {
                                                 folderModel = model
                                             }) {
                                                 HStack {
-                                                    Text(model)
+                                                    Text(ModelNameFormatter.format(name: model))
                                                     if folderModel == model
                                                         && folderProvider.contains(
                                                             account.id.uuidString)
@@ -489,7 +489,7 @@ struct FolderContextView: View {
                                                 folderProvider = "Ollama|\(account.id.uuidString)"
                                                 folderModel = model
                                             }) {
-                                                Text(model)
+                                                Text(ModelNameFormatter.format(name: model))
                                             }
                                         }
                                     }

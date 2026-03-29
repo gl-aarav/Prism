@@ -5458,9 +5458,9 @@ struct InputView: View {
                                 ForEach(ollamaManager.favoriteModels, id: \.self) { model in
                                     Button(action: { selectedOllamaModel = model }) {
                                         if selectedOllamaModel == model {
-                                            Label(model, systemImage: "checkmark")
+                                            Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                                         } else {
-                                            Text(model)
+                                            Text(ModelNameFormatter.format(name: model))
                                         }
                                     }
                                 }
@@ -5476,9 +5476,9 @@ struct InputView: View {
                                 ForEach(installedNonFav, id: \.self) { model in
                                     Button(action: { selectedOllamaModel = model }) {
                                         if selectedOllamaModel == model {
-                                            Label(model, systemImage: "checkmark")
+                                            Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                                         } else {
-                                            Text(model)
+                                            Text(ModelNameFormatter.format(name: model))
                                         }
                                     }
                                 }
@@ -5496,9 +5496,9 @@ struct InputView: View {
                                 ForEach(customNonInstalled, id: \.self) { model in
                                     Button(action: { selectedOllamaModel = model }) {
                                         if selectedOllamaModel == model {
-                                            Label(model, systemImage: "checkmark")
+                                            Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                                         } else {
-                                            Text(model)
+                                            Text(ModelNameFormatter.format(name: model))
                                         }
                                     }
                                 }
@@ -5511,9 +5511,9 @@ struct InputView: View {
                             ForEach(ollamaManager.allModels, id: \.self) { model in
                                 Button(action: { ollamaManager.toggleFavorite(model) }) {
                                     if ollamaManager.isFavorite(model) {
-                                        Label(model, systemImage: "star.fill")
+                                        Label(ModelNameFormatter.format(name: model), systemImage: "star.fill")
                                     } else {
-                                        Label(model, systemImage: "star")
+                                        Label(ModelNameFormatter.format(name: model), systemImage: "star")
                                     }
                                 }
                             }
@@ -7849,6 +7849,7 @@ struct SettingsView: View {
     @AppStorage("QuickToolsTintIntensity") private var quickToolsTintIntensity: Double = 0.5
     @AppStorage("WebOverlayBackgroundOpacity") private var webOverlayBackgroundOpacity: Double =
         0.25
+    @AppStorage("FormatModelNames") private var formatModelNames: Bool = true
     @AppStorage("WebOverlayTintIntensity") private var webOverlayTintIntensity: Double = 0.5
     @AppStorage("ShowCompare") private var showCompareTool: Bool = true
     @AppStorage("ShowCommands") private var showCommandsTool: Bool = true
@@ -8091,6 +8092,11 @@ struct SettingsView: View {
                 tint: .gray,
                 description: "Menu bar presence and click behavior."
             ) {
+                Toggle(isOn: $formatModelNames) {
+                    Label("Format Model Names", systemImage: "textformat.size")
+                }
+                .toggleStyle(.switch)
+                
                 Toggle(isOn: $showMenuBar) {
                     Label("Show Menu Bar Icon", systemImage: "menubar.rectangle")
                 }
@@ -8861,7 +8867,7 @@ struct SettingsView: View {
                 )
             ) {
                 ForEach(apiProviderModelStore.enabledModels(for: provider), id: \.self) { model in
-                    Text(model).tag(model)
+                    Text(ModelNameFormatter.format(name: model)).tag(model)
                 }
             }
             .pickerStyle(.menu)
@@ -8927,7 +8933,7 @@ struct SettingsView: View {
                                         enabledModels.contains(model)
                                             ? provider.tint : .secondary)
                                     VStack(alignment: .leading, spacing: 3) {
-                                        Text(model)
+                                        Text(ModelNameFormatter.format(name: model))
                                             .font(
                                                 .system(
                                                     size: 12, weight: .medium,
@@ -9260,7 +9266,7 @@ struct SettingsView: View {
 
             ForEach(geminiManager.customModels, id: \.self) { model in
                 HStack {
-                    Text(model)
+                    Text(ModelNameFormatter.format(name: model))
                         .font(.system(.callout, design: .monospaced))
                     Spacer()
                     Button(role: .destructive) {
@@ -9285,7 +9291,7 @@ struct SettingsView: View {
             } else {
                 ForEach(geminiManager.favoriteModels, id: \.self) { model in
                     HStack {
-                        Text(model)
+                        Text(ModelNameFormatter.format(name: model))
                             .font(.system(.callout, design: .monospaced))
                         Spacer()
                         Button(role: .destructive) {
@@ -9379,7 +9385,7 @@ struct SettingsView: View {
 
             ForEach(ollamaManager.customModels, id: \.self) { model in
                 HStack {
-                    Text(model)
+                    Text(ModelNameFormatter.format(name: model))
                         .font(.system(.callout, design: .monospaced))
                     Spacer()
                     Button(role: .destructive) {
@@ -9404,7 +9410,7 @@ struct SettingsView: View {
             } else {
                 ForEach(ollamaManager.favoriteModels, id: \.self) { model in
                     HStack {
-                        Text(model)
+                        Text(ModelNameFormatter.format(name: model))
                             .font(.system(.callout, design: .monospaced))
                         Spacer()
                         Button(role: .destructive) {
@@ -9508,7 +9514,7 @@ struct SettingsView: View {
 
             ForEach(nvidiaManager.customModels, id: \.self) { model in
                 HStack {
-                    Text(model)
+                    Text(ModelNameFormatter.format(name: model))
                         .font(.system(.callout, design: .monospaced))
                     Spacer()
                     Button(role: .destructive) {
@@ -9533,7 +9539,7 @@ struct SettingsView: View {
             } else {
                 ForEach(nvidiaManager.favoriteModels, id: \.self) { model in
                     HStack {
-                        Text(model)
+                        Text(ModelNameFormatter.format(name: model))
                             .font(.system(.callout, design: .monospaced))
                         Spacer()
                         Button(role: .destructive) {
@@ -9946,7 +9952,7 @@ struct SettingsView: View {
                                 if autocompleteBackend == "Ollama" {
                                     ForEach(OllamaModelManager.shared.allModels, id: \.self) {
                                         model in
-                                        Text(model).tag(model)
+                                        Text(ModelNameFormatter.format(name: model)).tag(model)
                                     }
                                 } else if autocompleteBackend == "Gemini" {
                                     ForEach(GeminiModelManager.shared.availableModels, id: \.self) {

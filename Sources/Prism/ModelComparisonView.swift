@@ -614,9 +614,9 @@ struct ModelComparisonView: View {
                                             if synthesizeProvider.contains(account.id.uuidString)
                                                 && synthesizeModel == model
                                             {
-                                                Label(model, systemImage: "checkmark")
+                                                Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                                             } else {
-                                                Text(model)
+                                                Text(ModelNameFormatter.format(name: model))
                                             }
                                         }
                                     }
@@ -633,9 +633,9 @@ struct ModelComparisonView: View {
                                     if providerBase(synthesizeProvider) == "Ollama"
                                         && synthesizeModel == model
                                     {
-                                        Label(model, systemImage: "checkmark")
+                                        Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                                     } else {
-                                        Text(model)
+                                        Text(ModelNameFormatter.format(name: model))
                                     }
                                 }
                             }
@@ -2250,9 +2250,9 @@ struct ComparisonCard: View {
                                     if slot.provider.contains(account.id.uuidString)
                                         && slot.model == model
                                     {
-                                        Label(model, systemImage: "checkmark")
+                                        Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                                     } else {
-                                        Text(model)
+                                        Text(ModelNameFormatter.format(name: model))
                                     }
                                 }
                             }
@@ -2264,9 +2264,9 @@ struct ComparisonCard: View {
                     ForEach(ollamaManager.allModels, id: \.self) { model in
                         Button(action: { onChangeProvider("Ollama", model) }) {
                             if slotProviderBase == "Ollama" && slot.model == model {
-                                Label(model, systemImage: "checkmark")
+                                Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                             } else {
-                                Text(model)
+                                Text(ModelNameFormatter.format(name: model))
                             }
                         }
                     }

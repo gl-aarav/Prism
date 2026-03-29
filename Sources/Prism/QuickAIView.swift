@@ -2388,12 +2388,12 @@ extension QuickAIView {
                                 ForEach(ollamaManager.favoriteModels, id: \.self) { model in
                                     Button(action: { selectedOllamaModel = model }) {
                                         if selectedOllamaModel == model {
-                                            Label(model, systemImage: "checkmark")
+                                            Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                                                 .foregroundStyle(
                                                     colorScheme == .dark
                                                         ? Color.white : Color.primary)
                                         } else {
-                                            Text(model)
+                                            Text(ModelNameFormatter.format(name: model))
                                         }
                                     }
                                 }
@@ -2409,12 +2409,12 @@ extension QuickAIView {
                                 ForEach(installedNonFav, id: \.self) { model in
                                     Button(action: { selectedOllamaModel = model }) {
                                         if selectedOllamaModel == model {
-                                            Label(model, systemImage: "checkmark")
+                                            Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                                                 .foregroundStyle(
                                                     colorScheme == .dark
                                                         ? Color.white : Color.primary)
                                         } else {
-                                            Text(model)
+                                            Text(ModelNameFormatter.format(name: model))
                                         }
                                     }
                                 }
@@ -2432,12 +2432,12 @@ extension QuickAIView {
                                 ForEach(customNonInstalled, id: \.self) { model in
                                     Button(action: { selectedOllamaModel = model }) {
                                         if selectedOllamaModel == model {
-                                            Label(model, systemImage: "checkmark")
+                                            Label(ModelNameFormatter.format(name: model), systemImage: "checkmark")
                                                 .foregroundStyle(
                                                     colorScheme == .dark
                                                         ? Color.white : Color.primary)
                                         } else {
-                                            Text(model)
+                                            Text(ModelNameFormatter.format(name: model))
                                         }
                                     }
                                 }
@@ -2450,9 +2450,9 @@ extension QuickAIView {
                             ForEach(ollamaManager.allModels, id: \.self) { model in
                                 Button(action: { ollamaManager.toggleFavorite(model) }) {
                                     if ollamaManager.isFavorite(model) {
-                                        Label(model, systemImage: "star.fill")
+                                        Label(ollamaManager.displayName(for: model), systemImage: "star.fill")
                                     } else {
-                                        Label(model, systemImage: "star")
+                                        Label(ollamaManager.displayName(for: model), systemImage: "star")
                                     }
                                 }
                             }

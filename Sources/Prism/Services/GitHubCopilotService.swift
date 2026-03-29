@@ -660,7 +660,7 @@ class GitHubCopilotModelManager: ObservableObject {
     }
 
     func displayName(for model: String) -> String {
-        return GitHubCopilotModelManager.displayNames[model] ?? model
+        return ModelNameFormatter.format(name: GitHubCopilotModelManager.displayNames[model] ?? model)
     }
 
     func getProvider(for model: String) -> String {

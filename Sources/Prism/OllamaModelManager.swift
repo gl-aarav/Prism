@@ -93,6 +93,10 @@ class OllamaModelManager: ObservableObject {
         let others = allModels.filter { !favorites.contains($0) }
         return favorites + others
     }
+    
+    func displayName(for model: String) -> String {
+        return ModelNameFormatter.format(name: model)
+    }
 
     var favoriteModels: [String] {
         get {

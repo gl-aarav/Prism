@@ -156,7 +156,7 @@ class GeminiModelManager: ObservableObject {
     }
 
     func displayName(for model: String) -> String {
-        GeminiModelManager.displayNames[model] ?? model
+        return ModelNameFormatter.format(name: GeminiModelManager.displayNames[model] ?? model)
     }
 
     var favoriteModels: [String] {
